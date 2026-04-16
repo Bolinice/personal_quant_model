@@ -63,3 +63,54 @@ class ModelConfigOut(ModelConfigBase):
 
 class ModelConfig(ModelConfigOut):
     pass
+
+class ModelFactorWeightBase(BaseModel):
+    model_id: int
+    factor_id: int
+    weight: float
+
+class ModelFactorWeightCreate(ModelFactorWeightBase):
+    pass
+
+class ModelFactorWeightInDB(ModelFactorWeightBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ModelFactorWeightOut(ModelFactorWeightBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ModelFactorWeight(ModelFactorWeightOut):
+    pass
+
+class ModelScoreBase(BaseModel):
+    model_id: int
+    security_id: int
+    total_score: float
+    trade_date: datetime
+
+class ModelScoreCreate(ModelScoreBase):
+    pass
+
+class ModelScoreInDB(ModelScoreBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ModelScoreOut(ModelScoreBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ModelScore(ModelScoreOut):
+    pass

@@ -2,9 +2,14 @@ from typing import List
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
 from app.models.models import Model, ModelFactorWeight, ModelScore
-from app.schemas.models import ModelCreate, ModelUpdate
+from app.schemas.models import ModelCreate, ModelUpdate, ModelFactorWeightCreate, ModelScoreCreate
 import pandas as pd
 import numpy as np
+
+def get_factor_values(factor_id: int, trade_date: str, db: Session):
+    """导入get_factor_values函数"""
+    from app.services.factors_service import get_factor_values as gfvs
+    return gfvs(factor_id, trade_date, db=None if db is None else db)
 
 def get_models(skip: int = 0, limit: int = 100, db: Session = None):
     if db is None:

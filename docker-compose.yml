@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/quant_platform
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=your-secret-key-here
+      - DEBUG=false
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:8080
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - quant-network
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=quant_platform
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - quant-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - quant-network
+
+  celery:
+    build: .
+    command: celery -A app.core.celery_config worker --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/quant_platform
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=your-secret-key-here
+      - DEBUG=false
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - quant-network
+
+  celery-beat:
+    build: .
+    command: celery -A app.core.celery_config beat --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/quant_platform
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=your-secret-key-here
+      - DEBUG=false
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - quant-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  quant-network:
+    driver: bridge

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
 from app.services.models_service import get_models, get_model_by_code, create_model, update_model, get_model_factor_weights, create_model_factor_weights, update_model_factor_weights, get_model_scores, create_model_scores, calculate_model_scores
 from app.models.models import Model, ModelFactorWeight, ModelScore
-from app.schemas.models import ModelCreate, ModelUpdate, ModelOut
+from app.schemas.models import ModelCreate, ModelUpdate, ModelOut, ModelFactorWeightCreate, ModelFactorWeightOut, ModelScoreCreate, ModelScoreOut
 
 router = APIRouter()
 

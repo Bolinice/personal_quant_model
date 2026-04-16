@@ -50,7 +50,7 @@ def renew_subscription_endpoint(subscription_id: int, db: Session = Depends(Sess
         raise HTTPException(status_code=400, detail="Subscription renewal failed")
     subscription = db.query(Subscription).filter(Subscription.id == subscription_id).first()
     return subscription
-
+    
 @router.post("/{subscription_id}/check-permission")
 def check_subscription_permission_endpoint(subscription_id: int, permission_type: str, db: Session = Depends(SessionLocal)):
     has_permission = check_subscription_permission(subscription_id, permission_type, db=db)

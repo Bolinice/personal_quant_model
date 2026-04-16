@@ -1,12 +1,18 @@
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
 from app.models.backtests import Backtest, BacktestResult, BacktestTrade
+from app.models.models import Model
+from app.models.stock_pools import StockPool
+from app.models.market import StockDaily
+from app.models.portfolios import Portfolio
 from app.schemas.backtests import BacktestCreate, BacktestUpdate, BacktestResultCreate
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from app.core.cache import cache_service
 from app.core.logging import logger
+from app.core.trading_utils import get_trading_calendar
+from app.core.portfolio_utils import create_simulated_portfolio, get_portfolio_positions
 
 @cache_service.cache_decorator(ttl=1800)
 def get_backtests(model_id: int = None, status: str = None, skip: int = 0, limit: int = 100, db: Session = None):
@@ -32,7 +38,7 @@ def create_backtest(backtest: BacktestCreate, db: Session = None):
     if db is None:
         db = SessionLocal()
         try:
-            db_backtest = Backtest(**backtest.dict())
+            db_backtest = Backtest(**backtest.model_dump())
             db_backtest.status = "pending"
             db.add(db_backtest)
             db.commit()
@@ -40,7 +46,7 @@ def create_backtest(backtest: BacktestCreate, db: Session = None):
             return db_backtest
         finally:
             db.close()
-    db_backtest = Backtest(**backtest.dict())
+    db_backtest = Backtest(**backtest.model_dump())
     db_backtest.status = "pending"
     db.add(db_backtest)
     db.commit()
@@ -54,7 +60,7 @@ def update_backtest(backtest_id: int, backtest_update: BacktestUpdate, db: Sessi
             db_backtest = db.query(Backtest).filter(Backtest.id == backtest_id).first()
             if not db_backtest:
                 return None
-            update_data = backtest_update.dict(exclude_unset=True)
+            update_data = backtest_update.model_dump(exclude_unset=True)
             for key, value in update_data.items():
                 setattr(db_backtest, key, value)
             db.commit()
@@ -65,7 +71,7 @@ def update_backtest(backtest_id: int, backtest_update: BacktestUpdate, db: Sessi
     db_backtest = db.query(Backtest).filter(Backtest.id == backtest_id).first()
     if not db_backtest:
         return None
-    update_data = backtest_update.dict(exclude_unset=True)
+    update_data = backtest_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_backtest, key, value)
     db.commit()
@@ -85,14 +91,14 @@ def create_backtest_result(backtest_id: int, result: BacktestResultCreate, db: S
     if db is None:
         db = SessionLocal()
         try:
-            db_result = BacktestResult(backtest_id=backtest_id, **result.dict())
+            db_result = BacktestResult(backtest_id=backtest_id, **result.model_dump())
             db.add(db_result)
             db.commit()
             db.refresh(db_result)
             return db_result
         finally:
             db.close()
-    db_result = BacktestResult(backtest_id=backtest_id, **result.dict())
+    db_result = BacktestResult(backtest_id=backtest_id, **result.model_dump())
     db.add(db_result)
     db.commit()
     db.refresh(db_result)
@@ -156,8 +162,6 @@ def run_backtest(backtest_id: int, db: Session = None):
     db.commit()
 
     return backtest
-
-def execute_backtest(backtest, db):
     """执行完整的回测逻辑，包含A股特殊规则"""
     # 获取回测参数
     start_date = backtest.start_date

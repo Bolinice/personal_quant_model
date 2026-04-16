@@ -64,14 +64,14 @@ def create_stock_daily(stock_data: StockDailyCreate, db: Session = None):
     if db is None:
         db = SessionLocal()
         try:
-            db_stock = StockDaily(**stock_data.dict())
+            db_stock = StockDaily(**stock_data.model_dump())
             db.add(db_stock)
             db.commit()
             db.refresh(db_stock)
             return db_stock
         finally:
             db.close()
-    db_stock = StockDaily(**stock_data.dict())
+    db_stock = StockDaily(**stock_data.model_dump())
     db.add(db_stock)
     db.commit()
     db.refresh(db_stock)
@@ -81,31 +81,31 @@ def create_index_daily(index_data: IndexDailyCreate, db: Session = None):
     if db is None:
         db = SessionLocal()
         try:
-            db_index = IndexDaily(**index_data.dict())
+            db_index = IndexDaily(**index_data.model_dump())
             db.add(db_index)
             db.commit()
             db.refresh(db_index)
             return db_index
         finally:
             db.close()
-    db_index = IndexDaily(**index_data.dict())
+    db_index = IndexDaily(**index_data.model_dump())
     db.add(db_index)
     db.commit()
     db.refresh(db_index)
     return db_index
 
-def create_trading_calendar(calendar_data: TradingCalendarCreate, db: Session = None):
+def create_trading_calendar(calendar_data, db: Session = None):
     if db is None:
         db = SessionLocal()
         try:
-            db_calendar = TradingCalendar(**calendar_data.dict())
+            db_calendar = TradingCalendar(**calendar_data.model_dump())
             db.add(db_calendar)
             db.commit()
             db.refresh(db_calendar)
             return db_calendar
         finally:
             db.close()
-    db_calendar = TradingCalendar(**calendar_data.dict())
+    db_calendar = TradingCalendar(**calendar_data.model_dump())
     db.add(db_calendar)
     db.commit()
     db.refresh(db_calendar)
@@ -162,14 +162,14 @@ def create_stock_financial(financial_data, db: Session = None):
     if db is None:
         db = SessionLocal()
         try:
-            db_financial = StockFinancial(**financial_data.dict())
+            db_financial = StockFinancial(**financial_data.model_dump())
             db.add(db_financial)
             db.commit()
             db.refresh(db_financial)
             return db_financial
         finally:
             db.close()
-    db_financial = StockFinancial(**financial_data.dict())
+    db_financial = StockFinancial(**financial_data.model_dump())
     db.add(db_financial)
     db.commit()
     db.refresh(db_financial)
@@ -179,14 +179,14 @@ def create_stock_industry(industry_data, db: Session = None):
     if db is None:
         db = SessionLocal()
         try:
-            db_industry = StockIndustry(**industry_data.dict())
+            db_industry = StockIndustry(**industry_data.model_dump())
             db.add(db_industry)
             db.commit()
             db.refresh(db_industry)
             return db_industry
         finally:
             db.close()
-    db_industry = StockIndustry(**industry_data.dict())
+    db_industry = StockIndustry(**industry_data.model_dump())
     db.add(db_industry)
     db.commit()
     db.refresh(db_industry)
@@ -196,14 +196,14 @@ def create_stock_basic(basic_data, db: Session = None):
     if db is None:
         db = SessionLocal()
         try:
-            db_basic = StockBasic(**basic_data.dict())
+            db_basic = StockBasic(**basic_data.model_dump())
             db.add(db_basic)
             db.commit()
             db.refresh(db_basic)
             return db_basic
         finally:
             db.close()
-    db_basic = StockBasic(**basic_data.dict())
+    db_basic = StockBasic(**basic_data.model_dump())
     db.add(db_basic)
     db.commit()
     db.refresh(db_basic)

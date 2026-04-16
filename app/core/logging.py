@@ -1,55 +1,26 @@
 import logging
-import logging.config
+import sys
 from pathlib import Path
-from app.core.config import settings
 
-def setup_logging():
-    """配置日志系统"""
-    log_config = {
-        'version': 1,
-        'disable_existing_loggers': False,
-        'formatters': {
-            'standard': {
-                'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
-            },
-        },
-        'handlers': {
-            'console': {
-                'level': 'INFO',
-                'class': 'logging.StreamHandler',
-                'formatter': 'standard',
-            },
-            'file': {
-                'level': 'DEBUG',
-                'class': 'logging.handlers.RotatingFileHandler',
-                'filename': Path('logs/app.log'),
-                'maxBytes': 10485760,  # 10MB
-                'backupCount': 5,
-                'formatter': 'standard',
-            },
-        },
-        'loggers': {
-            '': {
-                'handlers': ['console', 'file'] if not settings.debug else ['console'],
-                'level': 'DEBUG' if settings.debug else 'INFO',
-                'propagate': True
-            },
-            'uvicorn': {
-                'handlers': ['console', 'file'] if not settings.debug else ['console'],
-                'level': 'INFO',
-                'propagate': False
-            },
-            'sqlalchemy': {
-                'handlers': ['console', 'file'] if not settings.debug else ['console'],
-                'level': 'WARNING',
-                'propagate': False
-            },
-        }
-    }
+# 创建日志目录
+log_dir = Path("logs")
+log_dir.mkdir(exist_ok=True)
 
-    logging.config.dictConfig(log_config)
-    logger = logging.getLogger(__name__)
-    logger.info("Logging system initialized")
-    return logger
+# 配置日志格式
+log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+date_format = "%Y-%m-%d %H:%M:%S"
 
-logger = setup_logging()
+# 创建日志记录器
+logging.basicConfig(
+    level=logging.INFO,
+    format=log_format,
+    datefmt=date_format,
+    handlers=[
+        logging.FileHandler(log_dir / "app.log", encoding="utf-8"),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
+# 创建应用日志记录器
+logger = logging.getLogger("quant_platform")
+logger.setLevel(logging.INFO)

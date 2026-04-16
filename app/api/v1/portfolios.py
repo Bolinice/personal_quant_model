@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
 from app.services.portfolios_service import get_portfolios, create_portfolio, get_portfolio_positions, create_portfolio_positions, get_rebalance_records, create_rebalance_record, generate_portfolio, generate_rebalance
 from app.models.portfolios import Portfolio, PortfolioPosition, RebalanceRecord
-from app.schemas.portfolios import PortfolioCreate, PortfolioPositionCreate, RebalanceRecordCreate, PortfolioOut, PortfolioPositionOut, RebalanceRecordOut
+from app.schemas.portfolios import PortfolioCreate, PortfolioUpdate, PortfolioOut, PortfolioPositionCreate, PortfolioPositionOut, RebalanceRecordCreate, RebalanceRecordOut
 
 router = APIRouter()
 

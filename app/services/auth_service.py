@@ -76,7 +76,7 @@ def update_user(db: Session, user_id: int, user_update: UserUpdate):
     db_user = db.query(User).filter(User.id == user_id).first()
     if not db_user:
         return None
-    update_data = user_update.dict(exclude_unset=True)
+    update_data = user_update.model_dump(exclude_unset=True)
     if "password" in update_data:
         update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
     for key, value in update_data.items():

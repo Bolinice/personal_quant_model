@@ -2,7 +2,10 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
-from app.services.alert_logs_service import get_alert_logs, create_alert_log, get_alert_log_by_id, update_alert_log, delete_alert_log
+from app.services.alert_logs_service import (
+    get_alert_logs, create_alert_log, get_alert_log_by_id, update_alert_log, delete_alert_log,
+    monitor_risk_exposure, monitor_performance, trigger_alerts
+)
 from app.models.alert_logs import AlertLog
 from app.schemas.alert_logs import AlertLogCreate, AlertLogUpdate, AlertLogOut
 

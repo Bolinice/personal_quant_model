@@ -1,75 +1,101 @@
-from fastapi import Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware
-from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
-from app.monitoring.metrics import record_request, increment_active_users, decrement_active_users
-from app.core.logging import logger
+import functools
 import time
+from collections import defaultdict
+from fastapi import Request, HTTPException, status
+from prometheus_client import Counter, Histogram, Gauge
+import logging
 
-class MetricsMiddleware(BaseHTTPMiddleware):
-    """监控中间件"""
+logger = logging.getLogger(__name__)
 
-    async def dispatch(self, request: Request, call_next):
-        start_time = time.time()
+# Prometheus metrics
+request_count = Counter('http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
+request_duration = Histogram('http_request_duration_seconds', 'HTTP request duration')
+active_connections = Gauge('http_active_connections', 'Active HTTP connections')
+rate_limit_counts = Counter('rate_limit_exceeded_total', 'Rate limit exceeded', ['endpoint'])
 
-        # 增加活跃用户数
-        increment_active_users()
-
-        response = await call_next(request)
-
-        # 记录请求指标
-        duration = time.time() - start_time
-        record_request(
-            method=request.method,
-            endpoint=request.url.path,
-            status_code=response.status_code,
-            duration=duration
-        )
-
-        # 减少活跃用户数
-        decrement_active_users()
-
-        return response
-
-class LoggingMiddleware(BaseHTTPMiddleware):
-    """日志中间件"""
-
-    async def dispatch(self, request: Request, call_next):
-        logger.info(f"Request: {request.method} {request.url}")
-
-        response = await call_next(request)
-
-        logger.info(f"Response: {response.status_code} for {request.method} {request.url}")
-
-        return response
-
-class RateLimitMiddleware(BaseHTTPMiddleware):
-    """简单的限流中间件"""
-
+# Rate limiter
+class RateLimitMiddleware:
     def __init__(self, app, requests_per_minute: int = 60):
-        super().__init__(app)
+        self.app = app
         self.requests_per_minute = requests_per_minute
-        self.user_requests = {}
+        self.requests = defaultdict(list)
 
-    async def dispatch(self, request: Request, call_next):
-        # 简单的IP限流实现
+    async def __call__(self, request: Request, call_next):
         client_ip = request.client.host
         current_time = time.time()
 
-        # 清理过期的记录
-        if client_ip in self.user_requests:
-            self.user_requests[client_ip] = [
-                t for t in self.user_requests[client_ip]
-                if current_time - t < 60
-            ]
+        # 清理过期请求
+        self.requests[client_ip] = [
+            req_time for req_time in self.requests[client_ip]
+            if current_time - req_time < 60
+        ]
 
-        # 检查限流
-        if client_ip in self.user_requests and len(self.user_requests[client_ip]) >= self.requests_per_minute:
+        # 检查是否超过限制
+        if len(self.requests[client_ip]) >= self.requests_per_minute:
+            rate_limit_counts.labels(endpoint=request.url.path).inc()
             logger.warning(f"Rate limit exceeded for IP: {client_ip}")
-            return Response(status_code=429)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Rate limit exceeded"
+            )
 
-        # 记录请求
-        if client_ip not in self.user_requests:
-            self.user_requests[client_ip] = []
-        self.user_requests[client_ip].append(current_time)
+        # 记录本次请求
+        self.requests[client_ip].append(current_time)
 
-        return await call_next(request)
+        active_connections.inc()
+        try:
+            response = await call_next(request)
+            return response
+        finally:
+            active_connections.dec()
+
+# Logging middleware
+class LoggingMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, request: Request, call_next):
+        start_time = time.time()
+
+        # 记录请求信息
+        logger.info(f"Request: {request.method} {request.url.path}")
+
+        # 处理请求
+        response = await call_next(request)
+
+        # 计算处理时间
+        process_time = time.time() - start_time
+
+        # 记录响应信息
+        logger.info(
+            f"Response: {request.method} {request.url.path} "
+            f"Status: {response.status_code} "
+            f"Time: {process_time:.3f}s"
+        )
+
+        # 添加处理时间到响应头
+        response.headers["X-Process-Time"] = str(process_time)
+
+        return response
+
+# Metrics middleware
+class MetricsMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, request: Request, call_next):
+        start_time = time.time()
+
+        # 处理请求
+        response = await call_next(request)
+
+        # 计算处理时间并记录指标
+        process_time = time.time() - start_time
+        request_duration.observe(process_time)
+        request_count.labels(
+            method=request.method,
+            endpoint=request.url.path,
+            status=response.status_code
+        ).inc()
+
+        return response

@@ -64,3 +64,31 @@ class PortfolioPositionOut(PortfolioPositionBase):
 
 class PortfolioPosition(PortfolioPositionOut):
     pass
+
+class RebalanceRecordBase(BaseModel):
+    model_id: int
+    trade_date: datetime
+    rebalance_type: str  # scheduled, signal, risk
+    buy_list: List = []
+    sell_list: List = []
+    total_turnover: float = 0.0
+
+class RebalanceRecordCreate(RebalanceRecordBase):
+    pass
+
+class RebalanceRecordInDB(RebalanceRecordBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class RebalanceRecordOut(RebalanceRecordBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class RebalanceRecord(RebalanceRecordOut):
+    pass

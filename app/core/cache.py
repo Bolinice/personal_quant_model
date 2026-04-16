@@ -1,71 +1,65 @@
-import redis
-from typing import Optional, Any, Callable
-from functools import wraps
-from app.core.config import settings
+import hashlib
 import json
 import time
+from typing import Callable, Optional, Any
+from functools import wraps
+from app.core.logging import logger
 
 class CacheService:
+    """内存缓存服务"""
+
     def __init__(self):
-        self.redis = redis.Redis(
-            host=settings.redis_host or 'localhost',
-            port=settings.redis_port or 6379,
-            db=0,
-            decode_responses=True
-        )
+        self._cache = {}
 
     def get(self, key: str) -> Optional[Any]:
-        """获取缓存值"""
-        value = self.redis.get(key)
-        if value:
-            try:
-                return json.loads(value)
-            except json.JSONDecodeError:
+        """获取缓存"""
+        if key in self._cache:
+            value, expiry = self._cache[key]
+            if time.time() < expiry:
                 return value
+            else:
+                del self._cache[key]
         return None
 
-    def set(self, key: str, value: Any, ttl: int = 3600) -> bool:
-        """设置缓存值"""
-        try:
-            if isinstance(value, (dict, list)):
-                value = json.dumps(value)
-            return self.redis.setex(key, ttl, value)
-        except Exception as e:
-            print(f"Cache set error: {e}")
-            return False
+    def set(self, key: str, value: Any, ttl: int = 300):
+        """设置缓存"""
+        expiry = time.time() + ttl
+        self._cache[key] = (value, expiry)
 
-    def delete(self, key: str) -> bool:
-        """删除缓存值"""
-        return self.redis.delete(key) > 0
+    def delete(self, key: str):
+        """删除缓存"""
+        if key in self._cache:
+            del self._cache[key]
 
-    def clear_pattern(self, pattern: str) -> int:
-        """清除匹配模式的缓存"""
-        keys = self.redis.keys(pattern)
-        if keys:
-            return self.redis.delete(*keys)
-        return 0
+    def clear(self):
+        """清空缓存"""
+        self._cache.clear()
 
-    def cache_decorator(self, ttl: int = 3600):
+    def cache_decorator(self, ttl: int = 300):
         """缓存装饰器"""
-        def decorator(func: Callable) -> Callable:
+        def decorator(func: Callable):
             @wraps(func)
-            async def wrapper(*args, **kwargs):
+            def wrapper(*args, **kwargs):
                 # 生成缓存键
-                cache_key = f"{func.__name__}:{hash(str(args) + str(kwargs))}"
+                key_parts = [func.__name__]
+                key_parts.extend(str(arg) for arg in args)
+                key_parts.extend(str(k) + str(v) for k, v in sorted(kwargs.items()))
+                cache_key = hashlib.md5("|".join(key_parts).encode()).hexdigest()
 
                 # 尝试从缓存获取
-                cached_result = self.get(cache_key)
-                if cached_result is not None:
-                    return cached_result
+                cached_value = self.get(cache_key)
+                if cached_value is not None:
+                    logger.debug(f"Cache hit for key: {func.__name__}")
+                    return cached_value
 
-                # 执行函数
-                result = await func(*args, **kwargs)
-
-                # 存入缓存
+                # 执行函数并缓存结果
+                result = func(*args, **kwargs)
                 self.set(cache_key, result, ttl)
+                logger.debug(f"Cached result for key: {func.__name__}")
 
                 return result
             return wrapper
         return decorator
 
+# 全局缓存服务实例
 cache_service = CacheService()

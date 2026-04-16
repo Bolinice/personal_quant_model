@@ -2,7 +2,7 @@ from typing import List
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
 from app.models.portfolios import Portfolio, PortfolioPosition, RebalanceRecord
-from app.schemas.portfolios import PortfolioCreate, PortfolioPositionCreate
+from app.schemas.portfolios import PortfolioCreate, PortfolioPositionCreate, RebalanceRecordCreate
 import pandas as pd
 import numpy as np
 

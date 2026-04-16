@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
+from pathlib import Path
 
 class Settings(BaseSettings):
     database_url: str
@@ -18,7 +19,13 @@ class Settings(BaseSettings):
     redis_host: str = "localhost"
     redis_port: int = 6379
 
+    # 数据源配置
+    tushare_token: str = ""
+    primary_data_source: str = "akshare"  # tushare 或 akshare
+
     class Config:
-        env_file = "app/.env"
+        # 使用绝对路径确保正确加载 .env 文件
+        env_file = str(Path(__file__).parent.parent / ".env")
+        env_file_encoding = "utf-8"
 
 settings = Settings()

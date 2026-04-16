@@ -197,8 +197,7 @@ def generate_rebalance(model_id: int, trade_date: str, db: Session = None):
     # 获取目标组合
     # 计算买卖清单
     # 生成调仓记录
-    return None
-    
+
     # 示例：生成一个简单的调仓记录
     rebalance = RebalanceRecordCreate(
         model_id=model_id,

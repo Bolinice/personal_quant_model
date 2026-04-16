@@ -1,11 +1,5 @@
-from typing import Generator
-from sqlalchemy.orm import Session
-from app.db.connection import SessionLocal
+# 数据库会话模块
+# 统一从 base.py 导入以保持向后兼容
+from app.db.base import engine, SessionLocal, Base, get_db
 
-def get_db() -> Generator[Session, None, None]:
-    """数据库会话依赖函数"""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+__all__ = ["engine", "SessionLocal", "Base", "get_db"]

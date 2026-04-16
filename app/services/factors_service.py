@@ -1,10 +1,50 @@
-from typing import List
+from typing import List, Optional
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
 from app.models.factors import Factor, FactorValue, FactorAnalysis
+from app.models.market import StockDaily, TradingCalendar
 from app.schemas.factors import FactorCreate, FactorUpdate, FactorValueCreate, FactorAnalysisCreate
 import pandas as pd
 import numpy as np
+
+
+def get_next_trading_date(current_date: datetime, db: Session = None) -> Optional[datetime]:
+    """获取下一个交易日"""
+    if db is None:
+        db = SessionLocal()
+        try:
+            calendar = db.query(TradingCalendar).filter(
+                TradingCalendar.cal_date > current_date.date(),
+                TradingCalendar.is_open == True
+            ).order_by(TradingCalendar.cal_date).first()
+            return calendar.cal_date if calendar else None
+        finally:
+            db.close()
+    calendar = db.query(TradingCalendar).filter(
+        TradingCalendar.cal_date > current_date.date(),
+        TradingCalendar.is_open == True
+    ).order_by(TradingCalendar.cal_date).first()
+    return calendar.cal_date if calendar else None
+
+
+def get_trading_date_after(current_date: datetime, days: int, db: Session = None) -> Optional[datetime]:
+    """获取指定天数后的交易日"""
+    if db is None:
+        db = SessionLocal()
+        try:
+            calendars = db.query(TradingCalendar).filter(
+                TradingCalendar.cal_date > current_date.date(),
+                TradingCalendar.is_open == True
+            ).order_by(TradingCalendar.cal_date).limit(days + 1).all()
+            return calendars[days].cal_date if len(calendars) > days else None
+        finally:
+            db.close()
+    calendars = db.query(TradingCalendar).filter(
+        TradingCalendar.cal_date > current_date.date(),
+        TradingCalendar.is_open == True
+    ).order_by(TradingCalendar.cal_date).limit(days + 1).all()
+    return calendars[days].cal_date if len(calendars) > days else None
 
 def get_factors(skip: int = 0, limit: int = 100, category: str = None, status: str = None, db: Session = None):
     if db is None:

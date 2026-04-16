@@ -2,6 +2,7 @@ import functools
 import time
 from collections import defaultdict
 from fastapi import Request, HTTPException, status
+from starlette.middleware.base import BaseHTTPMiddleware
 from prometheus_client import Counter, Histogram, Gauge
 import logging
 
@@ -14,17 +15,33 @@ active_connections = Gauge('http_active_connections', 'Active HTTP connections')
 rate_limit_counts = Counter('rate_limit_exceeded_total', 'Rate limit exceeded', ['endpoint'])
 
 # Rate limiter
-class RateLimitMiddleware:
+class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, requests_per_minute: int = 60):
-        self.app = app
+        super().__init__(app)
         self.requests_per_minute = requests_per_minute
         self.requests = defaultdict(list)
+        self._last_cleanup = time.time()
 
-    async def __call__(self, request: Request, call_next):
-        client_ip = request.client.host
+    def _cleanup_expired(self, current_time: float):
+        """清理过期的请求记录，防止内存泄漏"""
+        # 每分钟清理一次
+        if current_time - self._last_cleanup > 60:
+            expired_ips = [
+                ip for ip, reqs in self.requests.items()
+                if not reqs or current_time - reqs[-1] > 60
+            ]
+            for ip in expired_ips:
+                del self.requests[ip]
+            self._last_cleanup = current_time
+
+    async def dispatch(self, request: Request, call_next):
+        client_ip = request.client.host if request.client else "unknown"
         current_time = time.time()
 
-        # 清理过期请求
+        # 定期清理过期记录
+        self._cleanup_expired(current_time)
+
+        # 清理该IP的过期请求
         self.requests[client_ip] = [
             req_time for req_time in self.requests[client_ip]
             if current_time - req_time < 60
@@ -50,11 +67,8 @@ class RateLimitMiddleware:
             active_connections.dec()
 
 # Logging middleware
-class LoggingMiddleware:
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, request: Request, call_next):
+class LoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
         start_time = time.time()
 
         # 记录请求信息
@@ -79,11 +93,8 @@ class LoggingMiddleware:
         return response
 
 # Metrics middleware
-class MetricsMiddleware:
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, request: Request, call_next):
+class MetricsMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
         start_time = time.time()
 
         # 处理请求

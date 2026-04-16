@@ -1,10 +1,5 @@
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+# 数据库连接模块
+# 统一从 base.py 导入以保持向后兼容
+from app.db.base import engine, SessionLocal, Base, get_db
 
-from app.core.config import settings
-
-engine = create_engine(settings.database_url)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-Base = declarative_base()
+__all__ = ["engine", "SessionLocal", "Base", "get_db"]

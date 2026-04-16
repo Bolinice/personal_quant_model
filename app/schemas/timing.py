@@ -70,6 +70,10 @@ class TimingConfigBase(BaseModel):
 class TimingConfigCreate(TimingConfigBase):
     pass
 
+class TimingConfigUpdate(BaseModel):
+    config_type: Optional[str] = None
+    config_value: Optional[str] = None
+
 class TimingConfigInDB(TimingConfigBase):
     id: int
     created_at: datetime

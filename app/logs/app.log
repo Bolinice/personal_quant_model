@@ -1,0 +1,24 @@
+2026-04-16 21:52:00 - quant_platform - INFO - Application starting...
+2026-04-16 21:57:56 - quant_platform - INFO - Application starting...
+2026-04-16 21:58:01 - app.middleware.middleware - INFO - Request: GET /
+2026-04-16 21:58:01 - app.middleware.middleware - INFO - Response: GET / Status: 200 Time: 0.001s
+2026-04-16 22:01:24 - quant_platform - INFO - Application starting...
+2026-04-16 22:01:26 - app.middleware.middleware - INFO - Request: GET /
+2026-04-16 22:01:26 - app.middleware.middleware - INFO - Response: GET / Status: 200 Time: 0.001s
+2026-04-16 22:01:41 - app.middleware.middleware - INFO - Request: GET /doc
+2026-04-16 22:01:41 - app.middleware.middleware - INFO - Response: GET /doc Status: 404 Time: 0.001s
+2026-04-16 22:02:43 - quant_platform - INFO - Application starting...
+2026-04-16 22:02:46 - app.middleware.middleware - INFO - Request: GET /doc
+2026-04-16 22:02:46 - app.middleware.middleware - INFO - Response: GET /doc Status: 404 Time: 0.001s
+2026-04-16 22:02:51 - app.middleware.middleware - INFO - Request: GET /docs
+2026-04-16 22:02:51 - app.middleware.middleware - INFO - Response: GET /docs Status: 200 Time: 0.001s
+2026-04-16 22:02:51 - app.middleware.middleware - INFO - Request: GET /openapi.json
+2026-04-16 22:11:16 - quant_platform - INFO - Application starting...
+2026-04-16 22:11:18 - app.middleware.middleware - INFO - Request: GET /
+2026-04-16 22:11:18 - app.middleware.middleware - INFO - Response: GET / Status: 200 Time: 0.001s
+2026-04-16 22:11:22 - app.middleware.middleware - INFO - Request: GET /
+2026-04-16 22:11:22 - app.middleware.middleware - INFO - Response: GET / Status: 200 Time: 0.001s
+2026-04-16 22:11:23 - app.middleware.middleware - INFO - Request: GET /docs
+2026-04-16 22:11:23 - app.middleware.middleware - INFO - Response: GET /docs Status: 200 Time: 0.001s
+2026-04-16 22:11:23 - app.middleware.middleware - INFO - Request: GET /openapi.json
+2026-04-16 22:11:23 - app.middleware.middleware - INFO - Response: GET /openapi.json Status: 200 Time: 0.135s

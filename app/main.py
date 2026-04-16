@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.core.logging import logger
 from app.api.v1 import auth, users, securities, market, stock_pools, factors, models, timing, portfolios, backtests, simulated_portfolios, products, subscriptions, reports, task_logs, alert_logs, performance
@@ -10,6 +11,14 @@ app = FastAPI(
     description="基于多因子选股模型的量化投资策略平台",
     version="1.0.0"
 )
+
+# 添加中间件确保 UTF-8 编码
+@app.middleware("http")
+async def add_charset_middleware(request: Request, call_next):
+    response = await call_next(request)
+    if "application/json" in response.headers.get("content-type", ""):
+        response.headers["content-type"] = "application/json; charset=utf-8"
+    return response
 
 # 初始化日志系统
 logger.info("Application starting...")
@@ -55,9 +64,10 @@ async def health_check():
     """健康检查端点"""
     try:
         # 检查数据库连接
+        from sqlalchemy import text
         from app.db.connection import engine
         with engine.connect() as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
 
         return {"status": "healthy", "message": "All services are running"}
     except Exception as e:

@@ -1,6 +1,6 @@
 from datetime import datetime, date
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 
 class FactorBase(BaseModel):
     factor_code: str
@@ -71,14 +71,20 @@ class FactorValue(FactorValueOut):
 class FactorAnalysisBase(BaseModel):
     factor_id: int
     analysis_date: date
-    ic: float
-    rank_ic: float
-    mean: float
-    std: float
-    quantile_25: float
-    quantile_50: float
-    quantile_75: float
-    coverage: float
+    analysis_type: Optional[str] = "ic_analysis"
+    ic: Optional[float] = None
+    rank_ic: Optional[float] = None
+    mean: Optional[float] = None
+    std: Optional[float] = None
+    quantile_25: Optional[float] = None
+    quantile_50: Optional[float] = None
+    quantile_75: Optional[float] = None
+    coverage: Optional[float] = None
+    ic_decay: Optional[List[float]] = None
+    group_returns: Optional[List[float]] = None
+    long_short_return: Optional[float] = None
+    correlation: Optional[float] = None
+    compare_factor_id: Optional[int] = None
 
 class FactorAnalysisCreate(FactorAnalysisBase):
     pass

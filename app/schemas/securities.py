@@ -36,3 +36,6 @@ class SecurityOut(SecurityBase):
 
     class Config:
         from_attributes = True
+
+class Security(SecurityOut):
+    pass

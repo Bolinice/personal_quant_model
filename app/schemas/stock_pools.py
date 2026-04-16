@@ -1,6 +1,6 @@
+from datetime import datetime, date
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
-from datetime import date
+from typing import Optional, Dict, Any, List
 
 class FilterConfig(BaseModel):
     exclude_st: bool = True
@@ -9,21 +9,21 @@ class FilterConfig(BaseModel):
     min_avg_amount: float = 50000000
     min_market_cap: Optional[float] = None
     max_market_cap: Optional[float] = None
-    industry_whitelist: Optional[list[str]] = None
-    industry_blacklist: Optional[list[str]] = None
-    board_whitelist: Optional[list[str]] = None
-    board_blacklist: Optional[list[str]] = None
+    industry_whitelist: Optional[List[str]] = None
+    industry_blacklist: Optional[List[str]] = None
+    board_whitelist: Optional[List[str]] = None
+    board_blacklist: Optional[List[str]] = None
 
 class StockPoolBase(BaseModel):
     pool_code: str
     pool_name: str
     base_index_code: str
-    filter_config: Dict[str, Any] = Field(default_factory=lambda: {
+    filter_config: Dict[str, Any] = Field(default_factory=lambda: {{
         "exclude_st": True,
         "exclude_suspended": True,
         "exclude_new_stock_days": 120,
         "min_avg_amount": 50000000
-    })
+    }})
     description: Optional[str] = None
 
 class StockPoolCreate(StockPoolBase):
@@ -54,10 +54,13 @@ class StockPoolOut(StockPoolBase):
     class Config:
         from_attributes = True
 
+class StockPool(StockPoolOut):
+    pass
+
 class StockPoolSnapshotBase(BaseModel):
     pool_id: int
     trade_date: date
-    securities: list[str]
+    securities: List[str]
     eligible_count: int
 
 class StockPoolSnapshotCreate(StockPoolSnapshotBase):

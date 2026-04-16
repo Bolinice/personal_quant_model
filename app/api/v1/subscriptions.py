@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
+
+from typing import List
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
 from app.services.subscriptions_service import get_subscriptions, create_subscription, update_subscription, get_subscription_histories, create_subscription_history, get_subscription_permissions, create_subscription_permission, check_subscription_permission, renew_subscription
@@ -7,7 +9,7 @@ from app.schemas.subscriptions import SubscriptionCreate, SubscriptionUpdate, Su
 
 router = APIRouter()
 
-@router.get("/my/subscriptions", response_model=list[SubscriptionOut])
+@router.get("/my/subscriptions", response_model=List[SubscriptionOut])
 def read_my_subscriptions(user_id: int, db: Session = Depends(SessionLocal)):
     subscriptions = get_subscriptions(user_id=user_id, db=db)
     return subscriptions
@@ -23,7 +25,7 @@ def update_subscription_endpoint(subscription_id: int, subscription_update: Subs
         raise HTTPException(status_code=404, detail="Subscription not found")
     return subscription
 
-@router.get("/{subscription_id}/histories", response_model=list[SubscriptionHistoryOut])
+@router.get("/{subscription_id}/histories", response_model=List[SubscriptionHistoryOut])
 def read_subscription_histories(subscription_id: int, db: Session = Depends(SessionLocal)):
     histories = get_subscription_histories(subscription_id, db=db)
     return histories
@@ -32,7 +34,7 @@ def read_subscription_histories(subscription_id: int, db: Session = Depends(Sess
 def create_subscription_history_endpoint(subscription_id: int, history: SubscriptionHistoryCreate, db: Session = Depends(SessionLocal)):
     return create_subscription_history(subscription_id, history, db=db)
 
-@router.get("/{subscription_id}/permissions", response_model=list[SubscriptionPermissionOut])
+@router.get("/{subscription_id}/permissions", response_model=List[SubscriptionPermissionOut])
 def read_subscription_permissions(subscription_id: int, db: Session = Depends(SessionLocal)):
     permissions = get_subscription_permissions(subscription_id, db=db)
     return permissions

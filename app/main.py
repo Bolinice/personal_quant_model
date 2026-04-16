@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api.v1 import auth, users, securities, market, stock_pools, factors, models, timing, portfolios, backtests, simulated_portfolios, products, subscriptions, reports, task_logs, alert_logs
+from app.core.logging import logger
+from app.api.v1 import auth, users, securities, market, stock_pools, factors, models, timing, portfolios, backtests, simulated_portfolios, products, subscriptions, reports, task_logs, alert_logs, performance
+from app.middleware.middleware import MetricsMiddleware, LoggingMiddleware, RateLimitMiddleware
 
 app = FastAPI(
     title="A股多因子增强策略平台",
@@ -9,14 +11,21 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# 添加CORS中间件
+# 初始化日志系统
+logger.info("Application starting...")
+
+# 添加中间件
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins.split(",") if settings.cors_origins else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(LoggingMiddleware)
+app.add_middleware(RateLimitMiddleware, requests_per_minute=60)
+app.add_middleware(MetricsMiddleware)
 
 # 包含API路由
 app.include_router(auth.router, prefix="/api/v1", tags=["认证"])
@@ -41,6 +50,25 @@ app.include_router(performance.router, prefix="/api/v1", tags=["绩效分析"])
 async def root():
     return {"message": "A股多因子增强策略平台 API", "version": "1.0.0"}
 
+@app.get("/health")
+async def health_check():
+    """健康检查端点"""
+    try:
+        # 检查数据库连接
+        from app.db.connection import engine
+        with engine.connect() as conn:
+            conn.execute("SELECT 1")
+
+        return {"status": "healthy", "message": "All services are running"}
+    except Exception as e:
+        return {"status": "unhealthy", "message": str(e)}
+
+@app.get("/metrics")
+async def metrics():
+    """监控指标端点"""
+    from prometheus_client import generate_latest
+    return generate_latest()
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)

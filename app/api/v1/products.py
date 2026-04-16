@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+
+from typing import List
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
 from app.services.products_service import get_products, create_product, update_product, get_product_reports, create_product_report, get_subscription_plans, create_subscription_plan, update_subscription_plan, get_subscriptions, create_subscription, update_subscription, generate_product_report
@@ -7,7 +9,7 @@ from app.schemas.products import ProductCreate, ProductUpdate, ProductReportCrea
 
 router = APIRouter()
 
-@router.get("/", response_model=list[ProductOut])
+@router.get("/", response_model=List[ProductOut])
 def read_products(model_id: int = None, skip: int = 0, limit: int = 100, db: Session = Depends(SessionLocal)):
     products = get_products(model_id=model_id, skip=skip, limit=limit, db=db)
     return products
@@ -30,7 +32,7 @@ def update_product_endpoint(product_id: int, product_update: ProductUpdate, db: 
         raise HTTPException(status_code=404, detail="Product not found")
     return product
 
-@router.get("/{product_id}/reports", response_model=list[ProductReportOut])
+@router.get("/{product_id}/reports", response_model=List[ProductReportOut])
 def read_product_reports(product_id: int, report_type: str = None, start_date: str = None, end_date: str = None, db: Session = Depends(SessionLocal)):
     reports = get_product_reports(product_id, report_type, start_date, end_date, db=db)
     return reports
@@ -46,7 +48,7 @@ def generate_product_report_endpoint(product_id: int, report_type: str, report_d
         raise HTTPException(status_code=404, detail="Report generation failed")
     return report
 
-@router.get("/subscription-plans", response_model=list[SubscriptionPlanOut])
+@router.get("/subscription-plans", response_model=List[SubscriptionPlanOut])
 def read_subscription_plans(skip: int = 0, limit: int = 100, db: Session = Depends(SessionLocal)):
     plans = get_subscription_plans(skip=skip, limit=limit, db=db)
     return plans
@@ -62,7 +64,7 @@ def update_subscription_plan_endpoint(plan_id: int, plan_update: dict, db: Sessi
         raise HTTPException(status_code=404, detail="Subscription plan not found")
     return plan
 
-@router.get("/my/subscriptions", response_model=list[SubscriptionOut])
+@router.get("/my/subscriptions", response_model=List[SubscriptionOut])
 def read_my_subscriptions(user_id: int, db: Session = Depends(SessionLocal)):
     subscriptions = get_subscriptions(user_id=user_id, db=db)
     return subscriptions

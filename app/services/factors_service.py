@@ -1,3 +1,4 @@
+from typing import List
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
 from app.models.factors import Factor, FactorValue, FactorAnalysis
@@ -90,7 +91,7 @@ def get_factor_values(factor_id: int, trade_date: str, security_id: int = None, 
         query = query.filter(FactorValue.security_id == security_id)
     return query.all()
 
-def create_factor_values(factor_id: int, trade_date: str, values: list[FactorValueCreate], db: Session = None):
+def create_factor_values(factor_id: int, trade_date: str, values: List[FactorValueCreate], db: Session = None):
     if db is None:
         db = SessionLocal()
         try:

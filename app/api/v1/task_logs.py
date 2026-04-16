@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+
+from typing import List
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
 from app.services.task_logs_service import get_task_logs, create_task_log, get_task_log_by_id, update_task_log, delete_task_log
@@ -7,7 +9,7 @@ from app.schemas.task_logs import TaskLogCreate, TaskLogUpdate, TaskLogOut
 
 router = APIRouter()
 
-@router.get("/", response_model=list[TaskLogOut])
+@router.get("/", response_model=List[TaskLogOut])
 def read_task_logs(skip: int = 0, limit: int = 100, task_type: str = None, status: str = None, db: Session = Depends(SessionLocal)):
     logs = get_task_logs(skip=skip, limit=limit, task_type=task_type, status=status, db=db)
     return logs

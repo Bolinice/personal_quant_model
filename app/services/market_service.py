@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
 from app.models.market import StockDaily, IndexDaily, TradingCalendar, StockFinancial, StockIndustry, StockBasic
-from app.schemas.market import StockDailyCreate, IndexDailyCreate, TradingCalendarCreate, StockFinancialCreate, StockIndustryCreate, StockBasicCreate
+from app.schemas.market import StockDailyCreate, IndexDailyCreate
 
 def get_stock_daily(ts_code: str, start_date: str, end_date: str, db: Session = None):
     if db is None:
@@ -158,7 +158,7 @@ def get_stock_basic(ts_code: str, db: Session = None):
             db.close()
     return db.query(StockBasic).filter(StockBasic.ts_code == ts_code).first()
 
-def create_stock_financial(financial_data: StockFinancialCreate, db: Session = None):
+def create_stock_financial(financial_data, db: Session = None):
     if db is None:
         db = SessionLocal()
         try:
@@ -175,7 +175,7 @@ def create_stock_financial(financial_data: StockFinancialCreate, db: Session = N
     db.refresh(db_financial)
     return db_financial
 
-def create_stock_industry(industry_data: StockIndustryCreate, db: Session = None):
+def create_stock_industry(industry_data, db: Session = None):
     if db is None:
         db = SessionLocal()
         try:
@@ -192,7 +192,7 @@ def create_stock_industry(industry_data: StockIndustryCreate, db: Session = None
     db.refresh(db_industry)
     return db_industry
 
-def create_stock_basic(basic_data: StockBasicCreate, db: Session = None):
+def create_stock_basic(basic_data, db: Session = None):
     if db is None:
         db = SessionLocal()
         try:

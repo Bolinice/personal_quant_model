@@ -1,3 +1,4 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
@@ -7,7 +8,7 @@ from app.schemas.alert_logs import AlertLogCreate, AlertLogUpdate, AlertLogOut
 
 router = APIRouter()
 
-@router.get("/", response_model=list[AlertLogOut])
+@router.get("/", response_model=List[AlertLogOut])
 def read_alert_logs(skip: int = 0, limit: int = 100, alert_type: str = None, severity: str = None, status: str = None, db: Session = Depends(SessionLocal)):
     logs = get_alert_logs(skip=skip, limit=limit, alert_type=alert_type, severity=severity, status=status, db=db)
     return logs

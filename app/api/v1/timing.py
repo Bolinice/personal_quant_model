@@ -1,3 +1,4 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
@@ -7,7 +8,7 @@ from app.schemas.timing import TimingSignalCreate, TimingConfigCreate, TimingCon
 
 router = APIRouter()
 
-@router.get("/signals", response_model=list[TimingSignalOut])
+@router.get("/signals", response_model=List[TimingSignalOut])
 def read_timing_signals(model_id: int, start_date: str, end_date: str, db: Session = Depends(SessionLocal)):
     signals = get_timing_signals(model_id, start_date, end_date, db=db)
     return signals

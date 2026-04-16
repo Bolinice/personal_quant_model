@@ -1,32 +1,48 @@
-from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any, List
-from datetime import date
+from datetime import datetime
+from pydantic import BaseModel
+from typing import Optional, List
 
 class PortfolioBase(BaseModel):
-    model_id: int
-    trade_date: date
-    target_exposure: float = 1.0
+    portfolio_code: str
+    portfolio_name: str
+    description: Optional[str] = None
+    initial_capital: float = 1000000.0
+    current_value: float = 1000000.0
+    is_active: bool = True
 
 class PortfolioCreate(PortfolioBase):
     pass
 
+class PortfolioUpdate(BaseModel):
+    portfolio_name: Optional[str] = None
+    description: Optional[str] = None
+    initial_capital: Optional[float] = None
+    current_value: Optional[float] = None
+    is_active: Optional[bool] = None
+
 class PortfolioInDB(PortfolioBase):
     id: int
-    created_at: date
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
 
 class PortfolioOut(PortfolioBase):
     id: int
-    created_at: date
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
 
+class Portfolio(PortfolioOut):
+    pass
+
 class PortfolioPositionBase(BaseModel):
     portfolio_id: int
     security_id: int
+    quantity: float
     weight: float
 
 class PortfolioPositionCreate(PortfolioPositionBase):
@@ -34,39 +50,17 @@ class PortfolioPositionCreate(PortfolioPositionBase):
 
 class PortfolioPositionInDB(PortfolioPositionBase):
     id: int
-    created_at: date
+    created_at: datetime
 
     class Config:
         from_attributes = True
 
 class PortfolioPositionOut(PortfolioPositionBase):
     id: int
-    created_at: date
+    created_at: datetime
 
     class Config:
         from_attributes = True
 
-class RebalanceRecordBase(BaseModel):
-    model_id: int
-    trade_date: date
-    rebalance_type: str = "scheduled"
-    buy_list: Optional[List[Dict[str, Any]]] = None
-    sell_list: Optional[List[Dict[str, Any]]] = None
-    total_turnover: float = 0.0
-
-class RebalanceRecordCreate(RebalanceRecordBase):
+class PortfolioPosition(PortfolioPositionOut):
     pass
-
-class RebalanceRecordInDB(RebalanceRecordBase):
-    id: int
-    created_at: date
-
-    class Config:
-        from_attributes = True
-
-class RebalanceRecordOut(RebalanceRecordBase):
-    id: int
-    created_at: date
-
-    class Config:
-        from_attributes = True

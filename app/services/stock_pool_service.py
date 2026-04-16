@@ -1,4 +1,6 @@
 from sqlalchemy.orm import Session
+
+from typing import List
 from app.db.base import SessionLocal
 from app.models.stock_pools import StockPool, StockPoolSnapshot
 from app.schemas.stock_pools import StockPoolCreate, StockPoolUpdate, FilterConfig
@@ -78,7 +80,7 @@ def get_stock_pool_snapshot(pool_id: int, trade_date: str, db: Session = None):
         StockPoolSnapshot.trade_date == trade_date
     ).first()
 
-def create_stock_pool_snapshot(pool_id: int, trade_date: str, securities: list[str], eligible_count: int, db: Session = None):
+def create_stock_pool_snapshot(pool_id: int, trade_date: str, securities: List[str], eligible_count: int, db: Session = None):
     if db is None:
         db = SessionLocal()
         try:

@@ -51,3 +51,19 @@ class FactorAnalysis(Base):
     
     def __repr__(self):
         return f"<FactorAnalysis(factor_id={self.factor_id}, analysis_date='{self.analysis_date}', ic={self.ic})>"
+
+class FactorResult(Base):
+    __tablename__ = "factor_results"
+
+    id = Column(Integer, primary_key=True, index=True)
+    factor_id = Column(Integer, index=True)
+    security_id = Column(Integer, index=True)
+    trade_date = Column(DateTime, index=True)
+    score = Column(Float)
+    rank = Column(Integer)
+    quantile = Column(Integer)
+    is_selected = Column(Boolean, default=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+    def __repr__(self):
+        return f"<FactorResult(factor_id={self.factor_id}, security_id={self.security_id}, trade_date='{self.trade_date}', score={self.score})>"

@@ -1,4 +1,6 @@
 from sqlalchemy.orm import Session
+
+from typing import List
 from app.db.base import SessionLocal
 from app.models.simulated_portfolios import SimulatedPortfolio, SimulatedPortfolioPosition, SimulatedPortfolioNav
 from app.schemas.simulated_portfolios import SimulatedPortfolioCreate, SimulatedPortfolioPositionCreate, SimulatedPortfolioNavCreate
@@ -52,7 +54,7 @@ def get_simulated_portfolio_positions(portfolio_id: int, trade_date: str = None,
         query = query.filter(SimulatedPortfolioPosition.trade_date == trade_date)
     return query.all()
 
-def create_simulated_portfolio_positions(portfolio_id: int, positions: list[SimulatedPortfolioPositionCreate], db: Session = None):
+def create_simulated_portfolio_positions(portfolio_id: int, positions: List[SimulatedPortfolioPositionCreate], db: Session = None):
     if db is None:
         db = SessionLocal()
         try:

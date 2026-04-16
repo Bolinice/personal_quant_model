@@ -5,7 +5,10 @@ from app.schemas.backtests import BacktestCreate, BacktestUpdate, BacktestResult
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
+from app.core.cache import cache_service
+from app.core.logging import logger
 
+@cache_service.cache_decorator(ttl=1800)
 def get_backtests(model_id: int = None, status: str = None, skip: int = 0, limit: int = 100, db: Session = None):
     if db is None:
         db = SessionLocal()

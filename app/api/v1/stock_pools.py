@@ -1,3 +1,4 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
@@ -7,7 +8,7 @@ from app.schemas.stock_pools import StockPoolCreate, StockPoolUpdate, StockPoolO
 
 router = APIRouter()
 
-@router.get("/", response_model=list[StockPoolOut])
+@router.get("/", response_model=List[StockPoolOut])
 def read_stock_pools(skip: int = 0, limit: int = 100, db: Session = Depends(SessionLocal)):
     pools = get_stock_pools(skip=skip, limit=limit, db=db)
     return pools
@@ -30,7 +31,7 @@ def update_stock_pool_endpoint(pool_id: int, pool_update: StockPoolUpdate, db: S
         raise HTTPException(status_code=404, detail="Stock pool not found")
     return pool
 
-@router.get("/{pool_id}/snapshots", response_model=list[StockPoolSnapshotOut])
+@router.get("/{pool_id}/snapshots", response_model=List[StockPoolSnapshotOut])
 def read_stock_pool_snapshots(pool_id: int, trade_date: str = None, eligible_only: bool = False, db: Session = Depends(SessionLocal)):
     if trade_date:
         snapshot = get_stock_pool_snapshot(pool_id, trade_date, db=db)

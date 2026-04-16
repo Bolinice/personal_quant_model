@@ -1,8 +1,9 @@
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
 from app.models.backtests import BacktestResult, BacktestTrade
-from app.models.simulated_portfolios import SimulatedPortfolio, SimulatedPortfolioNav
-from app.schemas.performance import PerformanceAnalysis, PerformanceMetrics
+from app.models.simulated_portfolios import SimulatedPortfolio, SimulatedPortfolioNav, SimulatedPortfolioPosition
+from app.models.securities import Security
+from app.schemas.performance import PerformanceCreate
 import pandas as pd
 import numpy as np
 from datetime import datetime
@@ -100,23 +101,31 @@ def calculate_performance_metrics(nav_df, result):
     win_rate = positive_returns / total_returns if total_returns > 0 else 0
 
     return PerformanceAnalysis(
-        total_return=result.total_return,
-        annual_return=annual_return,
-        benchmark_return=result.benchmark_return,
-        excess_return=result.excess_return,
-        max_drawdown=max_drawdown,
-        sharpe=sharpe,
-        calmar=calmar,
-        information_ratio=information_ratio,
-        turnover_rate=turnover_rate,
+        metrics=PerformanceMetrics(
+            total_return=result.total_return,
+            annual_return=annual_return,
+            benchmark_return=result.benchmark_return,
+            excess_return=result.excess_return,
+            max_drawdown=max_drawdown,
+            sharpe=sharpe,
+            calmar=calmar,
+            information_ratio=information_ratio,
+            turnover_rate=turnover_rate,
+            win_rate=win_rate
+        ),
         monthly_returns=monthly_returns.to_dict(),
-        win_rate=win_rate,
-        performance_chart={
-            'dates': nav_df['date'].tolist(),
-            'nav': nav_df['nav'].tolist(),
-            'cum_return': nav_df['cum_return'].tolist(),
-            'drawdown': nav_df['drawdown'].tolist()
-        }
+        performance_chart=PerformanceChart(
+            dates=[d.strftime('%Y-%m-%d') for d in nav_df['date']],
+            nav=nav_df['nav'].tolist(),
+            cum_return=nav_df['cum_return'].tolist(),
+            drawdown=nav_df['drawdown'].tolist()
+        ),
+        industry_exposure=[],
+        style_exposure=StyleExposure(
+            market_cap=0.0,
+            value=0.0,
+            growth=0.0
+        )
     )
 
 def get_industry_exposure(portfolio_id: int, date: str, db: Session = None):
@@ -136,14 +145,14 @@ def get_industry_exposure(portfolio_id: int, date: str, db: Session = None):
             # 获取行业数据
             industry_exposure = {}
             for position in positions:
-                # 获取股票行业
-                industry = db.query(StockIndustry).filter(
-                    StockIndustry.ts_code == position.security_id,
-                    StockIndustry.trade_date == date
+                # 获取股票基本信息
+                security = db.query(Security).filter(
+                    Security.id == position.security_id,
+                    Security.list_date <= date
                 ).first()
 
-                if industry:
-                    industry_name = industry.industry_name
+                if security:
+                    industry_name = security.industry_name
                     weight = position.weight
                     industry_exposure[industry_name] = industry_exposure.get(industry_name, 0) + weight
 
@@ -162,14 +171,14 @@ def get_industry_exposure(portfolio_id: int, date: str, db: Session = None):
     # 获取行业数据
     industry_exposure = {}
     for position in positions:
-        # 获取股票行业
-        industry = db.query(StockIndustry).filter(
-            StockIndustry.ts_code == position.security_id,
-            StockIndustry.trade_date == date
+        # 获取股票基本信息
+        security = db.query(Security).filter(
+            Security.id == position.security_id,
+            Security.list_date <= date
         ).first()
 
-        if industry:
-            industry_name = industry.industry_name
+        if security:
+            industry_name = security.industry_name
             weight = position.weight
             industry_exposure[industry_name] = industry_exposure.get(industry_name, 0) + weight
 
@@ -193,17 +202,17 @@ def get_style_exposure(portfolio_id: int, date: str, db: Session = None):
             market_cap_exposure = 0
             for position in positions:
                 # 获取股票基本信息
-                stock_basic = db.query(StockBasic).filter(
-                    StockBasic.ts_code == position.security_id
+                security = db.query(Security).filter(
+                    Security.id == position.security_id
                 ).first()
 
-                if stock_basic:
+                if security:
                     # 简单的市值分类
-                    if stock_basic.market == "主板":
+                    if security.board == "主板":
                         market_cap_exposure += position.weight * 0.3
-                    elif stock_basic.market == "创业板":
+                    elif security.board == "创业板":
                         market_cap_exposure += position.weight * 0.5
-                    elif stock_basic.market == "科创板":
+                    elif security.board == "科创板":
                         market_cap_exposure += position.weight * 0.7
 
             return {
@@ -226,17 +235,17 @@ def get_style_exposure(portfolio_id: int, date: str, db: Session = None):
     market_cap_exposure = 0
     for position in positions:
         # 获取股票基本信息
-        stock_basic = db.query(StockBasic).filter(
-            StockBasic.ts_code == position.security_id
+        security = db.query(Security).filter(
+            Security.id == position.security_id
         ).first()
 
-        if stock_basic:
+        if security:
             # 简单的市值分类
-            if stock_basic.market == "主板":
+            if security.board == "主板":
                 market_cap_exposure += position.weight * 0.3
-            elif stock_basic.market == "创业板":
+            elif security.board == "创业板":
                 market_cap_exposure += position.weight * 0.5
-            elif stock_basic.market == "科创板":
+            elif security.board == "科创板":
                 market_cap_exposure += position.weight * 0.7
 
     return {
@@ -247,18 +256,18 @@ def get_style_exposure(portfolio_id: int, date: str, db: Session = None):
 
 def generate_performance_report(analysis: PerformanceAnalysis):
     """生成绩效报告"""
-    report = {
-        'summary': {
-            'total_return': f"{analysis.total_return:.2%}",
-            'annual_return': f"{analysis.annual_return:.2%}",
-            'max_drawdown': f"{analysis.max_drawdown:.2%}",
-            'sharpe': f"{analysis.sharpe:.2f}",
-            'calmar': f"{analysis.calmar:.2f}"
+    report = PerformanceReport(
+        summary={
+            'total_return': f"{analysis.metrics.total_return:.2%}",
+            'annual_return': f"{analysis.metrics.annual_return:.2%}",
+            'max_drawdown': f"{analysis.metrics.max_drawdown:.2%}",
+            'sharpe': f"{analysis.metrics.sharpe:.2f}",
+            'calmar': f"{analysis.metrics.calmar:.2f}"
         },
-        'charts': analysis.performance_chart,
-        'monthly_returns': {k: f"{v:.2%}" for k, v in analysis.monthly_returns.items()},
-        'industry_exposure': {},  # 需要实际数据
-        'style_exposure': analysis.style_exposure
-    }
+        charts=analysis.performance_chart,
+        monthly_returns={k: f"{v:.2%}" for k, v in analysis.monthly_returns.items()},
+        industry_exposure=analysis.industry_exposure,
+        style_exposure=analysis.style_exposure
+    )
 
     return report

@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
 from app.models.timing import TimingSignal, TimingConfig
-from app.schemas.timing import TimingSignalCreate, TimingConfigCreate, TimingConfigUpdate
+from app.schemas.timing import TimingSignalCreate, TimingConfigCreate
 import pandas as pd
 import numpy as np
 

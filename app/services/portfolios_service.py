@@ -1,7 +1,8 @@
+from typing import List
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
 from app.models.portfolios import Portfolio, PortfolioPosition, RebalanceRecord
-from app.schemas.portfolios import PortfolioCreate, PortfolioPositionCreate, RebalanceRecordCreate
+from app.schemas.portfolios import PortfolioCreate, PortfolioPositionCreate
 import pandas as pd
 import numpy as np
 
@@ -46,7 +47,7 @@ def get_portfolio_positions(portfolio_id: int, db: Session = None):
             db.close()
     return db.query(PortfolioPosition).filter(PortfolioPosition.portfolio_id == portfolio_id).all()
 
-def create_portfolio_positions(portfolio_id: int, positions: list[PortfolioPositionCreate], db: Session = None):
+def create_portfolio_positions(portfolio_id: int, positions: List[PortfolioPositionCreate], db: Session = None):
     if db is None:
         db = SessionLocal()
         try:
@@ -174,28 +175,29 @@ def generate_rebalance(model_id: int, trade_date: str, db: Session = None):
     if db is None:
         db = SessionLocal()
         try:
-        # 获取当前持仓
-        # 获取目标组合
-        # 计算买卖清单
-        # 生成调仓记录
-        
-        # 示例：生成一个简单的调仓记录
-        rebalance = RebalanceRecordCreate(
-            model_id=model_id,
-            trade_date=trade_date,
-            rebalance_type="scheduled",
-            buy_list=[{"security_id": 21, "weight": 0.05}],
-            sell_list=[{"security_id": 1, "weight": 0.05}],
-            total_turnover=0.1
-        )
-        return create_rebalance_record(rebalance, db=db)
-    finally:
-        db.close()
-    
+            # 获取当前持仓
+            # 获取目标组合
+            # 计算买卖清单
+            # 生成调仓记录
+
+            # 示例：生成一个简单的调仓记录
+            rebalance = RebalanceRecordCreate(
+                model_id=model_id,
+                trade_date=trade_date,
+                rebalance_type="scheduled",
+                buy_list=[{"security_id": 21, "weight": 0.05}],
+                sell_list=[{"security_id": 1, "weight": 0.05}],
+                total_turnover=0.1
+            )
+            return create_rebalance_record(rebalance, db=db)
+        finally:
+            db.close()
+
     # 获取当前持仓
     # 获取目标组合
     # 计算买卖清单
     # 生成调仓记录
+    return None
     
     # 示例：生成一个简单的调仓记录
     rebalance = RebalanceRecordCreate(

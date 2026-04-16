@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+
+from typing import List
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
 from app.services.reports_service import (
@@ -16,7 +18,7 @@ from app.schemas.reports import (
 
 router = APIRouter()
 
-@router.get("/", response_model=list[ReportOut])
+@router.get("/", response_model=List[ReportOut])
 def read_reports(skip: int = 0, limit: int = 100, db: Session = Depends(SessionLocal)):
     reports = get_reports(skip=skip, limit=limit, db=db)
     return reports
@@ -47,7 +49,7 @@ def delete_report_endpoint(report_id: int, db: Session = Depends(SessionLocal)):
     return {"message": "Report deleted successfully"}
 
 # Report Templates
-@router.get("/templates/", response_model=list[ReportTemplateOut])
+@router.get("/templates/", response_model=List[ReportTemplateOut])
 def read_report_templates(skip: int = 0, limit: int = 100, db: Session = Depends(SessionLocal)):
     templates = get_report_templates(skip=skip, limit=limit, db=db)
     return templates
@@ -78,7 +80,7 @@ def delete_report_template_endpoint(template_id: int, db: Session = Depends(Sess
     return {"message": "Report template deleted successfully"}
 
 # Report Schedules
-@router.get("/schedules/", response_model=list[ReportScheduleOut])
+@router.get("/schedules/", response_model=List[ReportScheduleOut])
 def read_report_schedules(skip: int = 0, limit: int = 100, db: Session = Depends(SessionLocal)):
     schedules = get_report_schedules(skip=skip, limit=limit, db=db)
     return schedules

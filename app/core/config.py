@@ -14,8 +14,11 @@ class Settings(BaseSettings):
     minio_secret_key: str
     minio_bucket_name: str
     debug: bool = False
+    cors_origins: str = ""
+    redis_host: str = "localhost"
+    redis_port: int = 6379
 
     class Config:
-        env_file = ".env"
+        env_file = "app/.env"
 
 settings = Settings()

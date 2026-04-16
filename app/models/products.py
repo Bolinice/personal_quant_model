@@ -45,17 +45,3 @@ class SubscriptionPlan(Base):
     def __repr__(self):
         return f"<SubscriptionPlan(id={self.id}, plan_name='{self.plan_name}', price={self.price})>"
 
-class Subscription(Base):
-    __tablename__ = "subscriptions"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, index=True)
-    product_id = Column(Integer, index=True)
-    plan_id = Column(Integer, index=True)
-    start_time = Column(DateTime)
-    end_time = Column(DateTime)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, server_default=func.now())
-    
-    def __repr__(self):
-        return f"<Subscription(id={self.id}, user_id={self.user_id}, product_id={self.product_id})>"

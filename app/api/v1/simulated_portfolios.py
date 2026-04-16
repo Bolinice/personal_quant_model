@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+
+from typing import List
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
 from app.services.simulated_portfolios_service import get_simulated_portfolios, create_simulated_portfolio, get_simulated_portfolio_positions, create_simulated_portfolio_positions, get_simulated_portfolio_navs, create_simulated_portfolio_nav, update_simulated_portfolio, calculate_simulated_portfolio_nav
@@ -7,7 +9,7 @@ from app.schemas.simulated_portfolios import SimulatedPortfolioCreate, Simulated
 
 router = APIRouter()
 
-@router.get("/", response_model=list[SimulatedPortfolioOut])
+@router.get("/", response_model=List[SimulatedPortfolioOut])
 def read_simulated_portfolios(model_id: int = None, skip: int = 0, limit: int = 100, db: Session = Depends(SessionLocal)):
     portfolios = get_simulated_portfolios(model_id=model_id, skip=skip, limit=limit, db=db)
     return portfolios
@@ -16,16 +18,16 @@ def read_simulated_portfolios(model_id: int = None, skip: int = 0, limit: int = 
 def create_simulated_portfolio_endpoint(portfolio: SimulatedPortfolioCreate, db: Session = Depends(SessionLocal)):
     return create_simulated_portfolio(portfolio, db=db)
 
-@router.get("/{portfolio_id}/positions", response_model=list[SimulatedPortfolioPositionOut])
+@router.get("/{portfolio_id}/positions", response_model=List[SimulatedPortfolioPositionOut])
 def read_simulated_portfolio_positions(portfolio_id: int, trade_date: str = None, db: Session = Depends(SessionLocal)):
     positions = get_simulated_portfolio_positions(portfolio_id, trade_date, db=db)
     return positions
 
-@router.post("/{portfolio_id}/positions", response_model=list[SimulatedPortfolioPositionOut])
-def create_simulated_portfolio_positions_endpoint(portfolio_id: int, positions: list[SimulatedPortfolioPositionCreate], db: Session = Depends(SessionLocal)):
+@router.post("/{portfolio_id}/positions", response_model=List[SimulatedPortfolioPositionOut])
+def create_simulated_portfolio_positions_endpoint(portfolio_id: int, positions: List[SimulatedPortfolioPositionCreate], db: Session = Depends(SessionLocal)):
     return create_simulated_portfolio_positions(portfolio_id, positions, db=db)
 
-@router.get("/{portfolio_id}/navs", response_model=list[SimulatedPortfolioNavOut])
+@router.get("/{portfolio_id}/navs", response_model=List[SimulatedPortfolioNavOut])
 def read_simulated_portfolio_navs(portfolio_id: int, start_date: str = None, end_date: str = None, db: Session = Depends(SessionLocal)):
     navs = get_simulated_portfolio_navs(portfolio_id, start_date, end_date, db=db)
     return navs

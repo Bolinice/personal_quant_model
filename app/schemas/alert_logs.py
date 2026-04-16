@@ -1,15 +1,14 @@
-from pydantic import BaseModel, Field
 from datetime import datetime
+from pydantic import BaseModel
 from typing import Optional
 
 class AlertLogBase(BaseModel):
-    alert_type: str
-    severity: str
+    alert_type: str  # risk, performance, system, data
+    severity: str  # critical, high, medium, low
     title: str
     message: str
     source: str
-    status: str
-    created_at: datetime
+    status: str  # open, resolved, acknowledged
     resolved_at: Optional[datetime] = None
     resolution: Optional[str] = None
     related_data: Optional[dict] = None
@@ -18,16 +17,27 @@ class AlertLogCreate(AlertLogBase):
     pass
 
 class AlertLogUpdate(BaseModel):
-    severity: Optional[str] = None
     title: Optional[str] = None
     message: Optional[str] = None
     status: Optional[str] = None
-    resolved_at: Optional[datetime] = None
     resolution: Optional[str] = None
-    related_data: Optional[dict] = None
+    resolved_at: Optional[datetime] = None
+
+class AlertLogInDB(AlertLogBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 class AlertLogOut(AlertLogBase):
     id: int
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+class AlertLog(AlertLogOut):
+    pass

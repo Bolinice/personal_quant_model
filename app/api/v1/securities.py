@@ -1,3 +1,4 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
@@ -7,7 +8,7 @@ from app.schemas.securities import SecurityCreate, SecurityUpdate, SecurityOut
 
 router = APIRouter()
 
-@router.get("/", response_model=list[SecurityOut])
+@router.get("/", response_model=List[SecurityOut])
 def read_securities(skip: int = 0, limit: int = 100, db: Session = Depends(SessionLocal)):
     securities = get_securities(skip=skip, limit=limit, db=db)
     return securities

@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
 from app.models.reports import Report, ReportTemplate, ReportSchedule
-from app.schemas.reports import ReportCreate, ReportUpdate, ReportOut, ReportTemplateCreate, ReportTemplateUpdate, ReportTemplateOut, ReportScheduleCreate, ReportScheduleUpdate, ReportScheduleOut
+from app.schemas.reports import ReportCreate, ReportUpdate, ReportOut, ReportTemplateCreate, ReportTemplateOut
 
 def get_reports(skip: int = 0, limit: int = 100, db: Session = None):
     if db is None:

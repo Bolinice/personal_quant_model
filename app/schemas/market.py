@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional
-from datetime import date
+from datetime import datetime, date
 
 class StockDailyBase(BaseModel):
     ts_code: str
@@ -45,6 +45,9 @@ class StockDailyOut(StockDailyBase):
     class Config:
         from_attributes = True
 
+class StockDaily(StockDailyOut):
+    pass
+
 class IndexDailyBase(BaseModel):
     index_code: str
     trade_date: date
@@ -88,105 +91,5 @@ class IndexDailyOut(IndexDailyBase):
     class Config:
         from_attributes = True
 
-class TradingCalendarBase(BaseModel):
-    exchange: str
-    cal_date: date
-    is_open: bool = True
-    pretrade_date: Optional[date] = None
-
-class TradingCalendarCreate(TradingCalendarBase):
+class IndexDaily(IndexDailyOut):
     pass
-
-class TradingCalendarUpdate(BaseModel):
-    exchange: Optional[str] = None
-    is_open: Optional[bool] = None
-    pretrade_date: Optional[date] = None
-
-class TradingCalendarInDB(TradingCalendarBase):
-    id: int
-    created_at: date
-
-    class Config:
-        from_attributes = True
-
-class TradingCalendarOut(TradingCalendarBase):
-    id: int
-    created_at: date
-
-    class Config:
-        from_attributes = True
-
-class StockFinancialBase(BaseModel):
-    ts_code: str
-    ann_date: date
-    end_date: date
-    report_type: str
-    update_flag: str
-    revenue: Optional[float] = None
-    yoy_revenue: Optional[float] = None
-    net_profit: Optional[float] = None
-    yoy_net_profit: Optional[float] = None
-    gross_profit: Optional[float] = None
-    gross_profit_margin: Optional[float] = None
-    roe: Optional[float] = None
-    roa: Optional[float] = None
-    eps: Optional[float] = None
-    bvps: Optional[float] = None
-    net_profit_ratio: Optional[float] = None
-    current_ratio: Optional[float] = None
-    quick_ratio: Optional[float] = None
-    cash_ratio: Optional[float] = None
-    asset_liability_ratio: Optional[float] = None
-
-class StockFinancialCreate(StockFinancialBase):
-    pass
-
-class StockFinancialOut(StockFinancialBase):
-    id: int
-    created_at: date
-
-    class Config:
-        from_attributes = True
-
-class StockIndustryBase(BaseModel):
-    ts_code: str
-    trade_date: date
-    industry_code: str
-    industry_name: str
-    level: int
-
-class StockIndustryCreate(StockIndustryBase):
-    pass
-
-class StockIndustryOut(StockIndustryBase):
-    id: int
-    created_at: date
-
-    class Config:
-        from_attributes = True
-
-class StockBasicBase(BaseModel):
-    ts_code: str
-    symbol: str
-    name: str
-    area: str
-    industry: str
-    fullname: str
-    enname: str
-    market: str
-    exchange: str
-    curr_type: str
-    list_status: str
-    list_date: Optional[date] = None
-    delist_date: Optional[date] = None
-    is_hs: bool
-
-class StockBasicCreate(StockBasicBase):
-    pass
-
-class StockBasicOut(StockBasicBase):
-    id: int
-    created_at: date
-
-    class Config:
-        from_attributes = True

@@ -1,7 +1,8 @@
+from typing import List
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
 from app.models.models import Model, ModelFactorWeight, ModelScore
-from app.schemas.models import ModelCreate, ModelUpdate, ModelFactorWeightCreate, TimingConfig, ConstraintConfig
+from app.schemas.models import ModelCreate, ModelUpdate
 import pandas as pd
 import numpy as np
 
@@ -74,7 +75,7 @@ def get_model_factor_weights(model_id: int, db: Session = None):
             db.close()
     return db.query(ModelFactorWeight).filter(ModelFactorWeight.model_id == model_id).all()
 
-def create_model_factor_weights(model_id: int, weights: list[ModelFactorWeightCreate], db: Session = None):
+def create_model_factor_weights(model_id: int, weights: List[ModelFactorWeightCreate], db: Session = None):
     if db is None:
         db = SessionLocal()
         try:
@@ -107,7 +108,7 @@ def create_model_factor_weights(model_id: int, weights: list[ModelFactorWeightCr
         db.refresh(db_weight)
     return db_weights
 
-def update_model_factor_weights(model_id: int, weights: list[ModelFactorWeightCreate], db: Session = None):
+def update_model_factor_weights(model_id: int, weights: List[ModelFactorWeightCreate], db: Session = None):
     if db is None:
         db = SessionLocal()
         try:

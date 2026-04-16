@@ -1,3 +1,4 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
@@ -12,7 +13,7 @@ def create_user_endpoint(user: UserCreate, db: Session = Depends(SessionLocal)):
     db_user = create_user(db, user)
     return db_user
 
-@router.get("/", response_model=list[UserOut])
+@router.get("/", response_model=List[UserOut])
 def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(SessionLocal)):
     users = db.query(User).offset(skip).limit(limit).all()
     return users

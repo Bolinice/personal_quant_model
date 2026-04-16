@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field
+from datetime import datetime, date
+from pydantic import BaseModel
 from typing import Optional
-from datetime import date
 
 class FactorBase(BaseModel):
     factor_code: str
@@ -38,6 +38,9 @@ class FactorOut(FactorBase):
     class Config:
         from_attributes = True
 
+class Factor(FactorOut):
+    pass
+
 class FactorValueBase(BaseModel):
     factor_id: int
     trade_date: date
@@ -61,6 +64,9 @@ class FactorValueOut(FactorValueBase):
 
     class Config:
         from_attributes = True
+
+class FactorValue(FactorValueOut):
+    pass
 
 class FactorAnalysisBase(BaseModel):
     factor_id: int
@@ -90,3 +96,35 @@ class FactorAnalysisOut(FactorAnalysisBase):
 
     class Config:
         from_attributes = True
+
+class FactorAnalysis(FactorAnalysisOut):
+    pass
+
+class FactorResultBase(BaseModel):
+    factor_id: int
+    security_id: int
+    trade_date: date
+    score: float
+    rank: int
+    quantile: int
+    is_selected: bool = False
+
+class FactorResultCreate(FactorResultBase):
+    pass
+
+class FactorResultInDB(FactorResultBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class FactorResultOut(FactorResultBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class FactorResult(FactorResultOut):
+    pass

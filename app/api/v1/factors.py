@@ -1,3 +1,4 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
@@ -7,7 +8,7 @@ from app.schemas.factors import FactorCreate, FactorUpdate, FactorValueCreate, F
 
 router = APIRouter()
 
-@router.get("/", response_model=list[FactorOut])
+@router.get("/", response_model=List[FactorOut])
 def read_factors(skip: int = 0, limit: int = 100, category: str = None, status: str = None, db: Session = Depends(SessionLocal)):
     factors = get_factors(skip=skip, limit=limit, category=category, status=status, db=db)
     return factors
@@ -30,26 +31,26 @@ def update_factor_endpoint(factor_id: int, factor_update: FactorUpdate, db: Sess
         raise HTTPException(status_code=404, detail="Factor not found")
     return factor
 
-@router.get("/{factor_id}/values", response_model=list[FactorValueOut])
+@router.get("/{factor_id}/values", response_model=List[FactorValueOut])
 def read_factor_values(factor_id: int, trade_date: str, security_id: int = None, db: Session = Depends(SessionLocal)):
     values = get_factor_values(factor_id, trade_date, security_id, db=db)
     return values
 
-@router.post("/{factor_id}/values", response_model=list[FactorValueOut])
-def create_factor_values_endpoint(factor_id: int, values: list[FactorValueCreate], db: Session = Depends(SessionLocal)):
+@router.post("/{factor_id}/values", response_model=List[FactorValueOut])
+def create_factor_values_endpoint(factor_id: int, values: List[FactorValueCreate], db: Session = Depends(SessionLocal)):
     return create_factor_values(factor_id, values, db=db)
 
-@router.post("/{factor_id}/calculate", response_model=list[FactorValueOut])
+@router.post("/{factor_id}/calculate", response_model=List[FactorValueOut])
 def calculate_factor_values_endpoint(factor_id: int, trade_date: str, db: Session = Depends(SessionLocal)):
     # 这里应该获取相关证券列表
     # 示例：模拟计算
     return calculate_factor_values(factor_id, trade_date, [], db=db)
 
-@router.post("/{factor_id}/preprocess", response_model=list[FactorValueOut])
+@router.post("/{factor_id}/preprocess", response_model=List[FactorValueOut])
 def preprocess_factor_values_endpoint(factor_id: int, trade_date: str, db: Session = Depends(SessionLocal)):
     return preprocess_factor_values(factor_id, trade_date, db=db)
 
-@router.get("/{factor_id}/analysis", response_model=list[FactorAnalysisOut])
+@router.get("/{factor_id}/analysis", response_model=List[FactorAnalysisOut])
 def read_factor_analysis(factor_id: int, start_date: str, end_date: str, db: Session = Depends(SessionLocal)):
     analysis = get_factor_analysis(factor_id, start_date, end_date, db=db)
     return analysis

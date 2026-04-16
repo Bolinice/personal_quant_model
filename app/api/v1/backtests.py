@@ -1,3 +1,4 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
@@ -7,7 +8,7 @@ from app.schemas.backtests import BacktestCreate, BacktestUpdate, BacktestResult
 
 router = APIRouter()
 
-@router.get("/", response_model=list[BacktestOut])
+@router.get("/", response_model=List[BacktestOut])
 def read_backtests(model_id: int = None, status: str = None, skip: int = 0, limit: int = 100, db: Session = Depends(SessionLocal)):
     backtests = get_backtests(model_id=model_id, status=status, skip=skip, limit=limit, db=db)
     return backtests
@@ -41,7 +42,7 @@ def read_backtest_result(backtest_id: int, db: Session = Depends(SessionLocal)):
 def create_backtest_result_endpoint(backtest_id: int, result: BacktestResultCreate, db: Session = Depends(SessionLocal)):
     return create_backtest_result(backtest_id, result, db=db)
 
-@router.get("/{backtest_id}/trades", response_model=list[BacktestTradeOut])
+@router.get("/{backtest_id}/trades", response_model=List[BacktestTradeOut])
 def read_backtest_trades(backtest_id: int, page: int = 1, page_size: int = 100, db: Session = Depends(SessionLocal)):
     trades = get_backtest_trades(backtest_id, page=page, page_size=page_size, db=db)
     return trades

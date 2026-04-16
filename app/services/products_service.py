@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
-from app.models.products import Product, ProductReport, SubscriptionPlan, Subscription
-from app.schemas.products import ProductCreate, ProductUpdate, ProductReportCreate, SubscriptionPlanCreate, SubscriptionCreate
+from app.models.products import Product, ProductReport, SubscriptionPlan
+from app.schemas.products import ProductCreate, ProductUpdate, ProductReportCreate, SubscriptionPlanCreate
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta

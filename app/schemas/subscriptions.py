@@ -1,13 +1,13 @@
-from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
-from datetime import date
+from datetime import datetime
+from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
 
 class SubscriptionBase(BaseModel):
     user_id: int
     product_id: int
     plan_id: int
-    start_time: date
-    end_time: date
+    start_time: datetime
+    end_time: datetime
     is_active: bool = True
     auto_renew: bool = True
     payment_method: str = "credit_card"
@@ -24,23 +24,26 @@ class SubscriptionUpdate(BaseModel):
 
 class SubscriptionInDB(SubscriptionBase):
     id: int
-    created_at: date
-    updated_at: date
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
 
 class SubscriptionOut(SubscriptionBase):
     id: int
-    created_at: date
-    updated_at: date
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
 
+class Subscription(SubscriptionOut):
+    pass
+
 class SubscriptionHistoryBase(BaseModel):
     subscription_id: int
-    action: str
+    action: str  # create, renew, cancel, upgrade
     details: Optional[Dict[str, Any]] = None
 
 class SubscriptionHistoryCreate(SubscriptionHistoryBase):
@@ -48,21 +51,24 @@ class SubscriptionHistoryCreate(SubscriptionHistoryBase):
 
 class SubscriptionHistoryInDB(SubscriptionHistoryBase):
     id: int
-    created_at: date
+    created_at: datetime
 
     class Config:
         from_attributes = True
 
 class SubscriptionHistoryOut(SubscriptionHistoryBase):
     id: int
-    created_at: date
+    created_at: datetime
 
     class Config:
         from_attributes = True
 
+class SubscriptionHistory(SubscriptionHistoryOut):
+    pass
+
 class SubscriptionPermissionBase(BaseModel):
     subscription_id: int
-    permission_type: str
+    permission_type: str  # read_report, access_api, full_access
     is_granted: bool = True
 
 class SubscriptionPermissionCreate(SubscriptionPermissionBase):
@@ -70,14 +76,17 @@ class SubscriptionPermissionCreate(SubscriptionPermissionBase):
 
 class SubscriptionPermissionInDB(SubscriptionPermissionBase):
     id: int
-    created_at: date
+    created_at: datetime
 
     class Config:
         from_attributes = True
 
 class SubscriptionPermissionOut(SubscriptionPermissionBase):
     id: int
-    created_at: date
+    created_at: datetime
 
     class Config:
         from_attributes = True
+
+class SubscriptionPermission(SubscriptionPermissionOut):
+    pass

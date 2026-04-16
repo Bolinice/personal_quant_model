@@ -1,30 +1,26 @@
 from sqlalchemy.orm import Session
-from app.db.base import SessionLocal
+from app.db.base import with_db
 from app.models.reports import Report, ReportTemplate, ReportSchedule
 from app.schemas.reports import ReportCreate, ReportUpdate, ReportOut, ReportTemplateCreate, ReportTemplateOut
 
+@with_db
 def get_reports(skip: int = 0, limit: int = 100, db: Session = None):
-    if db is None:
-        db = SessionLocal()
     return db.query(Report).offset(skip).limit(limit).all()
 
+@with_db
 def get_report_by_id(report_id: int, db: Session = None):
-    if db is None:
-        db = SessionLocal()
     return db.query(Report).filter(Report.id == report_id).first()
 
+@with_db
 def create_report(report: ReportCreate, db: Session = None):
-    if db is None:
-        db = SessionLocal()
     db_report = Report(**report.dict())
     db.add(db_report)
     db.commit()
     db.refresh(db_report)
     return db_report
 
+@with_db
 def update_report(report_id: int, report_update: ReportUpdate, db: Session = None):
-    if db is None:
-        db = SessionLocal()
     db_report = get_report_by_id(report_id, db)
     if db_report is None:
         return None
@@ -34,9 +30,8 @@ def update_report(report_id: int, report_update: ReportUpdate, db: Session = Non
     db.refresh(db_report)
     return db_report
 
+@with_db
 def delete_report(report_id: int, db: Session = None):
-    if db is None:
-        db = SessionLocal()
     db_report = get_report_by_id(report_id, db)
     if db_report is None:
         return False
@@ -44,28 +39,24 @@ def delete_report(report_id: int, db: Session = None):
     db.commit()
     return True
 
+@with_db
 def get_report_templates(skip: int = 0, limit: int = 100, db: Session = None):
-    if db is None:
-        db = SessionLocal()
     return db.query(ReportTemplate).offset(skip).limit(limit).all()
 
+@with_db
 def get_report_template_by_id(template_id: int, db: Session = None):
-    if db is None:
-        db = SessionLocal()
     return db.query(ReportTemplate).filter(ReportTemplate.id == template_id).first()
 
+@with_db
 def create_report_template(template: ReportTemplateCreate, db: Session = None):
-    if db is None:
-        db = SessionLocal()
     db_template = ReportTemplate(**template.dict())
     db.add(db_template)
     db.commit()
     db.refresh(db_template)
     return db_template
 
+@with_db
 def update_report_template(template_id: int, template_update: ReportTemplateUpdate, db: Session = None):
-    if db is None:
-        db = SessionLocal()
     db_template = get_report_template_by_id(template_id, db)
     if db_template is None:
         return None
@@ -75,9 +66,8 @@ def update_report_template(template_id: int, template_update: ReportTemplateUpda
     db.refresh(db_template)
     return db_template
 
+@with_db
 def delete_report_template(template_id: int, db: Session = None):
-    if db is None:
-        db = SessionLocal()
     db_template = get_report_template_by_id(template_id, db)
     if db_template is None:
         return False
@@ -85,28 +75,24 @@ def delete_report_template(template_id: int, db: Session = None):
     db.commit()
     return True
 
+@with_db
 def get_report_schedules(skip: int = 0, limit: int = 100, db: Session = None):
-    if db is None:
-        db = SessionLocal()
     return db.query(ReportSchedule).offset(skip).limit(limit).all()
 
+@with_db
 def get_report_schedule_by_id(schedule_id: int, db: Session = None):
-    if db is None:
-        db = SessionLocal()
     return db.query(ReportSchedule).filter(ReportSchedule.id == schedule_id).first()
 
+@with_db
 def create_report_schedule(schedule: ReportScheduleCreate, db: Session = None):
-    if db is None:
-        db = SessionLocal()
     db_schedule = ReportSchedule(**schedule.dict())
     db.add(db_schedule)
     db.commit()
     db.refresh(db_schedule)
     return db_schedule
 
+@with_db
 def update_report_schedule(schedule_id: int, schedule_update: ReportScheduleUpdate, db: Session = None):
-    if db is None:
-        db = SessionLocal()
     db_schedule = get_report_schedule_by_id(schedule_id, db)
     if db_schedule is None:
         return None
@@ -116,9 +102,8 @@ def update_report_schedule(schedule_id: int, schedule_update: ReportScheduleUpda
     db.refresh(db_schedule)
     return db_schedule
 
+@with_db
 def delete_report_schedule(schedule_id: int, db: Session = None):
-    if db is None:
-        db = SessionLocal()
     db_schedule = get_report_schedule_by_id(schedule_id, db)
     if db_schedule is None:
         return False
@@ -126,10 +111,9 @@ def delete_report_schedule(schedule_id: int, db: Session = None):
     db.commit()
     return True
 
+@with_db
 def generate_report(report_id: int, db: Session = None):
     """生成报告的函数（实际实现需要根据具体需求）"""
-    if db is None:
-        db = SessionLocal()
     report = get_report_by_id(report_id, db)
     if report is None:
         return None
@@ -141,10 +125,9 @@ def generate_report(report_id: int, db: Session = None):
     db.refresh(report)
     return report
 
+@with_db
 def schedule_report_generation(schedule_id: int, db: Session = None):
     """调度报告生成的函数"""
-    if db is None:
-        db = SessionLocal()
     schedule = get_report_schedule_by_id(schedule_id, db)
     if schedule is None:
         return None

@@ -43,6 +43,12 @@ class ReportTemplateBase(BaseModel):
 class ReportTemplateCreate(ReportTemplateBase):
     pass
 
+class ReportTemplateUpdate(BaseModel):
+    template_name: Optional[str] = None
+    template_type: Optional[str] = None
+    template_content: Optional[str] = None
+    description: Optional[str] = None
+
 class ReportTemplateInDB(ReportTemplateBase):
     id: int
     created_at: datetime
@@ -60,4 +66,38 @@ class ReportTemplateOut(ReportTemplateBase):
         from_attributes = True
 
 class ReportTemplate(ReportTemplateOut):
+    pass
+
+class ReportScheduleBase(BaseModel):
+    schedule_name: str
+    report_template_id: int
+    cron_expression: str
+    is_active: bool = True
+
+class ReportScheduleCreate(ReportScheduleBase):
+    pass
+
+class ReportScheduleUpdate(BaseModel):
+    schedule_name: Optional[str] = None
+    report_template_id: Optional[int] = None
+    cron_expression: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class ReportScheduleInDB(ReportScheduleBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ReportScheduleOut(ReportScheduleBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ReportSchedule(ReportScheduleOut):
     pass

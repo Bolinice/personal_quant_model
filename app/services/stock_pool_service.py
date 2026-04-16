@@ -1,60 +1,28 @@
 from sqlalchemy.orm import Session
 
 from typing import List
-from app.db.base import SessionLocal
+from app.db.base import with_db
 from app.models.stock_pools import StockPool, StockPoolSnapshot
 from app.schemas.stock_pools import StockPoolCreate, StockPoolUpdate, FilterConfig
 
+@with_db
 def get_stock_pools(skip: int = 0, limit: int = 100, db: Session = None):
-    if db is None:
-        db = SessionLocal()
-        try:
-            return db.query(StockPool).offset(skip).limit(limit).all()
-        finally:
-            db.close()
     return db.query(StockPool).offset(skip).limit(limit).all()
 
+@with_db
 def get_stock_pool_by_code(pool_code: str, db: Session = None):
-    if db is None:
-        db = SessionLocal()
-        try:
-            return db.query(StockPool).filter(StockPool.pool_code == pool_code).first()
-        finally:
-            db.close()
     return db.query(StockPool).filter(StockPool.pool_code == pool_code).first()
 
+@with_db
 def create_stock_pool(pool: StockPoolCreate, db: Session = None):
-    if db is None:
-        db = SessionLocal()
-        try:
-            db_pool = StockPool(**pool.dict())
-            db.add(db_pool)
-            db.commit()
-            db.refresh(db_pool)
-            return db_pool
-        finally:
-            db.close()
     db_pool = StockPool(**pool.dict())
     db.add(db_pool)
     db.commit()
     db.refresh(db_pool)
     return db_pool
 
+@with_db
 def update_stock_pool(pool_id: int, pool_update: StockPoolUpdate, db: Session = None):
-    if db is None:
-        db = SessionLocal()
-        try:
-            db_pool = db.query(StockPool).filter(StockPool.id == pool_id).first()
-            if not db_pool:
-                return None
-            update_data = pool_update.dict(exclude_unset=True)
-            for key, value in update_data.items():
-                setattr(db_pool, key, value)
-            db.commit()
-            db.refresh(db_pool)
-            return db_pool
-        finally:
-            db.close()
     db_pool = db.query(StockPool).filter(StockPool.id == pool_id).first()
     if not db_pool:
         return None
@@ -65,37 +33,15 @@ def update_stock_pool(pool_id: int, pool_update: StockPoolUpdate, db: Session = 
     db.refresh(db_pool)
     return db_pool
 
+@with_db
 def get_stock_pool_snapshot(pool_id: int, trade_date: str, db: Session = None):
-    if db is None:
-        db = SessionLocal()
-        try:
-            return db.query(StockPoolSnapshot).filter(
-                StockPoolSnapshot.pool_id == pool_id,
-                StockPoolSnapshot.trade_date == trade_date
-            ).first()
-        finally:
-            db.close()
     return db.query(StockPoolSnapshot).filter(
         StockPoolSnapshot.pool_id == pool_id,
         StockPoolSnapshot.trade_date == trade_date
     ).first()
 
+@with_db
 def create_stock_pool_snapshot(pool_id: int, trade_date: str, securities: List[str], eligible_count: int, db: Session = None):
-    if db is None:
-        db = SessionLocal()
-        try:
-            db_snapshot = StockPoolSnapshot(
-                pool_id=pool_id,
-                trade_date=trade_date,
-                securities=securities,
-                eligible_count=eligible_count
-            )
-            db.add(db_snapshot)
-            db.commit()
-            db.refresh(db_snapshot)
-            return db_snapshot
-        finally:
-            db.close()
     db_snapshot = StockPoolSnapshot(
         pool_id=pool_id,
         trade_date=trade_date,

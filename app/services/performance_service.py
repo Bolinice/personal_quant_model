@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from app.db.base import SessionLocal
+from app.db.base import with_db
 from app.models.backtests import BacktestResult, BacktestTrade
 from app.models.simulated_portfolios import SimulatedPortfolio, SimulatedPortfolioNav, SimulatedPortfolioPosition
 from app.models.securities import Security
@@ -8,35 +8,9 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 
+@with_db
 def get_performance_analysis(backtest_id: int, start_date: str = None, end_date: str = None, db: Session = None):
     """获取绩效分析结果"""
-    if db is None:
-        db = SessionLocal()
-        try:
-            # 获取回测结果
-            result = db.query(BacktestResult).filter(BacktestResult.backtest_id == backtest_id).first()
-            if not result:
-                return None
-
-            # 获取交易记录
-            trades = db.query(BacktestTrade).filter(BacktestTrade.backtest_id == backtest_id).all()
-
-            # 获取净值历史
-            navs = db.query(SimulatedPortfolioNav).filter(
-                SimulatedPortfolioNav.portfolio_id == backtest_id,
-                SimulatedPortfolioNav.trade_date >= start_date if start_date else "1900-01-01",
-                SimulatedPortfolioNav.trade_date <= end_date if end_date else datetime.now().strftime("%Y-%m-%d")
-            ).all()
-
-            # 转换为DataFrame
-            nav_df = pd.DataFrame([(n.trade_date, n.nav) for n in navs], columns=['date', 'nav'])
-
-            # 计算绩效指标
-            analysis = calculate_performance_metrics(nav_df, result)
-
-            return analysis
-        finally:
-            db.close()
     # 获取回测结果
     result = db.query(BacktestResult).filter(BacktestResult.backtest_id == backtest_id).first()
     if not result:
@@ -128,37 +102,9 @@ def calculate_performance_metrics(nav_df, result):
         )
     )
 
+@with_db
 def get_industry_exposure(portfolio_id: int, date: str, db: Session = None):
     """获取行业暴露分析"""
-    if db is None:
-        db = SessionLocal()
-        try:
-            # 获取持仓
-            positions = db.query(SimulatedPortfolioPosition).filter(
-                SimulatedPortfolioPosition.portfolio_id == portfolio_id,
-                SimulatedPortfolioPosition.trade_date == date
-            ).all()
-
-            if not positions:
-                return None
-
-            # 获取行业数据
-            industry_exposure = {}
-            for position in positions:
-                # 获取股票基本信息
-                security = db.query(Security).filter(
-                    Security.id == position.security_id,
-                    Security.list_date <= date
-                ).first()
-
-                if security:
-                    industry_name = security.industry_name
-                    weight = position.weight
-                    industry_exposure[industry_name] = industry_exposure.get(industry_name, 0) + weight
-
-            return industry_exposure
-        finally:
-            db.close()
     # 获取持仓
     positions = db.query(SimulatedPortfolioPosition).filter(
         SimulatedPortfolioPosition.portfolio_id == portfolio_id,
@@ -184,44 +130,9 @@ def get_industry_exposure(portfolio_id: int, date: str, db: Session = None):
 
     return industry_exposure
 
+@with_db
 def get_style_exposure(portfolio_id: int, date: str, db: Session = None):
     """获取风格暴露分析"""
-    if db is None:
-        db = SessionLocal()
-        try:
-            # 获取持仓
-            positions = db.query(SimulatedPortfolioPosition).filter(
-                SimulatedPortfolioPosition.portfolio_id == portfolio_id,
-                SimulatedPortfolioPosition.trade_date == date
-            ).all()
-
-            if not positions:
-                return None
-
-            # 计算市值暴露
-            market_cap_exposure = 0
-            for position in positions:
-                # 获取股票基本信息
-                security = db.query(Security).filter(
-                    Security.id == position.security_id
-                ).first()
-
-                if security:
-                    # 简单的市值分类
-                    if security.board == "主板":
-                        market_cap_exposure += position.weight * 0.3
-                    elif security.board == "创业板":
-                        market_cap_exposure += position.weight * 0.5
-                    elif security.board == "科创板":
-                        market_cap_exposure += position.weight * 0.7
-
-            return {
-                'market_cap': market_cap_exposure,
-                'value': 0.0,  # 估值暴露
-                'growth': 0.0   # 成长暴露
-            }
-        finally:
-            db.close()
     # 获取持仓
     positions = db.query(SimulatedPortfolioPosition).filter(
         SimulatedPortfolioPosition.portfolio_id == portfolio_id,

@@ -1,0 +1,91 @@
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import {
+  Box, Typography, Paper, Grid, Button, Table, TableBody,
+  TableCell, TableContainer, TableHead, TableRow, Chip, Snackbar, Alert,
+} from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import { portfolioApi, PortfolioPosition, RebalanceRecord } from '../../api/portfolios';
+
+export default function PortfolioDetail() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [positions, setPositions] = useState<PortfolioPosition[]>([]);
+  const [rebalances, setRebalances] = useState<RebalanceRecord[]>([]);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
+
+  useEffect(() => {
+    if (id) {
+      portfolioApi.getPositions(Number(id)).then((res) => setPositions(res.data)).catch(() => {});
+    }
+  }, [id]);
+
+  const rebalanceTypeLabel: Record<string, string> = { scheduled: '定期', signal: '信号', risk: '风控' };
+
+  return (
+    <Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/portfolios')}>返回</Button>
+        <Typography variant="h5" sx={{ fontWeight: 600 }}>组合详情 #{id}</Typography>
+      </Box>
+
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>持仓明细</Typography>
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>证券ID</TableCell>
+                <TableCell>数量</TableCell>
+                <TableCell>权重</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {positions.map((p) => (
+                <TableRow key={p.id}>
+                  <TableCell>{p.security_id}</TableCell>
+                  <TableCell>{p.quantity?.toLocaleString()}</TableCell>
+                  <TableCell>{(p.weight * 100).toFixed(2)}%</TableCell>
+                </TableRow>
+              ))}
+              {positions.length === 0 && <TableRow><TableCell colSpan={3} align="center">暂无持仓数据</TableCell></TableRow>}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
+
+      <Paper sx={{ p: 2 }}>
+        <Typography variant="h6" gutterBottom>调仓记录</Typography>
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>日期</TableCell>
+                <TableCell>类型</TableCell>
+                <TableCell>买入</TableCell>
+                <TableCell>卖出</TableCell>
+                <TableCell>换手率</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {rebalances.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell>{r.trade_date?.slice(0, 10)}</TableCell>
+                  <TableCell><Chip label={rebalanceTypeLabel[r.rebalance_type] || r.rebalance_type} size="small" /></TableCell>
+                  <TableCell>{Array.isArray(r.buy_list) ? r.buy_list.length : 0}只</TableCell>
+                  <TableCell>{Array.isArray(r.sell_list) ? r.sell_list.length : 0}只</TableCell>
+                  <TableCell>{(r.total_turnover * 100).toFixed(2)}%</TableCell>
+                </TableRow>
+              ))}
+              {rebalances.length === 0 && <TableRow><TableCell colSpan={5} align="center">暂无调仓记录</TableCell></TableRow>}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
+
+      <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>{snackbar.message}</Alert>
+      </Snackbar>
+    </Box>
+  );
+}

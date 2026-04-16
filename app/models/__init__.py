@@ -1,10 +1,10 @@
 from .user import User
 from .securities import Security
 from .stock_pools import StockPool
-from .factors import Factor, FactorResult
-from .models import Model
+from .factors import Factor, FactorValue, FactorAnalysis, FactorResult
+from .models import Model, ModelFactorWeight, ModelScore
 from .timing import TimingModel
-from .portfolios import Portfolio
+from .portfolios import Portfolio, PortfolioPosition, RebalanceRecord
 from .backtests import Backtest, BacktestResult, BacktestTrade
 from .simulated_portfolios import SimulatedPortfolio, SimulatedPortfolioPosition, SimulatedPortfolioNav
 from .products import Product
@@ -18,10 +18,16 @@ __all__ = [
     "Security",
     "StockPool",
     "Factor",
+    "FactorValue",
+    "FactorAnalysis",
     "FactorResult",
     "Model",
+    "ModelFactorWeight",
+    "ModelScore",
     "TimingModel",
     "Portfolio",
+    "PortfolioPosition",
+    "RebalanceRecord",
     "Backtest",
     "BacktestResult",
     "BacktestTrade",

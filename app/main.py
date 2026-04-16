@@ -1,8 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.logging import logger
-from app.api.v1 import auth, users, securities, market, stock_pools, factors, models, timing, portfolios, backtests, simulated_portfolios, products, subscriptions, reports, task_logs, alert_logs, performance
+from app.api.v1 import api_router
 from app.middleware.middleware import MetricsMiddleware, LoggingMiddleware, RateLimitMiddleware
 
 app = FastAPI(
@@ -10,6 +10,14 @@ app = FastAPI(
     description="基于多因子选股模型的量化投资策略平台",
     version="1.0.0"
 )
+
+# 添加中间件确保 UTF-8 编码
+@app.middleware("http")
+async def add_charset_middleware(request: Request, call_next):
+    response = await call_next(request)
+    if "application/json" in response.headers.get("content-type", ""):
+        response.headers["content-type"] = "application/json; charset=utf-8"
+    return response
 
 # 初始化日志系统
 logger.info("Application starting...")
@@ -27,24 +35,8 @@ app.add_middleware(LoggingMiddleware)
 app.add_middleware(RateLimitMiddleware, requests_per_minute=60)
 app.add_middleware(MetricsMiddleware)
 
-# 包含API路由 - 使用特定路径前缀避免冲突
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["认证"])
-app.include_router(users.router, prefix="/api/v1/users", tags=["用户管理"])
-app.include_router(securities.router, prefix="/api/v1/securities", tags=["证券管理"])
-app.include_router(market.router, prefix="/api/v1/market", tags=["市场数据"])
-app.include_router(stock_pools.router, prefix="/api/v1/stock-pools", tags=["股票池管理"])
-app.include_router(factors.router, prefix="/api/v1/factors", tags=["因子管理"])
-app.include_router(models.router, prefix="/api/v1/models", tags=["模型管理"])
-app.include_router(timing.router, prefix="/api/v1/timing", tags=["择时管理"])
-app.include_router(portfolios.router, prefix="/api/v1/portfolios", tags=["组合管理"])
-app.include_router(backtests.router, prefix="/api/v1/backtests", tags=["回测管理"])
-app.include_router(simulated_portfolios.router, prefix="/api/v1/simulated-portfolios", tags=["模拟组合"])
-app.include_router(products.router, prefix="/api/v1/products", tags=["产品管理"])
-app.include_router(subscriptions.router, prefix="/api/v1/subscriptions", tags=["订阅管理"])
-app.include_router(reports.router, prefix="/api/v1/reports", tags=["报告管理"])
-app.include_router(task_logs.router, prefix="/api/v1/task-logs", tags=["任务日志"])
-app.include_router(alert_logs.router, prefix="/api/v1/alert-logs", tags=["告警日志"])
-app.include_router(performance.router, prefix="/api/v1/performance", tags=["绩效分析"])
+# 注册API路由
+app.include_router(api_router, prefix="/api/v1")
 
 @app.get("/")
 async def root():
@@ -54,10 +46,10 @@ async def root():
 async def health_check():
     """健康检查端点"""
     try:
-        # 检查数据库连接
-        from app.db.connection import engine
+        from sqlalchemy import text
+        from app.db.base import engine
         with engine.connect() as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
 
         return {"status": "healthy", "message": "All services are running"}
     except Exception as e:

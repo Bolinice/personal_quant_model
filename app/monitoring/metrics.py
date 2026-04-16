@@ -30,6 +30,12 @@ DATABASE_CONNECTIONS = Gauge(
     'Number of active database connections'
 )
 
+RATE_LIMIT_EXCEEDED = Counter(
+    'rate_limit_exceeded_total',
+    'Rate limit exceeded',
+    ['endpoint']
+)
+
 def record_request(method: str, endpoint: str, status_code: int, duration: float):
     """记录HTTP请求指标"""
     REQUEST_COUNT.labels(method=method, endpoint=endpoint, status_code=status_code).inc()

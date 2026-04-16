@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from app.db.base import SessionLocal
+from app.db.base import with_db
 from app.models.backtests import Backtest, BacktestResult, BacktestTrade
 from app.models.models import Model
 from app.models.stock_pools import StockPool
@@ -15,18 +15,8 @@ from app.core.trading_utils import get_trading_calendar
 from app.core.portfolio_utils import create_simulated_portfolio, get_portfolio_positions
 
 @cache_service.cache_decorator(ttl=1800)
+@with_db
 def get_backtests(model_id: int = None, status: str = None, skip: int = 0, limit: int = 100, db: Session = None):
-    if db is None:
-        db = SessionLocal()
-        try:
-            query = db.query(Backtest)
-            if model_id:
-                query = query.filter(Backtest.model_id == model_id)
-            if status:
-                query = query.filter(Backtest.status == status)
-            return query.offset(skip).limit(limit).all()
-        finally:
-            db.close()
     query = db.query(Backtest)
     if model_id:
         query = query.filter(Backtest.model_id == model_id)
@@ -34,18 +24,8 @@ def get_backtests(model_id: int = None, status: str = None, skip: int = 0, limit
         query = query.filter(Backtest.status == status)
     return query.offset(skip).limit(limit).all()
 
+@with_db
 def create_backtest(backtest: BacktestCreate, db: Session = None):
-    if db is None:
-        db = SessionLocal()
-        try:
-            db_backtest = Backtest(**backtest.model_dump())
-            db_backtest.status = "pending"
-            db.add(db_backtest)
-            db.commit()
-            db.refresh(db_backtest)
-            return db_backtest
-        finally:
-            db.close()
     db_backtest = Backtest(**backtest.model_dump())
     db_backtest.status = "pending"
     db.add(db_backtest)
@@ -53,21 +33,8 @@ def create_backtest(backtest: BacktestCreate, db: Session = None):
     db.refresh(db_backtest)
     return db_backtest
 
+@with_db
 def update_backtest(backtest_id: int, backtest_update: BacktestUpdate, db: Session = None):
-    if db is None:
-        db = SessionLocal()
-        try:
-            db_backtest = db.query(Backtest).filter(Backtest.id == backtest_id).first()
-            if not db_backtest:
-                return None
-            update_data = backtest_update.model_dump(exclude_unset=True)
-            for key, value in update_data.items():
-                setattr(db_backtest, key, value)
-            db.commit()
-            db.refresh(db_backtest)
-            return db_backtest
-        finally:
-            db.close()
     db_backtest = db.query(Backtest).filter(Backtest.id == backtest_id).first()
     if not db_backtest:
         return None
@@ -78,70 +45,26 @@ def update_backtest(backtest_id: int, backtest_update: BacktestUpdate, db: Sessi
     db.refresh(db_backtest)
     return db_backtest
 
+@with_db
 def get_backtest_results(backtest_id: int, db: Session = None):
-    if db is None:
-        db = SessionLocal()
-        try:
-            return db.query(BacktestResult).filter(BacktestResult.backtest_id == backtest_id).first()
-        finally:
-            db.close()
     return db.query(BacktestResult).filter(BacktestResult.backtest_id == backtest_id).first()
 
+@with_db
 def create_backtest_result(backtest_id: int, result: BacktestResultCreate, db: Session = None):
-    if db is None:
-        db = SessionLocal()
-        try:
-            db_result = BacktestResult(backtest_id=backtest_id, **result.model_dump())
-            db.add(db_result)
-            db.commit()
-            db.refresh(db_result)
-            return db_result
-        finally:
-            db.close()
     db_result = BacktestResult(backtest_id=backtest_id, **result.model_dump())
     db.add(db_result)
     db.commit()
     db.refresh(db_result)
     return db_result
 
+@with_db
 def get_backtest_trades(backtest_id: int, page: int = 1, page_size: int = 100, db: Session = None):
-    if db is None:
-        db = SessionLocal()
-        try:
-            offset = (page - 1) * page_size
-            return db.query(BacktestTrade).filter(BacktestTrade.backtest_id == backtest_id).offset(offset).limit(page_size).all()
-        finally:
-            db.close()
     offset = (page - 1) * page_size
     return db.query(BacktestTrade).filter(BacktestTrade.backtest_id == backtest_id).offset(offset).limit(page_size).all()
 
+@with_db
 def run_backtest(backtest_id: int, db: Session = None):
     """执行回测任务"""
-    if db is None:
-        db = SessionLocal()
-        try:
-            # 获取回测配置
-            backtest = db.query(Backtest).filter(Backtest.id == backtest_id).first()
-            if not backtest:
-                return None
-
-            # 更新状态为运行中
-            backtest.status = "running"
-            db.commit()
-
-            # 执行回测逻辑
-            result = execute_backtest(backtest, db=db)
-
-            # 保存结果
-            create_backtest_result(backtest_id, result, db=db)
-
-            # 更新回测状态为成功
-            backtest.status = "success"
-            db.commit()
-
-            return backtest
-        finally:
-            db.close()
     # 获取回测配置
     backtest = db.query(Backtest).filter(Backtest.id == backtest_id).first()
     if not backtest:
@@ -468,19 +391,9 @@ def calculate_backtest_results(nav_history, benchmark, db):
         turnover_rate=turnover_rate
     )
 
+@with_db
 def cancel_backtest(backtest_id: int, db: Session = None):
     """取消回测任务"""
-    if db is None:
-        db = SessionLocal()
-        try:
-            backtest = db.query(Backtest).filter(Backtest.id == backtest_id).first()
-            if not backtest:
-                return False
-            backtest.status = "failed"
-            db.commit()
-            return True
-        finally:
-            db.close()
     backtest = db.query(Backtest).filter(Backtest.id == backtest_id).first()
     if not backtest:
         return False

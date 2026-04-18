@@ -1,18 +1,367 @@
 """
 报告生成异步任务
+实现ADD 6.1节步骤12: 日终报告生成
 """
+from datetime import datetime, date
 from app.core.celery_config import celery_app
 from app.core.logging import logger
+from app.db.base import SessionLocal
+
+
+def _create_task_log(db, task_type, task_name, run_id, params=None):
+    """创建任务日志"""
+    from app.models.task_logs import TaskLog
+    log = TaskLog(
+        task_type=task_type,
+        task_name=task_name,
+        run_id=run_id,
+        status="running",
+        params_json=params,
+        started_at=datetime.now(),
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+    return log
+
+
+def _update_task_log(db, log, status, result=None, error=None):
+    """更新任务日志"""
+    log.status = status
+    log.ended_at = datetime.now()
+    log.duration = (log.ended_at - log.started_at).total_seconds()
+    if result:
+        log.result_json = result
+    if error:
+        log.error_message = str(error)[:2000]
+    db.commit()
 
 
 @celery_app.task(bind=True, max_retries=3, name="app.tasks.report_generate.run_daily_report_generate")
-def run_daily_report_generate(self):
-    """日终报告生成任务"""
+def run_daily_report_generate(self, trade_date: str = None, report_types: list = None):
+    """
+    日终报告生成任务
+    流程: 获取待生成报告 → 汇总数据 → 生成报告内容 → 更新状态
+    """
+    run_id = self.request.id
+    db = SessionLocal()
+
     try:
-        logger.info("Daily report generation started")
-        # TODO: 实现报告生成逻辑
-        logger.info("Daily report generation completed")
-        return {"status": "success"}
+        from app.models.reports import Report
+        from app.models.models import Model, ModelPerformance
+        from app.models.factors import Factor, FactorAnalysis
+        from app.models.portfolios import Portfolio, PortfolioPosition
+        from app.models.task_logs import TaskLog
+        from sqlalchemy import and_, func
+        import json
+
+        logger.info(f"Daily report generation started, run_id={run_id}")
+
+        # 创建任务日志
+        task_log = _create_task_log(db, "report_generate", "日终报告生成", run_id,
+                                     params={"trade_date": trade_date, "report_types": report_types})
+
+        # 确定计算日期
+        if trade_date:
+            calc_date = date.fromisoformat(trade_date) if isinstance(trade_date, str) else trade_date
+        else:
+            calc_date = date.today()
+
+        if report_types is None:
+            report_types = ["daily", "factor", "risk"]
+
+        generated_reports = []
+        errors = []
+
+        # === 1. 日报: 模型表现汇总 ===
+        if "daily" in report_types:
+            try:
+                active_models = db.query(Model).filter(Model.status == "active").all()
+
+                model_summaries = []
+                for model in active_models:
+                    # 获取最新表现
+                    perf = db.query(ModelPerformance).filter(
+                        ModelPerformance.model_id == model.id,
+                        ModelPerformance.trade_date <= calc_date,
+                    ).order_by(ModelPerformance.trade_date.desc()).first()
+
+                    # 获取最新组合
+                    portfolio = db.query(Portfolio).filter(
+                        Portfolio.model_id == model.id,
+                    ).order_by(Portfolio.trade_date.desc()).first()
+
+                    position_count = 0
+                    if portfolio:
+                        position_count = db.query(PortfolioPosition).filter(
+                            PortfolioPosition.portfolio_id == portfolio.id
+                        ).count()
+
+                    model_summaries.append({
+                        "model_id": model.id,
+                        "model_code": model.model_code,
+                        "model_name": model.model_name,
+                        "daily_return": float(perf.daily_return) if perf and perf.daily_return else None,
+                        "cumulative_return": float(perf.cumulative_return) if perf and perf.cumulative_return else None,
+                        "max_drawdown": float(perf.max_drawdown) if perf and perf.max_drawdown else None,
+                        "sharpe_ratio": float(perf.sharpe_ratio) if perf and perf.sharpe_ratio else None,
+                        "ic": float(perf.ic) if perf and perf.ic else None,
+                        "turnover": float(perf.turnover) if perf and perf.turnover else None,
+                        "num_selected": perf.num_selected if perf else 0,
+                        "position_count": position_count,
+                    })
+
+                # 获取今日任务执行情况
+                today_tasks = db.query(TaskLog).filter(
+                    func.date(TaskLog.created_at) == calc_date,
+                ).all()
+
+                task_summary = {
+                    "total": len(today_tasks),
+                    "success": sum(1 for t in today_tasks if t.status == "success"),
+                    "failed": sum(1 for t in today_tasks if t.status == "failed"),
+                    "running": sum(1 for t in today_tasks if t.status == "running"),
+                }
+
+                # 生成日报内容
+                content = _generate_daily_report_content(calc_date, model_summaries, task_summary)
+
+                # 创建报告记录
+                report = Report(
+                    title=f"日报 {calc_date}",
+                    report_type="daily",
+                    report_date=calc_date,
+                    content=content,
+                    summary=json.dumps({
+                        "models": len(model_summaries),
+                        "tasks": task_summary,
+                    }, ensure_ascii=False),
+                    status="generated",
+                    meta_json={"run_id": run_id},
+                )
+                db.add(report)
+                db.commit()
+                db.refresh(report)
+
+                generated_reports.append({"type": "daily", "report_id": report.id})
+
+            except Exception as e:
+                errors.append(f"Daily report failed: {str(e)}")
+                logger.error(f"Daily report generation failed: {e}")
+
+        # === 2. 因子报告: IC/衰减/分组 ===
+        if "factor" in report_types:
+            try:
+                active_factors = db.query(Factor).filter(Factor.is_active == True).all()
+
+                factor_summaries = []
+                for factor in active_factors:
+                    # 获取最新分析结果
+                    analysis = db.query(FactorAnalysis).filter(
+                        FactorAnalysis.factor_id == factor.id,
+                        FactorAnalysis.analysis_date <= calc_date,
+                    ).order_by(FactorAnalysis.analysis_date.desc()).first()
+
+                    factor_summaries.append({
+                        "factor_id": factor.id,
+                        "factor_code": factor.factor_code,
+                        "factor_name": factor.factor_name,
+                        "category": factor.category,
+                        "ic": float(analysis.ic) if analysis and analysis.ic else None,
+                        "rank_ic": float(analysis.rank_ic) if analysis and analysis.rank_ic else None,
+                        "ic_ir": float(analysis.ic_ir) if analysis and analysis.ic_ir else None,
+                        "coverage": float(analysis.coverage) if analysis and analysis.coverage else None,
+                    })
+
+                content = _generate_factor_report_content(calc_date, factor_summaries)
+
+                report = Report(
+                    title=f"因子报告 {calc_date}",
+                    report_type="factor",
+                    report_date=calc_date,
+                    content=content,
+                    summary=json.dumps({"factors": len(factor_summaries)}, ensure_ascii=False),
+                    status="generated",
+                    meta_json={"run_id": run_id},
+                )
+                db.add(report)
+                db.commit()
+                db.refresh(report)
+
+                generated_reports.append({"type": "factor", "report_id": report.id})
+
+            except Exception as e:
+                errors.append(f"Factor report failed: {str(e)}")
+                logger.error(f"Factor report generation failed: {e}")
+
+        # === 3. 风控报告: 预警汇总 ===
+        if "risk" in report_types:
+            try:
+                # 获取今日风控任务结果
+                risk_tasks = db.query(TaskLog).filter(
+                    TaskLog.task_type == "risk_check",
+                    func.date(TaskLog.created_at) == calc_date,
+                    TaskLog.status == "success",
+                ).order_by(TaskLog.created_at.desc()).all()
+
+                risk_summary = {
+                    "checks_run": len(risk_tasks),
+                    "alerts": [],
+                }
+
+                for task in risk_tasks:
+                    if task.result_json and isinstance(task.result_json, dict):
+                        risk_summary["alerts"].extend(task.result_json.get("alerts", []))
+
+                content = _generate_risk_report_content(calc_date, risk_summary)
+
+                report = Report(
+                    title=f"风控报告 {calc_date}",
+                    report_type="risk",
+                    report_date=calc_date,
+                    content=content,
+                    summary=json.dumps({
+                        "checks": risk_summary["checks_run"],
+                        "total_alerts": len(risk_summary["alerts"]),
+                        "critical": len([a for a in risk_summary["alerts"] if a.get("severity") == "critical"]),
+                    }, ensure_ascii=False),
+                    status="generated",
+                    meta_json={"run_id": run_id},
+                )
+                db.add(report)
+                db.commit()
+                db.refresh(report)
+
+                generated_reports.append({"type": "risk", "report_id": report.id})
+
+            except Exception as e:
+                errors.append(f"Risk report failed: {str(e)}")
+                logger.error(f"Risk report generation failed: {e}")
+
+        # 更新任务日志
+        result = {
+            "trade_date": str(calc_date),
+            "reports_generated": len(generated_reports),
+            "report_details": generated_reports,
+            "errors": errors,
+        }
+        _update_task_log(db, task_log, "success", result=result)
+
+        logger.info(f"Daily report generation completed: {len(generated_reports)} reports generated")
+        return {"status": "success", **result}
+
     except Exception as exc:
         logger.error(f"Report generation failed: {exc}")
+        try:
+            _update_task_log(db, task_log, "failed", error=exc)
+        except Exception:
+            pass
         raise self.retry(exc=exc, countdown=300)
+    finally:
+        db.close()
+
+
+def _generate_daily_report_content(calc_date, model_summaries, task_summary):
+    """生成日报内容(Markdown格式)"""
+    lines = [
+        f"# 日报 {calc_date}",
+        "",
+        "## 模型表现",
+        "",
+        "| 模型 | 日收益 | 累计收益 | 最大回撤 | 夏普 | IC | 换手率 | 持仓数 |",
+        "|------|--------|----------|----------|------|-----|--------|--------|",
+    ]
+
+    for m in model_summaries:
+        dr = f"{m['daily_return']:.2%}" if m['daily_return'] is not None else "-"
+        cr = f"{m['cumulative_return']:.2%}" if m['cumulative_return'] is not None else "-"
+        dd = f"{m['max_drawdown']:.2%}" if m['max_drawdown'] is not None else "-"
+        sr = f"{m['sharpe_ratio']:.2f}" if m['sharpe_ratio'] is not None else "-"
+        ic = f"{m['ic']:.4f}" if m['ic'] is not None else "-"
+        to = f"{m['turnover']:.2%}" if m['turnover'] is not None else "-"
+        lines.append(f"| {m['model_name']} | {dr} | {cr} | {dd} | {sr} | {ic} | {to} | {m['position_count']} |")
+
+    lines.extend([
+        "",
+        "## 任务执行情况",
+        "",
+        f"- 总任务数: {task_summary['total']}",
+        f"- 成功: {task_summary['success']}",
+        f"- 失败: {task_summary['failed']}",
+        f"- 运行中: {task_summary['running']}",
+    ])
+
+    return "\n".join(lines)
+
+
+def _generate_factor_report_content(calc_date, factor_summaries):
+    """生成因子报告内容(Markdown格式)"""
+    lines = [
+        f"# 因子报告 {calc_date}",
+        "",
+        "## 因子IC汇总",
+        "",
+        "| 因子 | 分类 | IC | Rank IC | ICIR | 覆盖率 |",
+        "|------|------|-----|---------|------|--------|",
+    ]
+
+    for f in factor_summaries:
+        ic = f"{f['ic']:.4f}" if f['ic'] is not None else "-"
+        ric = f"{f['rank_ic']:.4f}" if f['rank_ic'] is not None else "-"
+        icir = f"{f['ic_ir']:.4f}" if f['ic_ir'] is not None else "-"
+        cov = f"{f['coverage']:.2%}" if f['coverage'] is not None else "-"
+        lines.append(f"| {f['factor_name']} | {f['category']} | {ic} | {ric} | {icir} | {cov} |")
+
+    # IC分布统计
+    valid_ics = [f['ic'] for f in factor_summaries if f['ic'] is not None]
+    if valid_ics:
+        import numpy as np
+        lines.extend([
+            "",
+            "## IC分布统计",
+            "",
+            f"- 因子数: {len(valid_ics)}",
+            f"- IC均值: {np.mean(valid_ics):.4f}",
+            f"- IC标准差: {np.std(valid_ics):.4f}",
+            f"- IC>0占比: {sum(1 for ic in valid_ics if ic > 0) / len(valid_ics):.2%}",
+            f"- |IC|>0.03占比: {sum(1 for ic in valid_ics if abs(ic) > 0.03) / len(valid_ics):.2%}",
+        ])
+
+    return "\n".join(lines)
+
+
+def _generate_risk_report_content(calc_date, risk_summary):
+    """生成风控报告内容(Markdown格式)"""
+    alerts = risk_summary.get("alerts", [])
+    critical = [a for a in alerts if a.get("severity") == "critical"]
+    high = [a for a in alerts if a.get("severity") == "high"]
+    medium = [a for a in alerts if a.get("severity") == "medium"]
+
+    lines = [
+        f"# 风控报告 {calc_date}",
+        "",
+        "## 预警汇总",
+        "",
+        f"- 检查次数: {risk_summary['checks_run']}",
+        f"- 总预警数: {len(alerts)}",
+        f"- 严重(Critical): {len(critical)}",
+        f"- 高(High): {len(high)}",
+        f"- 中(Medium): {len(medium)}",
+    ]
+
+    if critical:
+        lines.extend(["", "## 严重预警", ""])
+        for a in critical:
+            lines.append(f"- **[{a.get('model_code', '')}]** {a.get('message', '')}")
+
+    if high:
+        lines.extend(["", "## 高级预警", ""])
+        for a in high:
+            lines.append(f"- **[{a.get('model_code', '')}]** {a.get('message', '')}")
+
+    if medium:
+        lines.extend(["", "## 中级预警", ""])
+        for a in medium:
+            lines.append(f"- [{a.get('model_code', '')}] {a.get('message', '')}")
+
+    return "\n".join(lines)

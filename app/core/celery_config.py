@@ -10,8 +10,8 @@ from app.core.logging import logger
 # 创建Celery实例
 celery_app = Celery(
     "quant_platform",
-    broker=settings.celery_broker_url,
-    backend=settings.celery_result_backend,
+    broker=settings.CELERY_BROKER_URL,
+    backend=settings.CELERY_RESULT_BACKEND,
     includes=[
         "app.tasks.backtests",
         "app.tasks.data_sync",

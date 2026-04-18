@@ -21,7 +21,7 @@ def get_model_by_code(model_code: str, db: Session = None):
 
 @with_db
 def create_model(model: ModelCreate, db: Session = None):
-    db_model = Model(**model.dict())
+    db_model = Model(**model.model_dump())
     db.add(db_model)
     db.commit()
     db.refresh(db_model)
@@ -32,7 +32,7 @@ def update_model(model_id: int, model_update: ModelUpdate, db: Session = None):
     db_model = db.query(Model).filter(Model.id == model_id).first()
     if not db_model:
         return None
-    update_data = model_update.dict(exclude_unset=True)
+    update_data = model_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_model, key, value)
     db.commit()

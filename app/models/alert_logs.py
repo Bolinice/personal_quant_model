@@ -1,21 +1,68 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, Float, Boolean, JSON
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, JSON, Text, Index
 from sqlalchemy.sql import func
 from app.db.base import Base
 
-class AlertLog(Base):
-    __tablename__ = "alert_logs"
 
-    id = Column(Integer, primary_key=True, index=True)
-    alert_type = Column(String(50))  # risk, performance, system, data
-    severity = Column(String(20))  # critical, high, medium, low
-    title = Column(String(200))
-    message = Column(Text)
-    source = Column(String(100))
-    status = Column(String(20))  # open, resolved, acknowledged
-    created_at = Column(DateTime, server_default=func.now())
-    resolved_at = Column(DateTime, nullable=True)
-    resolution = Column(Text, nullable=True)
-    related_data = Column(JSON, nullable=True)
+class AlertLog(Base):
+    """告警日志表"""
+    __tablename__ = "alert_logs"
+    __table_args__ = (
+        Index("ix_al_rule", "rule_id"),
+        Index("ix_al_status", "status"),
+    )
+
+    id: int = Column(Integer, primary_key=True, index=True)
+    rule_id: int = Column(Integer, index=True)
+    alert_type: str = Column(String(50))  # risk, performance, data, system
+    severity: str = Column(String(20))  # info, warning, critical
+    title: str = Column(String(200), nullable=False)
+    message: Text = Column(Text)
+    status: str = Column(String(20), default="pending")  # pending, acknowledged, resolved
+    acknowledged_by: int = Column(Integer)
+    acknowledged_at: DateTime = Column(DateTime)
+    resolved_at: DateTime = Column(DateTime)
+    meta_json: JSON = Column(JSON)
+    created_at: DateTime = Column(DateTime, server_default=func.now())
 
     def __repr__(self):
-        return f"<AlertLog(id={self.id}, alert_type='{self.alert_type}', severity='{self.severity}')>"
+        return f"<AlertLog(id={self.id}, alert_type='{self.alert_type}', title='{self.title}')>"
+
+
+class AlertRule(Base):
+    """告警规则表"""
+    __tablename__ = "alert_rules"
+    __table_args__ = (
+        Index("ix_ar_type", "alert_type"),
+    )
+
+    id: int = Column(Integer, primary_key=True, index=True)
+    rule_name: str = Column(String(100), nullable=False)
+    alert_type: str = Column(String(50))  # risk, performance, data, system
+    severity: str = Column(String(20), default="warning")
+    condition: JSON = Column(JSON, nullable=False)  # 触发条件
+    notify_config: JSON = Column(JSON)  # 通知配置
+    is_active: bool = Column(Boolean, default=True)
+    cooldown_minutes: int = Column(Integer, default=60)  # 冷却时间
+    last_triggered_at: DateTime = Column(DateTime)
+    created_by: int = Column(Integer)
+    created_at: DateTime = Column(DateTime, server_default=func.now())
+    updated_at: DateTime = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class Notification(Base):
+    """通知表"""
+    __tablename__ = "notifications"
+    __table_args__ = (
+        Index("ix_notif_user", "user_id"),
+        Index("ix_notif_status", "status"),
+    )
+
+    id: int = Column(Integer, primary_key=True, index=True)
+    user_id: int = Column(Integer, index=True, nullable=False)
+    title: str = Column(String(200), nullable=False)
+    content: Text = Column(Text)
+    notification_type: str = Column(String(30))  # system, alert, rebalance, report
+    status: str = Column(String(20), default="unread")  # unread, read
+    link: str = Column(String(255))
+    created_at: DateTime = Column(DateTime, server_default=func.now())
+    read_at: DateTime = Column(DateTime)

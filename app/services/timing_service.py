@@ -1,7 +1,7 @@
 from typing import List
 from sqlalchemy.orm import Session
 from app.db.base import with_db
-from app.models.timing import TimingSignal, TimingConfig
+from app.models.portfolios import TimingSignal, TimingConfig
 from app.schemas.timing import TimingSignalCreate, TimingConfigCreate
 import pandas as pd
 import numpy as np
@@ -16,7 +16,7 @@ def get_timing_signals(model_id: int, start_date: str, end_date: str, db: Sessio
 
 @with_db
 def create_timing_signal(signal: TimingSignalCreate, db: Session = None):
-    db_signal = TimingSignal(**signal.dict())
+    db_signal = TimingSignal(**signal.model_dump())
     db.add(db_signal)
     db.commit()
     db.refresh(db_signal)
@@ -28,7 +28,7 @@ def get_timing_config(model_id: int, db: Session = None):
 
 @with_db
 def create_timing_config(config: TimingConfigCreate, db: Session = None):
-    db_config = TimingConfig(**config.dict())
+    db_config = TimingConfig(**config.model_dump())
     db.add(db_config)
     db.commit()
     db.refresh(db_config)
@@ -39,7 +39,7 @@ def update_timing_config(model_id: int, config_update: TimingConfigUpdate, db: S
     db_config = db.query(TimingConfig).filter(TimingConfig.model_id == model_id).first()
     if not db_config:
         return None
-    update_data = config_update.dict(exclude_unset=True)
+    update_data = config_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_config, key, value)
     db.commit()

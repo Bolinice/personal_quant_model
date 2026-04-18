@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from app.db.base import with_db
-from app.models.reports import Report, ReportTemplate, ReportSchedule
+from app.models.reports import Report, ReportTemplate
 from app.schemas.reports import ReportCreate, ReportUpdate, ReportOut, ReportTemplateCreate, ReportTemplateOut
 
 @with_db
@@ -13,7 +13,7 @@ def get_report_by_id(report_id: int, db: Session = None):
 
 @with_db
 def create_report(report: ReportCreate, db: Session = None):
-    db_report = Report(**report.dict())
+    db_report = Report(**report.model_dump())
     db.add(db_report)
     db.commit()
     db.refresh(db_report)
@@ -24,7 +24,7 @@ def update_report(report_id: int, report_update: ReportUpdate, db: Session = Non
     db_report = get_report_by_id(report_id, db)
     if db_report is None:
         return None
-    for var, value in report_update.dict(exclude_unset=True).items():
+    for var, value in report_update.model_dump(exclude_unset=True).items():
         setattr(db_report, var, value)
     db.commit()
     db.refresh(db_report)
@@ -49,7 +49,7 @@ def get_report_template_by_id(template_id: int, db: Session = None):
 
 @with_db
 def create_report_template(template: ReportTemplateCreate, db: Session = None):
-    db_template = ReportTemplate(**template.dict())
+    db_template = ReportTemplate(**template.model_dump())
     db.add(db_template)
     db.commit()
     db.refresh(db_template)
@@ -60,7 +60,7 @@ def update_report_template(template_id: int, template_update: ReportTemplateUpda
     db_template = get_report_template_by_id(template_id, db)
     if db_template is None:
         return None
-    for var, value in template_update.dict(exclude_unset=True).items():
+    for var, value in template_update.model_dump(exclude_unset=True).items():
         setattr(db_template, var, value)
     db.commit()
     db.refresh(db_template)
@@ -85,7 +85,7 @@ def get_report_schedule_by_id(schedule_id: int, db: Session = None):
 
 @with_db
 def create_report_schedule(schedule: ReportScheduleCreate, db: Session = None):
-    db_schedule = ReportSchedule(**schedule.dict())
+    db_schedule = ReportSchedule(**schedule.model_dump())
     db.add(db_schedule)
     db.commit()
     db.refresh(db_schedule)
@@ -96,7 +96,7 @@ def update_report_schedule(schedule_id: int, schedule_update: ReportScheduleUpda
     db_schedule = get_report_schedule_by_id(schedule_id, db)
     if db_schedule is None:
         return None
-    for var, value in schedule_update.dict(exclude_unset=True).items():
+    for var, value in schedule_update.model_dump(exclude_unset=True).items():
         setattr(db_schedule, var, value)
     db.commit()
     db.refresh(db_schedule)

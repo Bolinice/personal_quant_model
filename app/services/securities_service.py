@@ -13,7 +13,7 @@ def get_security_by_ts_code(ts_code: str, db: Session = None):
 
 @with_db
 def create_security(security: SecurityCreate, db: Session = None):
-    db_security = Security(**security.dict())
+    db_security = Security(**security.model_dump())
     db.add(db_security)
     db.commit()
     db.refresh(db_security)
@@ -24,7 +24,7 @@ def update_security(security_id: int, security_update: SecurityUpdate, db: Sessi
     db_security = db.query(Security).filter(Security.id == security_id).first()
     if not db_security:
         return None
-    update_data = security_update.dict(exclude_unset=True)
+    update_data = security_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_security, key, value)
     db.commit()

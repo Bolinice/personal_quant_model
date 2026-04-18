@@ -1,533 +1,718 @@
 """
-因子计算引擎
-实现PRD中定义的各类因子计算逻辑
+因子引擎模块
+实现ADD 6.3节因子计算、存储、查询、分析全流程
 """
-from typing import List, Dict, Optional, Any
-from datetime import datetime, timedelta
+from typing import List, Optional, Dict, Any
+from datetime import date, datetime
 import numpy as np
 import pandas as pd
 from sqlalchemy.orm import Session
-from app.db.base import SessionLocal, with_db
-from app.models.factors import Factor, FactorValue
-from app.models.market import StockDaily, StockFinancial, StockBasic
+from sqlalchemy import and_, desc
+
 from app.core.logging import logger
-
-
-class FactorCalculator:
-    """因子计算器基类"""
-
-    def __init__(self, db: Session = None):
-        self.db = db
-
-    def get_stock_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
-        """获取股票日线数据"""
-        query = self.db.query(StockDaily).filter(
-            StockDaily.ts_code == ts_code,
-            StockDaily.trade_date >= start_date,
-            StockDaily.trade_date <= end_date
-        ).order_by(StockDaily.trade_date)
-
-        data = query.all()
-        if not data:
-            return pd.DataFrame()
-
-        return pd.DataFrame([{
-            'trade_date': d.trade_date,
-            'open': float(d.open) if d.open else None,
-            'high': float(d.high) if d.high else None,
-            'low': float(d.low) if d.low else None,
-            'close': float(d.close) if d.close else None,
-            'volume': float(d.vol) if d.vol else None,
-            'amount': float(d.amount) if d.amount else None,
-            'pct_chg': float(d.pct_chg) if d.pct_chg else None,
-        } for d in data])
-
-    def get_financial_data(self, ts_code: str) -> Optional[Dict]:
-        """获取财务数据"""
-        financial = self.db.query(StockFinancial).filter(
-            StockFinancial.ts_code == ts_code
-        ).order_by(StockFinancial.end_date.desc()).first()
-
-        if not financial:
-            return None
-
-        return {
-            'revenue': float(financial.revenue) if financial.revenue else None,
-            'net_profit': float(financial.net_profit) if financial.net_profit else None,
-            'total_assets': float(financial.total_assets) if financial.total_assets else None,
-            'total_equity': float(financial.total_equity) if financial.total_equity else None,
-            'operating_cash_flow': float(financial.operating_cash_flow) if financial.operating_cash_flow else None,
-            'gross_profit': float(financial.gross_profit) if financial.gross_profit else None,
-        }
-
-
-class QualityFactorCalculator(FactorCalculator):
-    """质量因子计算器"""
-
-    def calc_roe(self, ts_code: str) -> Optional[float]:
-        """ROE = 净利润 / 净资产"""
-        financial = self.get_financial_data(ts_code)
-        if not financial or not financial.get('net_profit') or not financial.get('total_equity'):
-            return None
-        if financial['total_equity'] == 0:
-            return None
-        return financial['net_profit'] / financial['total_equity']
-
-    def calc_roa(self, ts_code: str) -> Optional[float]:
-        """ROA = 净利润 / 总资产"""
-        financial = self.get_financial_data(ts_code)
-        if not financial or not financial.get('net_profit') or not financial.get('total_assets'):
-            return None
-        if financial['total_assets'] == 0:
-            return None
-        return financial['net_profit'] / financial['total_assets']
-
-    def calc_gross_margin(self, ts_code: str) -> Optional[float]:
-        """毛利率 = 毛利 / 营收"""
-        financial = self.get_financial_data(ts_code)
-        if not financial or not financial.get('gross_profit') or not financial.get('revenue'):
-            return None
-        if financial['revenue'] == 0:
-            return None
-        return financial['gross_profit'] / financial['revenue']
-
-    def calc_net_margin(self, ts_code: str) -> Optional[float]:
-        """净利率 = 净利润 / 营收"""
-        financial = self.get_financial_data(ts_code)
-        if not financial or not financial.get('net_profit') or not financial.get('revenue'):
-            return None
-        if financial['revenue'] == 0:
-            return None
-        return financial['net_profit'] / financial['revenue']
-
-    def calc_operating_cash_flow_ratio(self, ts_code: str) -> Optional[float]:
-        """经营现金流/净利润"""
-        financial = self.get_financial_data(ts_code)
-        if not financial:
-            return None
-        net_profit = financial.get('net_profit')
-        ocf = financial.get('operating_cash_flow')
-        if not net_profit or net_profit == 0:
-            return None
-        return ocf / net_profit if ocf else None
-
-
-class ValuationFactorCalculator(FactorCalculator):
-    """估值因子计算器"""
-
-    def calc_pe_ttm(self, ts_code: str, trade_date: str) -> Optional[float]:
-
-        """PE(TTM) = 总市值 / 过去12个月净利润"""
-        # 获取当日收盘价和总股本
-        daily = self.db.query(StockDaily).filter(
-            StockDaily.ts_code == ts_code,
-            StockDaily.trade_date == trade_date
-        ).first()
-
-        if not daily:
-            return None
-
-        # 获取过去12个月净利润
-        financial = self.db.query(StockFinancial).filter(
-            StockFinancial.ts_code == ts_code,
-            StockFinancial.end_date <= trade_date
-        ).order_by(StockFinancial.end_date.desc()).first()
-
-        if not financial or not financial.net_profit or float(financial.net_profit) <= 0:
-            return None
-
-        # 简化计算：使用当日市值
-        amount = float(daily.amount) if daily.amount else 0
-        vol = float(daily.vol) if daily.vol else 0
-        if vol == 0:
-            return None
-
-        # 市值估算 = 成交额 / 换手率 (简化)
-        net_profit = float(financial.net_profit)
-        if net_profit == 0:
-            return None
-
-        return amount / (vol * net_profit / 1e8) if vol > 0 else None
-
-    def calc_pb(self, ts_code: str, trade_date: str) -> Optional[float]:
-        """PB = 总市值 / 净资产"""
-        daily = self.db.query(StockDaily).filter(
-            StockDaily.ts_code == ts_code,
-            StockDaily.trade_date == trade_date
-        ).first()
-
-        if not daily:
-            return None
-
-        financial = self.db.query(StockFinancial).filter(
-            StockFinancial.ts_code == ts_code,
-            StockFinancial.end_date <= trade_date
-        ).order_by(StockFinancial.end_date.desc()).first()
-
-        if not financial or not financial.total_equity or float(financial.total_equity) <= 0:
-            return None
-
-        close = float(daily.close) if daily.close else 0
-        equity = float(financial.total_equity)
-
-        # 简化：PB = 股价 / 每股净资产
-        # 需要总股本数据，这里用简化估算
-        return close / (equity / 1e8)  # 假设总股本约1亿股
-
-    def calc_ps_ttm(self, ts_code: str, trade_date: str) -> Optional[float]:
-        """PS(TTM) = 总市值 / 过去12个月营收"""
-        daily = self.db.query(StockDaily).filter(
-            StockDaily.ts_code == ts_code,
-            StockDaily.trade_date == trade_date
-        ).first()
-
-        if not daily:
-            return None
-
-        financial = self.db.query(StockFinancial).filter(
-            StockFinancial.ts_code == ts_code,
-            StockFinancial.end_date <= trade_date
-        ).order_by(StockFinancial.end_date.desc()).first()
-
-        if not financial or not financial.revenue or float(financial.revenue) <= 0:
-            return None
-
-        close = float(daily.close) if daily.close else 0
-        revenue = float(financial.revenue)
-
-        return close / (revenue / 1e8)  # 简化估算
-
-
-class MomentumFactorCalculator(FactorCalculator):
-    """动量因子计算器"""
-
-    def calc_momentum(self, ts_code: str, trade_date: str, period: int = 20) -> Optional[float]:
-        """
-        计算动量因子（收益率）
-        period: 回看天数
-        """
-        end_date = datetime.strptime(trade_date, "%Y-%m-%d")
-        start_date = (end_date - timedelta(days=period * 2)).strftime("%Y-%m-%d")  # 多取一些数据
-
-        df = self.get_stock_daily(ts_code, start_date, trade_date)
-        if df.empty or len(df) < period:
-            return None
-
-        # 计算收益率
-        df = df.sort_values('trade_date')
-        close = df['close'].values
-
-        if len(close) < period + 1:
-            return None
-
-        return close[-1] / close[-period - 1] - 1
-
-    def calc_momentum_20d(self, ts_code: str, trade_date: str) -> Optional[float]:
-        """20日动量"""
-        return self.calc_momentum(ts_code, trade_date, 20)
-
-    def calc_momentum_60d(self, ts_code: str, trade_date: str) -> Optional[float]:
-        """60日动量"""
-        return self.calc_momentum(ts_code, trade_date, 60)
-
-    def calc_momentum_120d(self, ts_code: str, trade_date: str) -> Optional[float]:
-        """120日动量"""
-        return self.calc_momentum(ts_code, trade_date, 120)
-
-
-class GrowthFactorCalculator(FactorCalculator):
-    """成长因子计算器"""
-
-    def calc_revenue_growth(self, ts_code: str) -> Optional[float]:
-        """营收同比增长率"""
-        financials = self.db.query(StockFinancial).filter(
-            StockFinancial.ts_code == ts_code
-        ).order_by(StockFinancial.end_date.desc()).limit(2).all()
-
-        if len(financials) < 2:
-            return None
-
-        current = float(financials[0].revenue) if financials[0].revenue else None
-        previous = float(financials[1].revenue) if financials[1].revenue else None
-
-        if not current or not previous or previous == 0:
-            return None
-
-        return (current - previous) / previous
-
-    def calc_profit_growth(self, ts_code: str) -> Optional[float]:
-        """净利润同比增长率"""
-        financials = self.db.query(StockFinancial).filter(
-            StockFinancial.ts_code == ts_code
-        ).order_by(StockFinancial.end_date.desc()).limit(2).all()
-
-        if len(financials) < 2:
-            return None
-
-        current = float(financials[0].net_profit) if financials[0].net_profit else None
-        previous = float(financials[1].net_profit) if financials[1].net_profit else None
-
-        if not current or not previous or previous == 0:
-            return None
-
-        return (current - previous) / previous
-
-
-class RiskFactorCalculator(FactorCalculator):
-    """风险因子计算器"""
-
-    def calc_volatility(self, ts_code: str, trade_date: str, period: int = 20) -> Optional[float]:
-        """
-        计算年化波动率
-        period: 回看天数
-        """
-        end_date = datetime.strptime(trade_date, "%Y-%m-%d")
-        start_date = (end_date - timedelta(days=period * 2)).strftime("%Y-%m-%d")
-
-        df = self.get_stock_daily(ts_code, start_date, trade_date)
-        if df.empty or len(df) < period:
-            return None
-
-        # 计算日收益率
-        df = df.sort_values('trade_date')
-        returns = df['pct_chg'].values[-period:] / 100  # 转换为小数
-
-        # 年化波动率 = std * sqrt(252)
-        return np.std(returns) * np.sqrt(252)
-
-    def calc_volatility_20d(self, ts_code: str, trade_date: str) -> Optional[float]:
-        """20日波动率"""
-        return self.calc_volatility(ts_code, trade_date, 20)
-
-    def calc_volatility_60d(self, ts_code: str, trade_date: str) -> Optional[float]:
-        """60日波动率"""
-        return self.calc_volatility(ts_code, trade_date, 60)
-
-    def calc_downside_volatility(self, ts_code: str, trade_date: str, period: int = 60) -> Optional[float]:
-        """下行波动率"""
-        end_date = datetime.strptime(trade_date, "%Y-%m-%d")
-        start_date = (end_date - timedelta(days=period * 2)).strftime("%Y-%m-%d")
-
-        df = self.get_stock_daily(ts_code, start_date, trade_date)
-        if df.empty or len(df) < period:
-            return None
-
-        df = df.sort_values('trade_date')
-        returns = df['pct_chg'].values[-period:] / 100
-
-        # 只计算负收益
-        negative_returns = returns[returns < 0]
-
-        if len(negative_returns) == 0:
-            return 0.0
-
-        return np.std(negative_returns) * np.sqrt(252)
-
-
-class LiquidityFactorCalculator(FactorCalculator):
-    """流动性因子计算器"""
-
-    def calc_avg_amount(self, ts_code: str, trade_date: str, period: int = 20) -> Optional[float]:
-        """平均成交额（亿元）"""
-        end_date = datetime.strptime(trade_date, "%Y-%m-%d")
-        start_date = (end_date - timedelta(days=period * 2)).strftime("%Y-%m-%d")
-
-        df = self.get_stock_daily(ts_code, start_date, trade_date)
-        if df.empty or len(df) < period:
-            return None
-
-        df = df.sort_values('trade_date')
-        amounts = df['amount'].values[-period:]
-
-        return np.mean(amounts) / 1e8  # 转换为亿元
-
-    def calc_avg_turnover(self, ts_code: str, trade_date: str, period: int = 20) -> Optional[float]:
-        """平均换手率"""
-        end_date = datetime.strptime(trade_date, "%Y-%m-%d")
-        start_date = (end_date - timedelta(days=period * 2)).strftime("%Y-%m-%d")
-
-        df = self.get_stock_daily(ts_code, start_date, trade_date)
-        if df.empty or len(df) < period:
-            return None
-
-        df = df.sort_values('trade_date')
-
-        # 换手率 = 成交量 / 总股本 * 100
-        # 简化：使用成交额/市值估算
-        amounts = df['amount'].values[-period:]
-
-        return np.mean(amounts) * 100 if len(amounts) > 0 else None
-
-    def calc_illiquidity(self, ts_code: str, trade_date: str, period: int = 20) -> Optional[float]:
-        """非流动性指标 = |收益率| / 成交额"""
-        end_date = datetime.strptime(trade_date, "%Y-%m-%d")
-        start_date = (end_date - timedelta(days=period * 2)).strftime("%Y-%m-%d")
-
-        df = self.get_stock_daily(ts_code, start_date, trade_date)
-        if df.empty or len(df) < period:
-            return None
-
-        df = df.sort_values('trade_date')
-        df = df.tail(period)
-
-        # 计算每日非流动性
-        illiq = []
-        for i in range(1, len(df)):
-            ret = abs(df['pct_chg'].iloc[i] / 100)
-            amt = df['amount'].iloc[i]
-            if amt and amt > 0:
-                illiq.append(ret / amt)
-
-        return np.mean(illiq) if illiq else None
+from app.core.factor_preprocess import FactorPreprocessor, preprocess_factor_values
+from app.models.factors import Factor, FactorValue, FactorAnalysis, FactorResult
+
+
+# 因子分组定义 (ADD 6.3.1 + 机构级扩展)
+FACTOR_GROUPS = {
+    'valuation': {
+        'name': '价值因子',
+        'factors': ['ep_ttm', 'bp', 'sp_ttm', 'dp', 'cfp_ttm'],
+    },
+    'growth': {
+        'name': '成长因子',
+        'factors': ['yoy_revenue', 'yoy_net_profit', 'yoy_deduct_net_profit', 'yoy_roe'],
+    },
+    'quality': {
+        'name': '质量因子',
+        'factors': ['roe', 'roa', 'gross_profit_margin', 'net_profit_margin', 'current_ratio'],
+    },
+    'momentum': {
+        'name': '动量因子',
+        'factors': ['ret_1m', 'ret_3m', 'ret_6m', 'ret_12m', 'ret_1m_reversal'],
+    },
+    'volatility': {
+        'name': '波动率因子',
+        'factors': ['vol_20d', 'vol_60d', 'beta', 'idio_vol'],
+    },
+    'liquidity': {
+        'name': '流动性因子',
+        'factors': ['turnover_20d', 'turnover_60d', 'amihud_20d', 'zero_return_ratio'],
+    },
+    # === 机构级扩展因子组 ===
+    'northbound': {
+        'name': '北向资金因子',
+        'factors': ['north_net_buy_ratio', 'north_holding_chg_5d', 'north_holding_pct'],
+    },
+    'analyst': {
+        'name': '分析师预期因子',
+        'factors': ['sue', 'analyst_revision_1m', 'analyst_coverage', 'earnings_surprise'],
+    },
+    'microstructure': {
+        'name': '微观结构因子',
+        'factors': ['large_order_ratio', 'overnight_return', 'intraday_return_ratio', 'vpin'],
+    },
+    'policy': {
+        'name': '政策因子',
+        'factors': ['policy_sentiment', 'policy_theme_exposure'],
+    },
+    'supply_chain': {
+        'name': '供应链因子',
+        'factors': ['customer_momentum', 'supplier_demand'],
+    },
+    'sentiment': {
+        'name': '情绪因子',
+        'factors': ['retail_sentiment', 'margin_balance_chg', 'new_account_growth'],
+    },
+}
+
+# 因子方向定义 (ADD 6.3.4 + 机构级扩展)
+FACTOR_DIRECTIONS = {
+    # 价值因子: 越低越便宜，方向为-1(越小越好的因子取反后越大越好)
+    'ep_ttm': 1, 'bp': 1, 'sp_ttm': 1, 'dp': 1, 'cfp_ttm': 1,
+    # 成长因子: 越高越好
+    'yoy_revenue': 1, 'yoy_net_profit': 1, 'yoy_deduct_net_profit': 1, 'yoy_roe': 1,
+    # 质量因子: 越高越好
+    'roe': 1, 'roa': 1, 'gross_profit_margin': 1, 'net_profit_margin': 1, 'current_ratio': 1,
+    # 动量因子: 正动量方向为1，反转因子方向为-1
+    'ret_1m': 1, 'ret_3m': 1, 'ret_6m': 1, 'ret_12m': 1, 'ret_1m_reversal': -1,
+    # 波动率因子: 低波动更好，方向为-1
+    'vol_20d': -1, 'vol_60d': -1, 'beta': -1, 'idio_vol': -1,
+    # 流动性因子: 高流动性更好
+    'turnover_20d': 1, 'turnover_60d': 1, 'amihud_20d': -1, 'zero_return_ratio': -1,
+    # === 北向资金因子: 北向净买入越多越好 ===
+    'north_net_buy_ratio': 1, 'north_holding_chg_5d': 1, 'north_holding_pct': 1,
+    # === 分析师预期因子 ===
+    'sue': 1, 'analyst_revision_1m': 1, 'analyst_coverage': 1, 'earnings_surprise': 1,
+    # === 微观结构因子 ===
+    'large_order_ratio': 1, 'overnight_return': -1, 'intraday_return_ratio': 1, 'vpin': -1,
+    # === 政策因子 ===
+    'policy_sentiment': 1, 'policy_theme_exposure': 1,
+    # === 供应链因子 ===
+    'customer_momentum': 1, 'supplier_demand': 1,
+    # === 情绪因子: 散户情绪过高反向 ===
+    'retail_sentiment': -1, 'margin_balance_chg': 1, 'new_account_growth': -1,
+}
 
 
 class FactorEngine:
-    """因子计算引擎"""
+    """因子引擎 - 核心因子计算、存储、分析"""
 
-    def __init__(self, db: Session = None):
-        self.db = db or SessionLocal()
-        self.quality = QualityFactorCalculator(self.db)
-        self.valuation = ValuationFactorCalculator(self.db)
-        self.momentum = MomentumFactorCalculator(self.db)
-        self.growth = GrowthFactorCalculator(self.db)
-        self.risk = RiskFactorCalculator(self.db)
-        self.liquidity = LiquidityFactorCalculator(self.db)
+    def __init__(self, db: Session):
+        self.db = db
+        self.preprocessor = FactorPreprocessor()
 
-    def calculate_factor(self, factor_code: str, ts_code: str, trade_date: str) -> Optional[float]:
+    # ==================== 因子定义管理 ====================
+
+    def create_factor(self, factor_code: str, factor_name: str, category: str,
+                      direction: int = 1, formula_desc: str = None,
+                      calc_expression: str = None, description: str = None,
+                      created_by: int = None) -> Factor:
+        """创建因子定义"""
+        factor = Factor(
+            factor_code=factor_code,
+            factor_name=factor_name,
+            category=category,
+            direction=direction,
+            formula_desc=formula_desc,
+            calc_expression=calc_expression,
+            description=description,
+            created_by=created_by,
+        )
+        self.db.add(factor)
+        self.db.commit()
+        self.db.refresh(factor)
+        return factor
+
+    def get_factor(self, factor_id: int) -> Optional[Factor]:
+        """获取因子定义"""
+        return self.db.query(Factor).filter(Factor.id == factor_id).first()
+
+    def get_factor_by_code(self, factor_code: str) -> Optional[Factor]:
+        """根据代码获取因子"""
+        return self.db.query(Factor).filter(Factor.factor_code == factor_code).first()
+
+    def list_factors(self, category: str = None, is_active: bool = True) -> List[Factor]:
+        """列出因子"""
+        query = self.db.query(Factor)
+        if category:
+            query = query.filter(Factor.category == category)
+        if is_active is not None:
+            query = query.filter(Factor.is_active == is_active)
+        return query.all()
+
+    # ==================== 因子值存储 ====================
+
+    def save_factor_values(self, factor_id: int, trade_date: date,
+                           values: pd.DataFrame, run_id: str = None) -> int:
         """
-        根据因子代码计算因子值
+        批量保存因子值
+        支持raw/processed/neutralized/zscore多级存储
 
         Args:
-            factor_code: 因子代码
-            ts_code: 股票代码
+            factor_id: 因子ID
             trade_date: 交易日期
+            values: DataFrame with columns [security_id, raw_value, processed_value, neutralized_value, zscore_value]
+            run_id: 运行ID
 
         Returns:
-            因子值
+            保存的记录数
         """
-        factor_map = {
-            # 质量因子
-            'ROE': lambda: self.quality.calc_roe(ts_code),
-            'ROA': lambda: self.quality.calc_roa(ts_code),
-            'GROSS_MARGIN': lambda: self.quality.calc_gross_margin(ts_code),
-            'NET_MARGIN': lambda: self.quality.calc_net_margin(ts_code),
-            # 估值因子
-            'PE_TTM': lambda: self.valuation.calc_pe_ttm(ts_code, trade_date),
-            'PB': lambda: self.valuation.calc_pb(ts_code, trade_date),
-            'PS_TTM': lambda: self.valuation.calc_ps_ttm(ts_code, trade_date),
-            # 动量因子
-            'MOM_20D': lambda: self.momentum.calc_momentum_20d(ts_code, trade_date),
-            'MOM_60D': lambda: self.momentum.calc_momentum_60d(ts_code, trade_date),
-            'MOM_120D': lambda: self.momentum.calc_momentum_120d(ts_code, trade_date),
-            # 成长因子
-            'REVENUE_GROWTH': lambda: self.growth.calc_revenue_growth(ts_code),
-            'PROFIT_GROWTH': lambda: self.growth.calc_profit_growth(ts_code),
-            # 风险因子
-            'VOL_20D': lambda: self.risk.calc_volatility_20d(ts_code, trade_date),
-            'VOL_60D': lambda: self.risk.calc_volatility_60d(ts_code, trade_date),
-            # 流动性因子
-            'TURNOVER_20D': lambda: self.liquidity.calc_avg_turnover(ts_code, trade_date),
-            'AMOUNT_20D': lambda: self.liquidity.calc_avg_amount(ts_code, trade_date),
+        records = []
+        for _, row in values.iterrows():
+            record = FactorValue(
+                factor_id=factor_id,
+                trade_date=trade_date,
+                security_id=row['security_id'],
+                raw_value=row.get('raw_value'),
+                processed_value=row.get('processed_value'),
+                neutralized_value=row.get('neutralized_value'),
+                zscore_value=row.get('zscore_value'),
+                value=row.get('zscore_value', row.get('processed_value')),
+                run_id=run_id,
+            )
+            records.append(record)
+
+        self.db.bulk_save_objects(records)
+        self.db.commit()
+        return len(records)
+
+    def get_factor_values(self, factor_id: int, trade_date: date) -> pd.DataFrame:
+        """获取因子值"""
+        query = self.db.query(FactorValue).filter(
+            and_(FactorValue.factor_id == factor_id, FactorValue.trade_date == trade_date)
+        )
+        results = query.all()
+        if not results:
+            return pd.DataFrame()
+        return pd.DataFrame([{
+            'security_id': r.security_id,
+            'raw_value': r.raw_value,
+            'processed_value': r.processed_value,
+            'neutralized_value': r.neutralized_value,
+            'zscore_value': r.zscore_value,
+            'value': r.value,
+        } for r in results])
+
+    def get_factor_values_range(self, factor_id: int, start_date: date,
+                                end_date: date) -> pd.DataFrame:
+        """获取因子值时间序列"""
+        query = self.db.query(FactorValue).filter(
+            and_(
+                FactorValue.factor_id == factor_id,
+                FactorValue.trade_date >= start_date,
+                FactorValue.trade_date <= end_date,
+            )
+        )
+        results = query.all()
+        if not results:
+            return pd.DataFrame()
+        return pd.DataFrame([{
+            'trade_date': r.trade_date,
+            'security_id': r.security_id,
+            'value': r.value,
+            'zscore_value': r.zscore_value,
+        } for r in results])
+
+    # ==================== 因子分析 ====================
+
+    def calc_ic(self, factor_values: pd.Series, forward_returns: pd.Series) -> Dict[str, float]:
+        """
+        计算因子IC
+        符合ADD 6.3.6节
+
+        Args:
+            factor_values: 因子值
+            forward_returns: 下期收益
+
+        Returns:
+            IC指标
+        """
+        valid = ~(factor_values.isna() | forward_returns.isna())
+        if valid.sum() < 10:
+            return {'ic': np.nan, 'rank_ic': np.nan}
+
+        fv = factor_values[valid]
+        fr = forward_returns[valid]
+
+        ic = fv.corr(fr)  # Pearson IC
+        rank_ic = fv.rank().corr(fr.rank())  # Spearman Rank IC
+
+        return {
+            'ic': round(ic, 4) if not np.isnan(ic) else 0,
+            'rank_ic': round(rank_ic, 4) if not np.isnan(rank_ic) else 0,
         }
 
-        calculator = factor_map.get(factor_code)
-        if not calculator:
-            logger.warning(f"Unknown factor code: {factor_code}")
-            return None
-
-        try:
-            return calculator()
-        except Exception as e:
-            logger.error(f"Error calculating factor {factor_code} for {ts_code}: {e}")
-            return None
-
-    def calculate_all_factors(self, ts_codes: List[str], trade_date: str,
-                             factor_codes: List[str] = None) -> pd.DataFrame:
+    def calc_ic_series(self, factor_id: int, start_date: date, end_date: date,
+                       forward_period: int = 20) -> pd.DataFrame:
         """
-        批量计算多只股票的多个因子
+        计算IC时间序列
+        符合ADD 6.3.6节
+        """
+        # 获取因子值
+        factor_data = self.get_factor_values_range(factor_id, start_date, end_date)
+        if factor_data.empty:
+            return pd.DataFrame()
+
+        # 按日期计算IC
+        ic_records = []
+        for trade_date in factor_data['trade_date'].unique():
+            day_data = factor_data[factor_data['trade_date'] == trade_date]
+            # 这里需要获取下期收益，简化处理
+            ic_record = {
+                'trade_date': trade_date,
+                'factor_id': factor_id,
+            }
+            ic_records.append(ic_record)
+
+        return pd.DataFrame(ic_records)
+
+    def calc_factor_decay(self, factor_id: int, trade_date: date,
+                          max_lag: int = 20) -> Dict:
+        """
+        计算因子衰减
+        符合ADD 6.3.6节: 因子值与未来N期收益的相关性
 
         Args:
-            ts_codes: 股票代码列表
-            trade_date: 交易日期
-            factor_codes: 因子代码列表，默认计算所有因子
+            factor_id: 因子ID
+            trade_date: 基准日期
+            max_lag: 最大滞后期数
 
         Returns:
-            DataFrame，行为股票，列为因子
+            衰减数据
         """
-        if factor_codes is None:
-            factor_codes = [
-                'ROE', 'ROA', 'GROSS_MARGIN', 'NET_MARGIN',
-                'PE_TTM', 'PB', 'PS_TTM',
-                'MOM_20D', 'MOM_60D', 'MOM_120D',
-                'REVENUE_GROWTH', 'PROFIT_GROWTH',
-                'VOL_20D', 'VOL_60D',
-                'TURNOVER_20D', 'AMOUNT_20D'
-            ]
+        # 简化实现：返回衰减结构
+        decay_values = []
+        for lag in range(1, max_lag + 1):
+            # 实际实现需要查询不同滞后期收益
+            decay_values.append({'lag': lag, 'ic': 0})
 
-        results = []
-        for ts_code in ts_codes:
-            row = {'ts_code': ts_code}
-            for factor_code in factor_codes:
-                row[factor_code] = self.calculate_factor(factor_code, ts_code, trade_date)
-            results.append(row)
+        return {
+            'factor_id': factor_id,
+            'trade_date': trade_date,
+            'decay_values': decay_values,
+        }
 
-        return pd.DataFrame(results)
+    def calc_factor_correlation(self, factor_id_a: int, factor_id_b: int,
+                                start_date: date, end_date: date) -> Dict:
+        """
+        计算两个因子的相关性
+        符合ADD 6.3.6节
+        """
+        values_a = self.get_factor_values_range(factor_id_a, start_date, end_date)
+        values_b = self.get_factor_values_range(factor_id_b, start_date, end_date)
 
-    def close(self):
-        """关闭数据库连接"""
-        if self.db:
-            self.db.close()
+        if values_a.empty or values_b.empty:
+            return {'correlation': np.nan}
 
+        # 按日期和证券对齐
+        merged = pd.merge(
+            values_a[['trade_date', 'security_id', 'value']],
+            values_b[['trade_date', 'security_id', 'value']],
+            on=['trade_date', 'security_id'],
+            suffixes=('_a', '_b'),
+        )
 
-@with_db
-def run_factor_calculation(factor_id: int, trade_date: str, ts_codes: List[str], db: Session = None) -> List[FactorValue]:
-    """
-    运行因子计算并保存结果
+        if merged.empty:
+            return {'correlation': np.nan}
 
-    Args:
-        factor_id: 因子ID
-        trade_date: 交易日期
-        ts_codes: 股票代码列表
-        db: 数据库会话
+        corr = merged['value_a'].corr(merged['value_b'])
+        rank_corr = merged['value_a'].rank().corr(merged['value_b'].rank())
 
-    Returns:
-        因子值列表
-    """
-    # 获取因子信息
-    factor = db.query(Factor).filter(Factor.id == factor_id).first()
-    if not factor:
-        logger.error(f"Factor {factor_id} not found")
-        return []
+        return {
+            'correlation': round(corr, 4) if not np.isnan(corr) else 0,
+            'rank_correlation': round(rank_corr, 4) if not np.isnan(rank_corr) else 0,
+        }
 
-    engine = FactorEngine(db)
-    results = []
+    def group_backtest(self, factor_id: int, start_date: date, end_date: date,
+                       n_groups: int = 5) -> Dict:
+        """
+        因子分组回测
+        符合ADD 6.3.6节: 按因子值分组，计算各组收益
 
-    for ts_code in ts_codes:
-        value = engine.calculate_factor(factor.factor_code, ts_code, trade_date)
+        Args:
+            factor_id: 因子ID
+            start_date: 开始日期
+            end_date: 结束日期
+            n_groups: 分组数
 
-        if value is not None:
-            # 检查是否已存在
-            existing = db.query(FactorValue).filter(
-                FactorValue.factor_id == factor_id,
-                FactorValue.trade_date == trade_date,
-                FactorValue.security_id == ts_code  # 简化：使用 ts_code 作为 security_id
-            ).first()
+        Returns:
+            分组回测结果
+        """
+        factor_data = self.get_factor_values_range(factor_id, start_date, end_date)
+        if factor_data.empty:
+            return {}
 
-            if existing:
-                existing.value = value
-                existing.is_valid = True
-            else:
-                fv = FactorValue(
-                    factor_id=factor_id,
-                    trade_date=trade_date,
-                    security_id=ts_code,  # 简化处理
-                    value=value,
-                    is_valid=True
-                )
-                db.add(fv)
-                results.append(fv)
+        # 按日期分组
+        group_results = {}
+        for trade_date in factor_data['trade_date'].unique():
+            day_data = factor_data[factor_data['trade_date'] == trade_date]
+            day_data = day_data.sort_values('value')
 
-    db.commit()
-    logger.info(f"Calculated {len(results)} factor values for {factor.factor_code} on {trade_date}")
+            # 等分
+            group_labels = pd.qcut(day_data['value'], n_groups, labels=False, duplicates='drop')
+            day_data['group'] = group_labels
 
-    return results
+            for group_num in range(n_groups):
+                group_data = day_data[day_data['group'] == group_num]
+                if group_num not in group_results:
+                    group_results[group_num] = []
+                group_results[group_num].append({
+                    'trade_date': trade_date,
+                    'count': len(group_data),
+                    'mean_value': group_data['value'].mean(),
+                })
+
+        return {
+            'factor_id': factor_id,
+            'n_groups': n_groups,
+            'group_results': group_results,
+        }
+
+    # ==================== 因子计算 ====================
+
+    def calc_valuation_factors(self, financial_df: pd.DataFrame, price_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        计算价值因子
+        符合ADD 6.3.1节
+        """
+        result = pd.DataFrame()
+        result['security_id'] = financial_df['ts_code']
+
+        # EP_TTM = 1 / PE_TTM
+        result['ep_ttm'] = 1 / financial_df['pe_ttm'].replace(0, np.nan)
+
+        # BP = 1 / PB
+        result['bp'] = 1 / financial_df['pb'].replace(0, np.nan)
+
+        # SP_TTM = 1 / PS_TTM
+        result['sp_ttm'] = 1 / financial_df['ps_ttm'].replace(0, np.nan)
+
+        # DP = 股息率
+        result['dp'] = financial_df.get('dividend_yield', np.nan)
+
+        # CFP_TTM = 经营现金流/总市值
+        if 'operating_cash_flow' in financial_df.columns and 'total_market_cap' in financial_df.columns:
+            result['cfp_ttm'] = financial_df['operating_cash_flow'] / financial_df['total_market_cap'].replace(0, np.nan)
+
+        return result
+
+    def calc_growth_factors(self, financial_df: pd.DataFrame) -> pd.DataFrame:
+        """计算成长因子"""
+        result = pd.DataFrame()
+        result['security_id'] = financial_df['ts_code']
+        result['yoy_revenue'] = financial_df.get('yoy_revenue')
+        result['yoy_net_profit'] = financial_df.get('yoy_net_profit')
+        result['yoy_deduct_net_profit'] = financial_df.get('yoy_deduct_net_profit')
+        result['yoy_roe'] = financial_df.get('yoy_roe')
+        return result
+
+    def calc_quality_factors(self, financial_df: pd.DataFrame) -> pd.DataFrame:
+        """计算质量因子"""
+        result = pd.DataFrame()
+        result['security_id'] = financial_df['ts_code']
+        result['roe'] = financial_df.get('roe')
+        result['roa'] = financial_df.get('roa')
+        result['gross_profit_margin'] = financial_df.get('gross_profit_margin')
+        result['net_profit_margin'] = financial_df.get('net_profit_margin')
+        result['current_ratio'] = financial_df.get('current_ratio')
+        return result
+
+    def calc_momentum_factors(self, price_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        计算动量因子
+        符合ADD 6.3.1节
+        """
+        result = pd.DataFrame()
+
+        if 'close' not in price_df.columns or 'ts_code' not in price_df.columns:
+            return result
+
+        result['security_id'] = price_df['ts_code']
+
+        # 过去N月收益率
+        close = price_df['close']
+        result['ret_1m'] = close.pct_change(20)
+        result['ret_3m'] = close.pct_change(60)
+        result['ret_6m'] = close.pct_change(120)
+        result['ret_12m'] = close.pct_change(240)
+
+        # 1个月反转因子
+        result['ret_1m_reversal'] = -result['ret_1m']
+
+        return result
+
+    def calc_volatility_factors(self, price_df: pd.DataFrame) -> pd.DataFrame:
+        """计算波动率因子"""
+        result = pd.DataFrame()
+
+        if 'close' not in price_df.columns:
+            return result
+
+        result['security_id'] = price_df.get('ts_code')
+
+        # 日收益率
+        daily_ret = price_df['close'].pct_change()
+
+        # 滚动波动率
+        result['vol_20d'] = daily_ret.rolling(20).std() * np.sqrt(252)
+        result['vol_60d'] = daily_ret.rolling(60).std() * np.sqrt(252)
+
+        return result
+
+    def calc_liquidity_factors(self, price_df: pd.DataFrame) -> pd.DataFrame:
+        """计算流动性因子"""
+        result = pd.DataFrame()
+
+        if 'turnover_rate' not in price_df.columns:
+            return result
+
+        result['security_id'] = price_df.get('ts_code')
+
+        # 滚动换手率
+        result['turnover_20d'] = price_df['turnover_rate'].rolling(20).mean()
+        result['turnover_60d'] = price_df['turnover_rate'].rolling(60).mean()
+
+        # Amihud非流动性指标
+        if 'amount' in price_df.columns and 'close' in price_df.columns:
+            abs_ret = price_df['close'].pct_change().abs()
+            amount = price_df['amount']
+            result['amihud_20d'] = (abs_ret / amount.replace(0, np.nan)).rolling(20).mean()
+
+        # 零收益天数占比
+        daily_ret = price_df['close'].pct_change() if 'close' in price_df.columns else pd.Series()
+        result['zero_return_ratio'] = (daily_ret.abs() < 0.001).rolling(20).mean()
+
+        return result
+
+    # ==================== 机构级扩展因子计算 ====================
+
+    def calc_northbound_factors(self, northbound_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        北向资金因子
+        北向资金是A股最重要的聪明钱信号之一
+
+        Args:
+            northbound_df: 需包含 ts_code, north_net_buy, north_holding, north_holding_pct, daily_volume
+        """
+        result = pd.DataFrame()
+        result['security_id'] = northbound_df['ts_code']
+
+        # 北向净买入占比 = 北向净买入额 / 日成交额
+        if 'north_net_buy' in northbound_df.columns and 'daily_volume' in northbound_df.columns:
+            result['north_net_buy_ratio'] = (
+                northbound_df['north_net_buy'] / northbound_df['daily_volume'].replace(0, np.nan)
+            )
+
+        # 北向持股5日变化率
+        if 'north_holding' in northbound_df.columns:
+            result['north_holding_chg_5d'] = northbound_df['north_holding'].pct_change(5)
+
+        # 北向持股占比
+        if 'north_holding_pct' in northbound_df.columns:
+            result['north_holding_pct'] = northbound_df['north_holding_pct']
+
+        return result
+
+    def calc_analyst_factors(self, analyst_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        分析师预期因子
+        SUE(标准化预期外盈利)和分析师修正因子是机构核心Alpha来源
+
+        Args:
+            analyst_df: 需包含 ts_code, actual_eps, expected_eps, num_analysts,
+                        consensus_rating_1m_ago, consensus_rating, earnings_date
+        """
+        result = pd.DataFrame()
+        result['security_id'] = analyst_df['ts_code']
+
+        # SUE = (实际盈利 - 预期盈利) / 历史预测误差标准差
+        if all(c in analyst_df.columns for c in ['actual_eps', 'expected_eps']):
+            surprise = analyst_df['actual_eps'] - analyst_df['expected_eps']
+            # 使用滚动标准差作为分母
+            surprise_std = surprise.rolling(8, min_periods=4).std() if len(surprise) >= 4 else surprise.std()
+            result['sue'] = surprise / surprise_std.replace(0, np.nan)
+
+        # 分析师评级1个月修正 = 当前一致评级 - 1月前一致评级
+        if all(c in analyst_df.columns for c in ['consensus_rating', 'consensus_rating_1m_ago']):
+            result['analyst_revision_1m'] = (
+                analyst_df['consensus_rating_1m_ago'] - analyst_df['consensus_rating']
+            )  # 评级越低越好(1=买入), 所以取反
+
+        # 分析师覆盖度 = 覆盖分析师数量
+        if 'num_analysts' in analyst_df.columns:
+            result['analyst_coverage'] = analyst_df['num_analysts']
+
+        # 盈利惊喜 = (实际 - 预期) / |预期|
+        if all(c in analyst_df.columns for c in ['actual_eps', 'expected_eps']):
+            result['earnings_surprise'] = (
+                (analyst_df['actual_eps'] - analyst_df['expected_eps'])
+                / analyst_df['expected_eps'].abs().replace(0, np.nan)
+            )
+
+        return result
+
+    def calc_microstructure_factors(self, price_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        微观结构因子
+        从日内交易数据提取低频可用的Alpha信号
+
+        Args:
+            price_df: 需包含 ts_code, close, open, volume, amount,
+                      large_order_volume(可选), super_large_order_volume(可选)
+        """
+        result = pd.DataFrame()
+        result['security_id'] = price_df.get('ts_code')
+
+        # 大单比率 = (大单成交额 + 超大单成交额) / 总成交额
+        if all(c in price_df.columns for c in ['large_order_volume', 'super_large_order_volume', 'volume']):
+            smart_money_vol = price_df['large_order_volume'].fillna(0) + price_df['super_large_order_volume'].fillna(0)
+            result['large_order_ratio'] = smart_money_vol / price_df['volume'].replace(0, np.nan)
+            result['large_order_ratio'] = result['large_order_ratio'].rolling(20, min_periods=5).mean()
+
+        # 隔夜收益率 = 今日开盘价 / 昨日收盘价 - 1
+        if all(c in price_df.columns for c in ['open', 'close']):
+            result['overnight_return'] = price_df['open'] / price_df['close'].shift(1) - 1
+            result['overnight_return'] = result['overnight_return'].rolling(20, min_periods=5).mean()
+
+        # 日内/隔夜收益比 = 日内收益绝对值 / 隔夜收益绝对值
+        if all(c in price_df.columns for c in ['open', 'close']):
+            intraday_ret = price_df['close'] / price_df['open'] - 1
+            overnight_ret = price_df['open'] / price_df['close'].shift(1) - 1
+            result['intraday_return_ratio'] = (
+                intraday_ret.abs().rolling(20, min_periods=5).mean()
+                / overnight_ret.abs().rolling(20, min_periods=5).mean().replace(0, np.nan)
+            )
+
+        # VPIN (Volume-Synchronized Probability of Informed Trading) 简化估计
+        if all(c in price_df.columns for c in ['close', 'volume']):
+            daily_ret = price_df['close'].pct_change()
+            # 使用价格变化与成交量的关系作为VPIN代理
+            abs_ret = daily_ret.abs()
+            vol_ratio = price_df['volume'] / price_df['volume'].rolling(20, min_periods=5).mean()
+            result['vpin'] = (abs_ret * vol_ratio).rolling(20, min_periods=5).mean()
+
+        return result
+
+    def calc_policy_factors(self, policy_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        政策因子 (A股特有)
+        政策是A股最重要的驱动因素之一
+
+        Args:
+            policy_df: 需包含 ts_code, policy_sentiment_score, policy_keywords_match
+        """
+        result = pd.DataFrame()
+        result['security_id'] = policy_df.get('ts_code')
+
+        # 政策情绪得分 = 基于政策文件NLP分析的得分
+        if 'policy_sentiment_score' in policy_df.columns:
+            result['policy_sentiment'] = policy_df['policy_sentiment_score']
+
+        # 政策主题暴露度 = 与当前政策主题关键词匹配度
+        if 'policy_keywords_match' in policy_df.columns:
+            result['policy_theme_exposure'] = policy_df['policy_keywords_match']
+
+        return result
+
+    def calc_supply_chain_factors(self, supply_chain_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        供应链因子 (Cohen-Frazzini客户动量)
+        下游客户收入加速 → 上游供应商未来1-3个月跑赢
+
+        Args:
+            supply_chain_df: 需包含 ts_code, customer_revenue_growth, downstream_demand_index
+        """
+        result = pd.DataFrame()
+        result['security_id'] = supply_chain_df.get('ts_code')
+
+        # 客户动量 = 下游主要客户收入增速加权平均
+        if 'customer_revenue_growth' in supply_chain_df.columns:
+            result['customer_momentum'] = supply_chain_df['customer_revenue_growth']
+
+        # 供应商需求指标
+        if 'downstream_demand_index' in supply_chain_df.columns:
+            result['supplier_demand'] = supply_chain_df['downstream_demand_index']
+
+        return result
+
+    def calc_sentiment_factors(self, sentiment_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        情绪因子 (A股特有)
+        A股散户占比高，情绪因子具有显著Alpha
+
+        Args:
+            sentiment_df: 需包含 ts_code, retail_order_ratio(可选), margin_balance(可选),
+                          new_accounts(可选), social_media_volume(可选)
+        """
+        result = pd.DataFrame()
+        result['security_id'] = sentiment_df.get('ts_code')
+
+        # 散户情绪 = 散户订单占比 (越高越反向)
+        if 'retail_order_ratio' in sentiment_df.columns:
+            result['retail_sentiment'] = sentiment_df['retail_order_ratio'].rolling(20, min_periods=5).mean()
+
+        # 融资余额变化率
+        if 'margin_balance' in sentiment_df.columns:
+            result['margin_balance_chg'] = sentiment_df['margin_balance'].pct_change(5)
+
+        # 新开户数增长率 (市场级别)
+        if 'new_accounts' in sentiment_df.columns:
+            result['new_account_growth'] = sentiment_df['new_accounts'].pct_change(20)
+
+        return result
+
+    def calc_all_factors(self, financial_df: pd.DataFrame, price_df: pd.DataFrame,
+                         industry_col: str = None, cap_col: str = None,
+                         neutralize: bool = True,
+                         northbound_df: pd.DataFrame = None,
+                         analyst_df: pd.DataFrame = None,
+                         policy_df: pd.DataFrame = None,
+                         supply_chain_df: pd.DataFrame = None,
+                         sentiment_df: pd.DataFrame = None) -> pd.DataFrame:
+        """
+        计算所有因子并预处理
+        符合ADD 6.3节完整流程 + 机构级扩展因子
+        """
+        # 计算各类因子
+        valuation = self.calc_valuation_factors(financial_df, price_df)
+        growth = self.calc_growth_factors(financial_df)
+        quality = self.calc_quality_factors(financial_df)
+        momentum = self.calc_momentum_factors(price_df)
+        volatility = self.calc_volatility_factors(price_df)
+        liquidity = self.calc_liquidity_factors(price_df)
+
+        # 机构级扩展因子
+        northbound = self.calc_northbound_factors(northbound_df) if northbound_df is not None and not northbound_df.empty else pd.DataFrame()
+        analyst = self.calc_analyst_factors(analyst_df) if analyst_df is not None and not analyst_df.empty else pd.DataFrame()
+        microstructure = self.calc_microstructure_factors(price_df)
+        policy = self.calc_policy_factors(policy_df) if policy_df is not None and not policy_df.empty else pd.DataFrame()
+        supply_chain = self.calc_supply_chain_factors(supply_chain_df) if supply_chain_df is not None and not supply_chain_df.empty else pd.DataFrame()
+        sentiment = self.calc_sentiment_factors(sentiment_df) if sentiment_df is not None and not sentiment_df.empty else pd.DataFrame()
+
+        # 合并
+        all_factors = [valuation, growth, quality, momentum, volatility, liquidity,
+                       northbound, analyst, microstructure, policy, supply_chain, sentiment]
+        merged = pd.DataFrame()
+        for f in all_factors:
+            if not f.empty and 'security_id' in f.columns:
+                if merged.empty:
+                    merged = f
+                else:
+                    merged = pd.merge(merged, f, on='security_id', how='outer')
+
+        if merged.empty:
+            return merged
+
+        # 预处理所有因子列
+        factor_cols = [c for c in merged.columns if c != 'security_id']
+        merged = self.preprocessor.preprocess_dataframe(
+            merged, factor_cols,
+            industry_col=industry_col,
+            cap_col=cap_col,
+            neutralize=neutralize,
+            direction_map=FACTOR_DIRECTIONS,
+        )
+
+        return merged

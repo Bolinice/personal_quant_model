@@ -19,7 +19,7 @@ def get_subscriptions(user_id: int = None, product_id: int = None, is_active: bo
 
 @with_db
 def create_subscription(subscription: SubscriptionCreate, db: Session = None):
-    db_subscription = Subscription(**subscription.dict())
+    db_subscription = Subscription(**subscription.model_dump())
     db.add(db_subscription)
     db.commit()
     db.refresh(db_subscription)
@@ -39,7 +39,7 @@ def update_subscription(subscription_id: int, subscription_update: SubscriptionU
     db_subscription = db.query(Subscription).filter(Subscription.id == subscription_id).first()
     if not db_subscription:
         return None
-    update_data = subscription_update.dict(exclude_unset=True)
+    update_data = subscription_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_subscription, key, value)
     db.commit()
@@ -61,7 +61,7 @@ def get_subscription_histories(subscription_id: int, db: Session = None):
 
 @with_db
 def create_subscription_history(subscription_id: int, history: SubscriptionHistoryCreate, db: Session = None):
-    db_history = SubscriptionHistory(**history.dict())
+    db_history = SubscriptionHistory(**history.model_dump())
     db.add(db_history)
     db.commit()
     db.refresh(db_history)
@@ -73,7 +73,7 @@ def get_subscription_permissions(subscription_id: int, db: Session = None):
 
 @with_db
 def create_subscription_permission(permission: SubscriptionPermissionCreate, db: Session = None):
-    db_permission = SubscriptionPermission(**permission.dict())
+    db_permission = SubscriptionPermission(**permission.model_dump())
     db.add(db_permission)
     db.commit()
     db.refresh(db_permission)

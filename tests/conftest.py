@@ -3,7 +3,7 @@ import asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.db.connection import Base, get_db
+from app.db.base import Base, get_db
 from app.main import app
 from app.core.config import settings
 
@@ -30,16 +30,12 @@ def override_get_db():
 
 app.dependency_overrides[get_db] = override_get_db
 
+
 @pytest.fixture(scope="session")
 def client():
     with TestClient(app) as c:
         yield c
 
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
 
 @pytest.fixture
 def db():

@@ -906,12 +906,115 @@ P1 再扩展 IC、分层收益。
 
 ---
 
-# 13. 权限建议
+# 13. 通知接口
 
-## 13.1 管理员
+---
+
+## 13.1 通知列表
+
+### GET `/api/v1/notifications`
+
+#### 查询参数
+| 参数 | 类型 | 说明 |
+|---|---|---|
+| is_read | bool | 是否已读 |
+| notification_type | string | system/risk/rebalance/report |
+| page | int | 页码 |
+| page_size | int | 每页数量 |
+
+---
+
+## 13.2 标记通知已读
+
+### PUT `/api/v1/notifications/{notification_id}/read`
+
+---
+
+## 13.3 批量标记已读
+
+### PUT `/api/v1/notifications/read-all`
+
+---
+
+# 14. 策略接口
+
+---
+
+## 14.1 策略列表
+
+### GET `/api/v1/strategies`
+
+#### 查询参数
+| 参数 | 类型 | 说明 |
+|---|---|---|
+| status | string | draft/published/archived |
+| page | int | 页码 |
+| page_size | int | 每页数量 |
+
+---
+
+## 14.2 创建策略
+
+### POST `/api/v1/strategies`
+
+```json
+{
+  "name": "中证500增强策略V1",
+  "model_id": 1,
+  "description": "基于质量、估值、动量因子的增强策略"
+}
+```
+
+---
+
+# 15. 绩效分析接口
+
+---
+
+## 15.1 回测绩效分析
+
+### GET `/api/v1/performance/backtests/{backtest_id}/analysis`
+
+#### 响应示例
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "returns": {
+      "total_return": 1.23,
+      "annual_return": 0.18,
+      "excess_return": 0.06
+    },
+    "risk": {
+      "max_drawdown": -0.21,
+      "volatility": 0.15,
+      "sharpe": 1.12,
+      "calmar": 0.86,
+      "information_ratio": 0.65
+    },
+    "attribution": {
+      "industry_contribution": {},
+      "style_contribution": {}
+    }
+  }
+}
+```
+
+---
+
+## 15.2 模拟组合绩效分析
+
+### GET `/api/v1/performance/simulated-portfolios/{portfolio_id}/analysis`
+
+---
+
+# 16. 权限建议
+
+## 16.1 管理员
 - 全部接口
 
-## 13.2 研究员
+## 16.2 研究员
 - 数据查询
 - 因子
 - 模型
@@ -919,7 +1022,7 @@ P1 再扩展 IC、分层收益。
 - 模拟组合
 - 报告生成
 
-## 13.3 客户
+## 16.3 客户
 - 我的订阅
 - 产品详情
 - 当前组合
@@ -928,7 +1031,7 @@ P1 再扩展 IC、分层收益。
 
 ---
 
-# 14. API 开发优先级
+# 17. API 开发优先级
 
 ## P0
 - 认证

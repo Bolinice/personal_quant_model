@@ -22,7 +22,7 @@ export default function Dashboard() {
     factorApi.list({ limit: 200 }).then((res) => setStats((s) => ({ ...s, factors: res.data.length }))).catch(() => {});
     modelApi.list({ limit: 200 }).then((res) => setStats((s) => ({ ...s, models: res.data.length }))).catch(() => {});
     backtestApi.list({ limit: 200 }).then((res) => setStats((s) => ({ ...s, backtests: res.data.length }))).catch(() => {});
-    client.get('/../health').then((res) => setStats((s) => ({ ...s, health: res.data.status }))).catch(() => {});
+    client.get('/health').then((res) => setStats((s) => ({ ...s, health: res.data.status }))).catch(() => {});
   }, []);
 
   const cards = [

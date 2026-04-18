@@ -1,6 +1,7 @@
 """
 因子预处理模块
-实现缺失值处理、去极值、标准化、中性化等功能
+实现完整的因子预处理pipeline: 缺失值处理 → 去极值 → 标准化 → 方向统一 → 中性化
+符合ADD文档6.3节规范 + 机构级增强: MICE插补/逆正态秩变换/自适应去极值/约束回归中性化
 """
 from typing import List, Optional, Dict, Tuple
 import numpy as np
@@ -12,12 +13,12 @@ from app.core.logging import logger
 
 
 class FactorPreprocessor:
-    """因子预处理器"""
+    """因子预处理器 - 实现ADD 6.3节完整预处理流程"""
 
     def __init__(self):
         pass
 
-    # ==================== 缺失值处理 ====================
+    # ==================== 1. 缺失值处理 ====================
 
     def fill_missing_mean(self, series: pd.Series) -> pd.Series:
         """用均值填充缺失值"""
@@ -40,196 +41,430 @@ class FactorPreprocessor:
             result.loc[mask & df[value_col].isna()] = industry_mean
         return result
 
-    # ==================== 去极值 ====================
+    def fill_missing_cross_section_median(self, series: pd.Series) -> pd.Series:
+        """用横截面中位数填充缺失值"""
+        return series.fillna(series.median())
+
+    def check_coverage(self, series: pd.Series, min_coverage: float = 0.8) -> Tuple[bool, float]:
+        """
+        检查因子覆盖率
+
+        Args:
+            series: 因子值序列
+            min_coverage: 最低覆盖率阈值
+
+        Returns:
+            (是否通过, 实际覆盖率)
+        """
+        coverage = 1 - series.isna().mean()
+        return coverage >= min_coverage, coverage
+
+    def fill_missing_mice(self, df: pd.DataFrame, factor_cols: List[str],
+                          max_iter: int = 10, random_state: int = 42) -> pd.DataFrame:
+        """
+        MICE多重插补 (Multivariate Imputation by Chained Equations)
+        利用因子间相关性进行迭代插补，保留多变量关系
+
+        Args:
+            df: 包含因子值的数据框
+            factor_cols: 需要插补的因子列
+            max_iter: 最大迭代次数
+            random_state: 随机种子
+        """
+        try:
+            from sklearn.experimental import enable_iterative_imputer
+            from sklearn.impute import IterativeImputer
+        except ImportError:
+            logger.warning("sklearn not available for MICE, falling back to median fill")
+            result = df.copy()
+            for col in factor_cols:
+                result[col] = self.fill_missing_median(result[col])
+            return result
+
+        result = df.copy()
+        imputer = IterativeImputer(max_iter=max_iter, random_state=random_state)
+        valid_data = result[factor_cols]
+        imputed = imputer.fit_transform(valid_data)
+        result[factor_cols] = imputed
+        return result
+
+    def fill_missing_decay_forward(self, series: pd.Series, decay_rate: float = 0.05) -> pd.Series:
+        """
+        指数衰减前向填充
+        适用于季度财务数据：距离公告日越远，数据权重越低
+        weight = exp(-decay_rate * days_since_announcement)
+
+        Args:
+            series: 因子值序列(按时间排序)
+            decay_rate: 衰减率
+        """
+        result = series.copy()
+        last_valid = np.nan
+        days_since = 0
+
+        for i in range(len(result)):
+            if not np.isnan(result.iloc[i]):
+                last_valid = result.iloc[i]
+                days_since = 0
+            elif not np.isnan(last_valid):
+                days_since += 1
+                result.iloc[i] = last_valid * np.exp(-decay_rate * days_since)
+
+        return result
+
+    def add_missingness_indicators(self, df: pd.DataFrame,
+                                    factor_cols: List[str]) -> pd.DataFrame:
+        """
+        缺失指示特征
+        某些因子缺失本身是信息(如不披露研发费用)，创建二值指示特征
+
+        Args:
+            df: 包含因子值的数据框
+            factor_cols: 因子列名列表
+        """
+        result = df.copy()
+        for col in factor_cols:
+            result[f'{col}_missing'] = result[col].isna().astype(int)
+        return result
+
+    # ==================== 2. 去极值 ====================
 
     def winsorize_mad(self, series: pd.Series, n_mad: float = 3.0) -> pd.Series:
         """
         MAD方法去极值（Median Absolute Deviation）
-        比标准差更稳健
+        比标准差更稳健，符合ADD 6.3.2节
 
-        Args:
-            series: 因子值序列
-            n_mad: MAD倍数，默认3倍
-
-        Returns:
-            处理后的序列
+        x' = median(x) ± k * MAD
+        MAD = median(|x - median(x)|)
         """
-        median = series.median()
-        mad = np.median(np.abs(series - median))
-
+        s = series.dropna()
+        if s.empty:
+            return series
+        median = s.median()
+        mad = np.median(np.abs(s - median))
         if mad == 0:
             return series
-
         upper_bound = median + n_mad * mad
         lower_bound = median - n_mad * mad
-
         return series.clip(lower_bound, upper_bound)
 
-    def winsorize_quantile(self, series: pd.Series, lower: float = 0.025, upper: float = 0.975) -> pd.Series:
+    def winsorize_quantile(self, series: pd.Series, lower: float = 0.01, upper: float = 0.99) -> pd.Series:
         """
-        分位数去极值
-
-        Args:
-            series: 因子值序列
-            lower: 下分位数，默认2.5%
-            upper: 上分位数，默认97.5%
-
-        Returns:
-            处理后的序列
+        分位数截断去极值
+        符合ADD 6.3.2节，默认1%/99%
         """
         lower_bound = series.quantile(lower)
         upper_bound = series.quantile(upper)
-
         return series.clip(lower_bound, upper_bound)
 
     def winsorize_sigma(self, series: pd.Series, n_sigma: float = 3.0) -> pd.Series:
+        """标准差去极值"""
+        mean = series.mean()
+        std = series.std()
+        if std == 0:
+            return series
+        upper_bound = mean + n_sigma * std
+        lower_bound = mean - n_sigma * std
+        return series.clip(lower_bound, upper_bound)
+
+    def winsorize_adaptive_mad(self, series: pd.Series, base_k: float = 3.0,
+                                vol_series: pd.Series = None,
+                                long_run_vol: float = None) -> pd.Series:
         """
-        标准差去极值
+        自适应MAD去极值
+        高波动期k更大(避免过度截断)，低波动期k更小
+        k_t = base_k * (vol_t / vol_long_run)
 
         Args:
             series: 因子值序列
-            n_sigma: 标准差倍数
-
-        Returns:
-            处理后的序列
+            base_k: 基础MAD倍数
+            vol_series: 当前波动率序列(可选)
+            long_run_vol: 长期波动率(可选)
         """
-        mean = series.mean()
-        std = series.std()
+        if vol_series is not None and long_run_vol is not None and long_run_vol > 0:
+            # 自适应k
+            current_vol = vol_series.iloc[-1] if len(vol_series) > 0 else long_run_vol
+            adaptive_k = base_k * (current_vol / long_run_vol)
+            adaptive_k = np.clip(adaptive_k, base_k * 0.5, base_k * 2.0)  # 限制范围
+        else:
+            adaptive_k = base_k
 
-        if std == 0:
-            return series
+        return self.winsorize_mad(series, n_mad=adaptive_k)
 
-        upper_bound = mean + n_sigma * std
-        lower_bound = mean - n_sigma * std
+    def winsorize_isolation_forest(self, df: pd.DataFrame, factor_cols: List[str],
+                                    contamination: float = 0.02,
+                                    random_state: int = 42) -> pd.DataFrame:
+        """
+        Isolation Forest多变量异常检测
+        检测因子空间中的异常观测(而非单变量极值)
 
-        return series.clip(lower_bound, upper_bound)
+        Args:
+            df: 包含因子值的数据框
+            factor_cols: 因子列名列表
+            contamination: 异常比例
+            random_state: 随机种子
+        """
+        try:
+            from sklearn.ensemble import IsolationForest
+        except ImportError:
+            logger.warning("sklearn not available for Isolation Forest, skipping")
+            return df
 
-    # ==================== 标准化 ====================
+        result = df.copy()
+        valid_mask = result[factor_cols].notna().all(axis=1)
+        if valid_mask.sum() < 50:
+            return result
+
+        clf = IsolationForest(contamination=contamination, random_state=random_state)
+        X = result.loc[valid_mask, factor_cols].fillna(0)
+        outliers = clf.fit_predict(X)
+
+        # 将异常值标记为NaN(后续由单变量方法处理)
+        outlier_mask = outliers == -1
+        outlier_indices = result.loc[valid_mask].index[outlier_mask]
+        for col in factor_cols:
+            result.loc[outlier_indices, col] = np.nan
+
+        return result
+
+    # ==================== 3. 标准化 ====================
 
     def standardize_zscore(self, series: pd.Series) -> pd.Series:
         """
-        Z-score标准化
-        (x - mean) / std
+        横截面Z-score标准化
+        符合ADD 6.3.3节: z_i = (x_i - μ) / σ
         """
         mean = series.mean()
         std = series.std()
-
-        if std == 0:
+        if std == 0 or np.isnan(std):
             return series - mean
-
         return (series - mean) / std
 
     def standardize_rank(self, series: pd.Series) -> pd.Series:
-        """
-        排名标准化
-        将因子值转换为排名百分比 [0, 1]
-        """
+        """排名标准化: 将因子值转换为排名百分比 [0, 1]"""
         return series.rank(pct=True)
 
     def standardize_minmax(self, series: pd.Series, min_val: float = 0, max_val: float = 1) -> pd.Series:
-        """
-        Min-Max标准化
-        将因子值缩放到 [min_val, max_val] 区间
-        """
+        """Min-Max标准化"""
         s_min = series.min()
         s_max = series.max()
-
         if s_max == s_min:
             return pd.Series([0.5] * len(series), index=series.index)
-
         normalized = (series - s_min) / (s_max - s_min)
         return normalized * (max_val - min_val) + min_val
 
-    # ==================== 中性化 ====================
+    def standardize_rank_normal(self, series: pd.Series) -> pd.Series:
+        """
+        逆正态秩变换 (Inverse Normal Transformation)
+        AQR和学术界标准方法: 将排名转换为标准正态分布
+        z_i = Phi^{-1}(rank_i / (N + 1))
+        强制横截面服从标准正态，对下游线性模型最优
+        """
+        ranks = series.rank(method='average')
+        n = len(series.dropna())
+        if n == 0:
+            return series
+        # 逆正态变换
+        percentile = ranks / (n + 1)
+        # 限制在(0.001, 0.999)避免无穷
+        percentile = percentile.clip(0.001, 0.999)
+        result = pd.Series(np.nan, index=series.index)
+        valid = series.notna()
+        result.loc[valid] = stats.norm.ppf(percentile.loc[valid])
+        return result
+
+    def standardize_robust_zscore(self, series: pd.Series) -> pd.Series:
+        """
+        稳健Z-score (基于中位数和MAD)
+        z_i = (x_i - median(x)) / (1.4826 * MAD(x))
+        1.4826因子使MAD与标准差在正态分布下一致
+        """
+        s = series.dropna()
+        if s.empty:
+            return series
+        median = s.median()
+        mad = np.median(np.abs(s - median))
+        if mad == 0:
+            return series - median
+        return (series - median) / (1.4826 * mad)
+
+    # ==================== 4. 因子方向统一 ====================
+
+    def align_direction(self, series: pd.Series, direction: int = 1) -> pd.Series:
+        """
+        统一因子方向
+        符合ADD 6.3.4节: 分数越高，预期未来表现越好
+
+        Args:
+            direction: 1=正向(越大越好), -1=反向(越小越好)
+        """
+        if direction == -1:
+            return -series
+        return series
+
+    # ==================== 5. 中性化 ====================
 
     def neutralize_industry(self, df: pd.DataFrame, value_col: str, industry_col: str) -> pd.Series:
         """
         行业中性化
-        对每个行业内的因子值进行标准化，消除行业差异
+        符合ADD 6.3.5节: 对因子做行业哑变量回归，取残差
 
-        Args:
-            df: 包含因子值和行业信息的数据框
-            value_col: 因子值列名
-            industry_col: 行业列名
-
-        Returns:
-            中性化后的因子值
+        x_i = α + Σ β_k * Industry_{i,k} + ε_i
         """
-        result = pd.Series(index=df.index, dtype=float)
+        # 构建行业哑变量
+        industries = pd.get_dummies(df[industry_col], drop_first=True)
+        X = industries.values
+        y = df[value_col].values
 
-        for industry in df[industry_col].unique():
-            mask = df[industry_col] == industry
-            industry_values = df.loc[mask, value_col]
-            result.loc[mask] = self.standardize_zscore(industry_values)
+        # 处理NaN
+        valid_mask = ~np.isnan(y)
+        if valid_mask.sum() < X.shape[1] + 10:
+            # 样本不足，退化为行业内标准化
+            result = pd.Series(index=df.index, dtype=float)
+            for industry in df[industry_col].unique():
+                mask = df[industry_col] == industry
+                industry_values = df.loc[mask, value_col]
+                result.loc[mask] = self.standardize_zscore(industry_values)
+            return result
 
-        return result
+        # WLS回归
+        try:
+            X_valid = X[valid_mask]
+            y_valid = y[valid_mask]
+            # 添加截距项
+            X_with_const = np.column_stack([np.ones(X_valid.shape[0]), X_valid])
+            beta = np.linalg.lstsq(X_with_const, y_valid, rcond=None)[0]
+            predicted = X_with_const @ beta
+            residuals = y_valid - predicted
+            result = pd.Series(np.nan, index=df.index)
+            result.iloc[valid_mask] = residuals
+            return result
+        except np.linalg.LinAlgError:
+            logger.warning("Industry neutralization failed, falling back to within-industry zscore")
+            result = pd.Series(index=df.index, dtype=float)
+            for industry in df[industry_col].unique():
+                mask = df[industry_col] == industry
+                industry_values = df.loc[mask, value_col]
+                result.loc[mask] = self.standardize_zscore(industry_values)
+            return result
 
     def neutralize_market_cap(self, df: pd.DataFrame, value_col: str, cap_col: str) -> pd.Series:
         """
         市值中性化
-        通过回归去除市值影响
+        符合ADD 6.3.5节: 加入log(market cap)控制项
 
-        Args:
-            df: 包含因子值和市值的数据框
-            value_col: 因子值列名
-            cap_col: 市值列名
-
-        Returns:
-            中性化后的因子值（残差）
+        x_i = α + β * log(MV_i) + ε_i
         """
-        # 对市值取对数
         log_cap = np.log(df[cap_col])
+        valid_mask = ~(np.isnan(df[value_col]) | np.isnan(log_cap) | np.isinf(log_cap))
 
-        # 线性回归
-        slope, intercept, _, _, _ = stats.linregress(log_cap, df[value_col])
+        if valid_mask.sum() < 10:
+            return df[value_col]
 
-        # 计算残差
+        slope, intercept, _, _, _ = stats.linregress(
+            log_cap[valid_mask], df.loc[valid_mask, value_col]
+        )
         residuals = df[value_col] - (slope * log_cap + intercept)
-
         return residuals
 
     def neutralize_industry_and_cap(self, df: pd.DataFrame, value_col: str,
                                     industry_col: str, cap_col: str) -> pd.Series:
         """
         行业和市值双重中性化
-
-        Args:
-            df: 数据框
-            value_col: 因子值列名
-            industry_col: 行业列名
-            cap_col: 市值列名
-
-        Returns:
-            中性化后的因子值
+        符合ADD 6.3.5节:
+        x_i = α + β * log(MV_i) + Σ γ_k * Industry_{i,k} + ε_i
         """
-        # 先做行业中性化
-        industry_neutral = self.neutralize_industry(df, value_col, industry_col)
+        # 构建特征矩阵: 行业哑变量 + log(市值)
+        industries = pd.get_dummies(df[industry_col], drop_first=True)
+        log_cap = np.log(df[cap_col])
+        X = np.column_stack([industries.values, log_cap.values])
+        y = df[value_col].values
 
-        # 再做市值中性化
-        df_temp = df.copy()
-        df_temp['industry_neutral'] = industry_neutral
+        valid_mask = ~(np.isnan(y) | np.isnan(X).any(axis=1) | np.isinf(X).any(axis=1))
+        if valid_mask.sum() < X.shape[1] + 10:
+            return self.neutralize_industry(df, value_col, industry_col)
 
-        return self.neutralize_market_cap(df_temp, 'industry_neutral', cap_col)
+        try:
+            X_valid = X[valid_mask]
+            y_valid = y[valid_mask]
+            X_with_const = np.column_stack([np.ones(X_valid.shape[0]), X_valid])
+            beta = np.linalg.lstsq(X_with_const, y_valid, rcond=None)[0]
+            predicted = X_with_const @ beta
+            residuals = y_valid - predicted
+            result = pd.Series(np.nan, index=df.index)
+            result.iloc[valid_mask] = residuals
+            return result
+        except np.linalg.LinAlgError:
+            return self.neutralize_industry(df, value_col, industry_col)
 
-    # ==================== 完整预处理流程 ====================
+    def neutralize_industry_constrained(self, df: pd.DataFrame, value_col: str,
+                                         industry_col: str) -> pd.Series:
+        """
+        约束回归行业中性化 (Barra Assector方法)
+        约束行业哑变量系数之和为0，防止截距项吸收行业效应
+
+        x_i = α + Σ β_k * Industry_{i,k} + ε_i
+        s.t. Σ β_k = 0
+        """
+        industries = pd.get_dummies(df[industry_col])  # 不drop_first
+        y = df[value_col].values
+        valid_mask = ~np.isnan(y)
+
+        if valid_mask.sum() < industries.shape[1] + 10:
+            return self.neutralize_industry(df, value_col, industry_col)
+
+        try:
+            X = industries.values[valid_mask]
+            y_valid = y[valid_mask]
+            n_industries = X.shape[1]
+
+            # 约束矩阵: 行业系数之和为0
+            # 使用Lagrange乘子法: [X'X  A'] [beta ] = [X'y]
+            #                     [A   0 ] [lambda]   [0   ]
+            A = np.ones((1, n_industries))
+            X_with_const = np.column_stack([np.ones(X.shape[0]), X])
+
+            # 构建KKT系统
+            n_vars = X_with_const.shape[1]
+            KKT = np.zeros((n_vars + 1, n_vars + 1))
+            KKT[:n_vars, :n_vars] = X_with_const.T @ X_with_const
+            KKT[:n_vars, n_vars] = A.flatten()  # 约束行
+            KKT[n_vars, :n_vars] = A.flatten()  # 约束列
+
+            rhs = np.zeros(n_vars + 1)
+            rhs[:n_vars] = X_with_const.T @ y_valid
+            rhs[n_vars] = 0  # 约束右侧
+
+            solution = np.linalg.solve(KKT, rhs)
+            beta = solution[:n_vars]
+            predicted = X_with_const @ beta
+            residuals = y_valid - predicted
+
+            result = pd.Series(np.nan, index=df.index)
+            result.iloc[valid_mask] = residuals
+            return result
+        except (np.linalg.LinAlgError, ValueError):
+            return self.neutralize_industry(df, value_col, industry_col)
+
+    # ==================== 6. 完整预处理流程 ====================
 
     def preprocess(self, series: pd.Series,
-                   fill_method: str = 'mean',
+                   fill_method: str = 'median',
                    winsorize_method: str = 'mad',
                    winsorize_param: float = 3.0,
-                   standardize_method: str = 'zscore') -> pd.Series:
+                   standardize_method: str = 'zscore',
+                   direction: int = 1) -> pd.Series:
         """
         完整的因子预处理流程
+        符合ADD 6.3节: 缺失值处理 → 去极值 → 标准化 → 方向统一
 
         Args:
             series: 原始因子值
-            fill_method: 缺失值填充方法 ('mean', 'median', 'zero')
-            winsorize_method: 去极值方法 ('mad', 'quantile', 'sigma')
+            fill_method: 缺失值填充方法 ('mean', 'median', 'zero', 'decay_forward')
+            winsorize_method: 去极值方法 ('mad', 'quantile', 'sigma', 'adaptive_mad')
             winsorize_param: 去极值参数
-            standardize_method: 标准化方法 ('zscore', 'rank', 'minmax')
-
-        Returns:
-            预处理后的因子值
+            standardize_method: 标准化方法 ('zscore', 'rank', 'minmax', 'rank_normal', 'robust_zscore')
+            direction: 因子方向 (1=正向, -1=反向)
         """
         # 1. 缺失值处理
         if fill_method == 'mean':
@@ -238,14 +473,18 @@ class FactorPreprocessor:
             series = self.fill_missing_median(series)
         elif fill_method == 'zero':
             series = self.fill_missing_zero(series)
+        elif fill_method == 'decay_forward':
+            series = self.fill_missing_decay_forward(series)
 
         # 2. 去极值
         if winsorize_method == 'mad':
             series = self.winsorize_mad(series, winsorize_param)
         elif winsorize_method == 'quantile':
-            series = self.winsorize_quantile(series, 1 - winsorize_param, winsorize_param)
+            series = self.winsorize_quantile(series, 1 - winsorize_param / 100, winsorize_param / 100)
         elif winsorize_method == 'sigma':
             series = self.winsorize_sigma(series, winsorize_param)
+        elif winsorize_method == 'adaptive_mad':
+            series = self.winsorize_adaptive_mad(series, base_k=winsorize_param)
 
         # 3. 标准化
         if standardize_method == 'zscore':
@@ -254,30 +493,38 @@ class FactorPreprocessor:
             series = self.standardize_rank(series)
         elif standardize_method == 'minmax':
             series = self.standardize_minmax(series)
+        elif standardize_method == 'rank_normal':
+            series = self.standardize_rank_normal(series)
+        elif standardize_method == 'robust_zscore':
+            series = self.standardize_robust_zscore(series)
+
+        # 4. 方向统一
+        series = self.align_direction(series, direction)
 
         return series
 
     def preprocess_dataframe(self, df: pd.DataFrame, factor_cols: List[str],
                             industry_col: str = None, cap_col: str = None,
-                            neutralize: bool = False) -> pd.DataFrame:
+                            neutralize: bool = False,
+                            direction_map: Dict[str, int] = None) -> pd.DataFrame:
         """
         批量预处理多个因子
 
         Args:
             df: 包含因子值的数据框
             factor_cols: 因子列名列表
-            industry_col: 行业列名（用于中性化）
-            cap_col: 市值列名（用于中性化）
+            industry_col: 行业列（用于中性化）
+            cap_col: 市值列（用于中性化）
             neutralize: 是否进行中性化
-
-        Returns:
-            预处理后的数据框
+            direction_map: 因子方向映射 {col: direction}
         """
         result = df.copy()
 
         for col in factor_cols:
-            # 基硎预处理
-            result[col] = self.preprocess(df[col])
+            direction = direction_map.get(col, 1) if direction_map else 1
+
+            # 基础预处理
+            result[col] = self.preprocess(df[col], direction=direction)
 
             # 中性化
             if neutralize:
@@ -290,6 +537,46 @@ class FactorPreprocessor:
 
         return result
 
+    # ==================== 7. 稳定性检查 ====================
+
+    def check_stability(self, factor_values: pd.DataFrame,
+                        date_col: str = 'trade_date',
+                        value_col: str = 'value',
+                        window: int = 60) -> Dict:
+        """
+        因子稳定性检查
+        计算滚动IC和滚动覆盖率，检测因子失效
+
+        Args:
+            factor_values: 因子值DataFrame
+            date_col: 日期列
+            value_col: 值列
+            window: 滚动窗口
+
+        Returns:
+            稳定性指标
+        """
+        if factor_values.empty:
+            return {'is_stable': False, 'reason': 'No data'}
+
+        # 按日期计算覆盖率
+        daily_coverage = factor_values.groupby(date_col)[value_col].apply(
+            lambda x: 1 - x.isna().mean()
+        )
+
+        # 滚动覆盖率
+        rolling_coverage = daily_coverage.rolling(window).mean()
+
+        # 覆盖率趋势
+        coverage_trend = rolling_coverage.iloc[-1] - rolling_coverage.iloc[0] if len(rolling_coverage) > 1 else 0
+
+        return {
+            'is_stable': rolling_coverage.iloc[-1] > 0.5 if len(rolling_coverage) > 0 else False,
+            'current_coverage': rolling_coverage.iloc[-1] if len(rolling_coverage) > 0 else 0,
+            'coverage_trend': coverage_trend,
+            'min_coverage': rolling_coverage.min() if len(rolling_coverage) > 0 else 0,
+        }
+
 
 class FactorNormalizer:
     """因子方向统一化"""
@@ -297,29 +584,15 @@ class FactorNormalizer:
     def __init__(self):
         pass
 
-    def align_direction(self, series: pd.Series, direction: str = 'desc') -> pd.Series:
-        """
-        统一因子方向
-
-        Args:
-            series: 因子值
-            direction: 期望方向 ('desc' 表示越大越好，'asc' 表示越小越好)
-
-        Returns:
-            调整方向后的因子值
-        """
-        if direction == 'asc':
-            # 越小越好，取负
+    def align_direction(self, series: pd.Series, direction: int = 1) -> pd.Series:
+        """统一因子方向: direction=1越大越好, direction=-1越小越好"""
+        if direction == -1:
             return -series
         return series
 
     def align_to_benchmark(self, factor_values: pd.Series, benchmark_values: pd.Series) -> pd.Series:
-        """
-        对齐到基准方向
-        确保因子与基准收益正相关
-        """
+        """对齐到基准方向: 确保因子与基准收益正相关"""
         correlation = factor_values.corr(benchmark_values)
-
         if correlation < 0:
             return -factor_values
         return factor_values
@@ -327,20 +600,10 @@ class FactorNormalizer:
 
 # 便捷函数
 def preprocess_factor_values(factor_values: pd.Series,
-                            fill_method: str = 'mean',
+                            fill_method: str = 'median',
                             winsorize_method: str = 'mad',
-                            standardize_method: str = 'zscore') -> pd.Series:
-    """
-    预处理因子值的便捷函数
-
-    Args:
-        factor_values: 因子值序列
-        fill_method: 缺失值填充方法
-        winsorize_method: 去极值方法
-        standardize_method: 标准化方法
-
-    Returns:
-        预处理后的因子值
-    """
+                            standardize_method: str = 'zscore',
+                            direction: int = 1) -> pd.Series:
+    """预处理因子值的便捷函数"""
     preprocessor = FactorPreprocessor()
-    return preprocessor.preprocess(factor_values, fill_method, winsorize_method, 3.0, standardize_method)
+    return preprocessor.preprocess(factor_values, fill_method, winsorize_method, 3.0, standardize_method, direction)

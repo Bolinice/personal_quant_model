@@ -24,16 +24,16 @@ class FactorUpdate(BaseModel):
 
 class FactorInDB(FactorBase):
     id: int
-    created_at: date
-    updated_at: date
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
 
 class FactorOut(FactorBase):
     id: int
-    created_at: date
-    updated_at: date
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -53,14 +53,14 @@ class FactorValueCreate(FactorValueBase):
 
 class FactorValueInDB(FactorValueBase):
     id: int
-    created_at: date
+    created_at: datetime
 
     class Config:
         from_attributes = True
 
 class FactorValueOut(FactorValueBase):
     id: int
-    created_at: date
+    created_at: datetime
 
     class Config:
         from_attributes = True
@@ -91,14 +91,14 @@ class FactorAnalysisCreate(FactorAnalysisBase):
 
 class FactorAnalysisInDB(FactorAnalysisBase):
     id: int
-    created_at: date
+    created_at: datetime
 
     class Config:
         from_attributes = True
 
 class FactorAnalysisOut(FactorAnalysisBase):
     id: int
-    created_at: date
+    created_at: datetime
 
     class Config:
         from_attributes = True

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Float, Numeric
+from sqlalchemy import Column, Integer, String, DateTime, Float, Numeric, Boolean
 from sqlalchemy.sql import func
 from app.db.base import Base
 
@@ -17,6 +17,8 @@ class IndexDaily(Base):
     pct_chg = Column(Numeric(14, 4))
     vol = Column(Numeric(20, 4))
     amount = Column(Numeric(24, 4))
+    data_source = Column(String(20))           # 数据来源: tushare/akshare/crawler
+    amount_is_estimated = Column(Boolean, default=False)  # 成交额是否为估算值
 
     def __repr__(self):
         return f"<IndexDaily(index_code='{self.index_code}', trade_date='{self.trade_date}', close={self.close})>"

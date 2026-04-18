@@ -17,13 +17,8 @@ class FilterConfig(BaseModel):
 class StockPoolBase(BaseModel):
     pool_code: str
     pool_name: str
-    base_index_code: str
-    filter_config: Dict[str, Any] = Field(default_factory=lambda: {{
-        "exclude_st": True,
-        "exclude_suspended": True,
-        "exclude_new_stock_days": 120,
-        "min_avg_amount": 50000000
-    }})
+    base_index_code: Optional[str] = None
+    filter_config: Optional[Dict[str, Any]] = None
     description: Optional[str] = None
 
 class StockPoolCreate(StockPoolBase):
@@ -39,8 +34,8 @@ class StockPoolUpdate(BaseModel):
 class StockPoolInDB(StockPoolBase):
     id: int
     is_active: bool
-    created_at: date
-    updated_at: date
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -48,8 +43,8 @@ class StockPoolInDB(StockPoolBase):
 class StockPoolOut(StockPoolBase):
     id: int
     is_active: bool
-    created_at: date
-    updated_at: date
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -68,14 +63,14 @@ class StockPoolSnapshotCreate(StockPoolSnapshotBase):
 
 class StockPoolSnapshotInDB(StockPoolSnapshotBase):
     id: int
-    created_at: date
+    created_at: datetime
 
     class Config:
         from_attributes = True
 
 class StockPoolSnapshotOut(StockPoolSnapshotBase):
     id: int
-    created_at: date
+    created_at: datetime
 
     class Config:
         from_attributes = True

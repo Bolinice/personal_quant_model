@@ -16,7 +16,7 @@ def get_simulated_portfolios(model_id: int = None, skip: int = 0, limit: int = 1
 
 @with_db
 def create_simulated_portfolio(portfolio: SimulatedPortfolioCreate, db: Session = None):
-    db_portfolio = SimulatedPortfolio(**portfolio.dict())
+    db_portfolio = SimulatedPortfolio(**portfolio.model_dump())
     db.add(db_portfolio)
     db.commit()
     db.refresh(db_portfolio)
@@ -57,7 +57,7 @@ def get_simulated_portfolio_navs(portfolio_id: int, start_date: str = None, end_
 
 @with_db
 def create_simulated_portfolio_nav(portfolio_id: int, nav: SimulatedPortfolioNavCreate, db: Session = None):
-    db_nav = SimulatedPortfolioNav(**nav.dict())
+    db_nav = SimulatedPortfolioNav(**nav.model_dump())
     db.add(db_nav)
     db.commit()
     db.refresh(db_nav)

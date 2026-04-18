@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.base import get_db
 from app.services.timing_service import get_timing_signals, create_timing_signal, get_timing_config, create_timing_config, update_timing_config, calculate_ma_timing, calculate_breadth_timing, calculate_volatility_timing
-from app.models.timing import TimingSignal, TimingConfig
+from app.models.portfolios import TimingSignal, TimingConfig
 from app.schemas.timing import TimingSignalCreate, TimingConfigCreate, TimingConfigUpdate, TimingSignalOut, TimingConfigOut
 
 router = APIRouter()

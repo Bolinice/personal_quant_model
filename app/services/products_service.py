@@ -15,7 +15,7 @@ def get_products(model_id: int = None, skip: int = 0, limit: int = 100, db: Sess
 
 @with_db
 def create_product(product: ProductCreate, db: Session = None):
-    db_product = Product(**product.dict())
+    db_product = Product(**product.model_dump())
     db.add(db_product)
     db.commit()
     db.refresh(db_product)
@@ -26,7 +26,7 @@ def update_product(product_id: int, product_update: ProductUpdate, db: Session =
     db_product = db.query(Product).filter(Product.id == product_id).first()
     if not db_product:
         return None
-    update_data = product_update.dict(exclude_unset=True)
+    update_data = product_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_product, key, value)
     db.commit()
@@ -46,7 +46,7 @@ def get_product_reports(product_id: int, report_type: str = None, start_date: st
 
 @with_db
 def create_product_report(product_id: int, report: ProductReportCreate, db: Session = None):
-    db_report = ProductReport(**report.dict())
+    db_report = ProductReport(**report.model_dump())
     db.add(db_report)
     db.commit()
     db.refresh(db_report)
@@ -58,7 +58,7 @@ def get_subscription_plans(skip: int = 0, limit: int = 100, db: Session = None):
 
 @with_db
 def create_subscription_plan(plan: SubscriptionPlanCreate, db: Session = None):
-    db_plan = SubscriptionPlan(**plan.dict())
+    db_plan = SubscriptionPlan(**plan.model_dump())
     db.add(db_plan)
     db.commit()
     db.refresh(db_plan)

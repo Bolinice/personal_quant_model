@@ -9,7 +9,7 @@ from app.services.reports_service import (
     get_report_schedules, get_report_schedule_by_id, create_report_schedule, update_report_schedule, delete_report_schedule,
     generate_report, schedule_report_generation
 )
-from app.models.reports import Report, ReportTemplate, ReportSchedule
+from app.models.reports import Report, ReportTemplate
 from app.schemas.reports import (
     ReportCreate, ReportUpdate, ReportOut,
     ReportTemplateCreate, ReportTemplateUpdate, ReportTemplateOut,

@@ -84,7 +84,7 @@ export default function TimingList() {
         <Typography variant="h6" gutterBottom>选择模型</Typography>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
           <TextField label="模型" select size="small" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} sx={{ minWidth: 200 }}>
-            {models.map((m) => <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>)}
+            {models.map((m) => <MenuItem key={m.id} value={m.id}>{m.model_name}</MenuItem>)}
           </TextField>
           <TextField label="开始日期" type="date" size="small" value={dateRange.start} onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })} />
           <TextField label="结束日期" type="date" size="small" value={dateRange.end} onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })} />

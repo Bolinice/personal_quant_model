@@ -55,7 +55,7 @@ export default function PortfolioList() {
       <Paper sx={{ p: 2, mb: 3 }}>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
           <TextField label="模型" select size="small" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} sx={{ minWidth: 200 }}>
-            {models.map((m) => <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>)}
+            {models.map((m) => <MenuItem key={m.id} value={m.id}>{m.model_name}</MenuItem>)}
           </TextField>
           <TextField label="交易日期" type="date" size="small" value={tradeDate} onChange={(e) => setTradeDate(e.target.value)} />
           <Button variant="outlined" onClick={loadPortfolios}>查询</Button>
@@ -100,7 +100,7 @@ export default function PortfolioList() {
         <DialogTitle>生成组合</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
           <TextField label="模型" select size="small" value={genModel} onChange={(e) => setGenModel(e.target.value)}>
-            {models.map((m) => <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>)}
+            {models.map((m) => <MenuItem key={m.id} value={m.id}>{m.model_name}</MenuItem>)}
           </TextField>
           <TextField label="交易日期" type="date" size="small" value={genDate} onChange={(e) => setGenDate(e.target.value)} />
         </DialogContent>

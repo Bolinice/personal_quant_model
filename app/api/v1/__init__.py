@@ -3,7 +3,8 @@ from fastapi import APIRouter
 from app.api.v1 import (
     auth, users, securities, market, stock_pools, factors,
     models, timing, portfolios, backtests, simulated_portfolios,
-    products, subscriptions, reports, task_logs, alert_logs, performance
+    products, subscriptions, reports, task_logs, alert_logs, performance,
+    strategies, notifications,
 )
 
 api_router = APIRouter()
@@ -25,3 +26,5 @@ api_router.include_router(reports.router, prefix="/reports", tags=["报告管理
 api_router.include_router(task_logs.router, prefix="/task-logs", tags=["任务日志"])
 api_router.include_router(alert_logs.router, prefix="/alert-logs", tags=["告警日志"])
 api_router.include_router(performance.router, prefix="/performance", tags=["绩效分析"])
+api_router.include_router(strategies.router, prefix="/strategies", tags=["策略管理"])
+api_router.include_router(notifications.router, prefix="/notifications", tags=["通知管理"])

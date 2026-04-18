@@ -11,21 +11,10 @@ from app.core.config import settings
 from app.core.logging import logger
 
 # 导入所有模型以确保它们被注册
+import app.models  # noqa: F401 - 触发 __init__.py 注册所有模型
 from app.models.user import User
-from app.models.securities import Security
-from app.models.stock_pools import StockPool, StockPoolSnapshot
-from app.models.factors import Factor, FactorValue, FactorAnalysis, FactorResult
-from app.models.models import Model, ModelFactorWeight, ModelScore
-from app.models.timing import TimingModel, TimingSignal, TimingConfig
-from app.models.portfolios import Portfolio, PortfolioPosition, RebalanceRecord
-from app.models.backtests import Backtest, BacktestResult, BacktestTrade
-from app.models.simulated_portfolios import SimulatedPortfolio, SimulatedPortfolioPosition, SimulatedPortfolioNav
-from app.models.products import Product
-from app.models.subscriptions import Subscription
-from app.models.reports import Report, ReportTemplate, ReportSchedule
-from app.models.task_logs import TaskLog
-from app.models.alert_logs import AlertLog
-from app.models.market import StockDaily, IndexDaily, TradingCalendar, StockFinancial, StockIndustry, StockBasic
+from app.models.factors import Factor
+from app.models.stock_pools import StockPool
 
 
 def init_database(drop_existing: bool = False):
@@ -54,8 +43,8 @@ def create_default_data():
         # 创建默认管理员用户
         admin = db.query(User).filter(User.username == "admin").first()
         if not admin:
-            # 使用简单的 SHA256 哈希作为默认密码
-            hashed_password = hashlib.sha256("admin123".encode()).hexdigest()
+            from app.services.auth_service import AuthService
+            hashed_password = AuthService.hash_password("admin123")
             admin = User(
                 username="admin",
                 email="admin@example.com",

@@ -222,6 +222,13 @@ class TushareDataSource(BaseDataSource):
             logger.error(f"Error getting financial indicator: {e}")
             return pd.DataFrame()
 
+    def get_financial_data(self, ts_code: str = None, start_date: str = None,
+                           end_date: str = None, **kwargs) -> pd.DataFrame:
+        """获取财务数据（兼容基类接口）"""
+        if ts_code:
+            return self.get_financial_indicator(ts_code, start_date, end_date)
+        return pd.DataFrame()
+
     def get_income_statement(self, ts_code: str, start_date: str = None, end_date: str = None) -> pd.DataFrame:
         """获取利润表"""
         if not self._connected:

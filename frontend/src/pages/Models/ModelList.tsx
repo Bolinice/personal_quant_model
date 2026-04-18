@@ -17,7 +17,7 @@ export default function ModelList() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
-  const [form, setForm] = useState<ModelCreate>({ name: '', model_type: 'factor', description: '' });
+  const [form, setForm] = useState<ModelCreate>({ model_name: '', model_type: 'factor', description: '' });
 
   const loadModels = async () => {
     try {
@@ -33,7 +33,7 @@ export default function ModelList() {
     try {
       await modelApi.create(form);
       setDialogOpen(false);
-      setForm({ name: '', model_type: 'factor', description: '' });
+      setForm({ model_name: '', model_type: 'factor', description: '' });
       setSnackbar({ open: true, message: '模型创建成功', severity: 'success' });
       loadModels();
     } catch { setSnackbar({ open: true, message: '创建失败', severity: 'error' }); }
@@ -68,10 +68,10 @@ export default function ModelList() {
               {models.map((m) => (
                 <TableRow key={m.id} hover>
                   <TableCell>{m.id}</TableCell>
-                  <TableCell>{m.name}</TableCell>
+                  <TableCell>{m.model_name}</TableCell>
                   <TableCell><Chip label={typeLabel[m.model_type] || m.model_type} size="small" color={typeColor[m.model_type]} /></TableCell>
                   <TableCell>{m.version}</TableCell>
-                  <TableCell><Chip label={m.is_active ? '启用' : '停用'} size="small" color={m.is_active ? 'success' : 'default'} /></TableCell>
+                  <TableCell><Chip label={m.status === 'active' ? '启用' : m.status} size="small" color={m.status === 'active' ? 'success' : 'default'} /></TableCell>
                   <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.description || '-'}</TableCell>
                   <TableCell>{m.updated_at?.slice(0, 10)}</TableCell>
                   <TableCell>
@@ -88,7 +88,7 @@ export default function ModelList() {
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>新建模型</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-          <TextField label="模型名称" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} fullWidth required />
+          <TextField label="模型名称" value={form.model_name} onChange={(e) => setForm({ ...form, model_name: e.target.value })} fullWidth required />
           <TextField label="模型类型" select value={form.model_type} onChange={(e) => setForm({ ...form, model_type: e.target.value })} fullWidth>
             {MODEL_TYPES.map((t) => <MenuItem key={t} value={t}>{typeLabel[t]}</MenuItem>)}
           </TextField>

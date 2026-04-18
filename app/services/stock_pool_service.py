@@ -15,7 +15,7 @@ def get_stock_pool_by_code(pool_code: str, db: Session = None):
 
 @with_db
 def create_stock_pool(pool: StockPoolCreate, db: Session = None):
-    db_pool = StockPool(**pool.dict())
+    db_pool = StockPool(**pool.model_dump())
     db.add(db_pool)
     db.commit()
     db.refresh(db_pool)
@@ -26,7 +26,7 @@ def update_stock_pool(pool_id: int, pool_update: StockPoolUpdate, db: Session = 
     db_pool = db.query(StockPool).filter(StockPool.id == pool_id).first()
     if not db_pool:
         return None
-    update_data = pool_update.dict(exclude_unset=True)
+    update_data = pool_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_pool, key, value)
     db.commit()

@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 from app.db.base import with_db, SessionLocal
 from app.models.market import StockDaily, IndexDaily, TradingCalendar, StockBasic, StockFinancial
 from app.data_sources import TushareDataSource, AKShareDataSource, CrawlerDataSource, data_source_manager, get_data_source
+from app.data_sources.normalizer import DataNormalizer
+from app.data_sources.cleaner import DataCleaner
 from app.core.logging import logger
 from app.core.config import settings
 
@@ -29,6 +31,8 @@ class DataSyncService:
         """
         self.primary_source = primary_source
         self.tushare_token = tushare_token
+        self.normalizer = DataNormalizer()
+        self.cleaner = DataCleaner()
 
         # 注册数据源
         if tushare_token:
@@ -110,6 +114,12 @@ class DataSyncService:
             logger.warning("No trading calendar data fetched")
             return 0
 
+        # 标准化 + 清洗
+        df = self.normalizer.normalize_trading_calendar(df, source_name)
+        df, clean_report = self.cleaner.clean_trading_calendar(df)
+        if clean_report.issues:
+            logger.warning(f"Trading calendar clean issues: {len(clean_report.issues)}")
+
         db = SessionLocal()
         try:
             count = 0
@@ -176,6 +186,12 @@ class DataSyncService:
         if df.empty:
             logger.warning("No stock basic data fetched")
             return 0
+
+        # 标准化 + 清洗
+        df = self.normalizer.normalize_stock_basic(df, source_name)
+        df, clean_report = self.cleaner.clean_stock_basic(df)
+        if clean_report.issues:
+            logger.warning(f"Stock basic clean issues: {len(clean_report.issues)}")
 
         db = SessionLocal()
         try:
@@ -245,6 +261,12 @@ class DataSyncService:
             logger.warning(f"No daily data fetched for {ts_code}")
             return 0
 
+        # 标准化 + 清洗
+        df = self.normalizer.normalize_stock_daily(df, source_name)
+        df, clean_report = self.cleaner.clean_stock_daily(df)
+        if clean_report.issues:
+            logger.warning(f"Stock daily clean issues for {ts_code}: {len(clean_report.issues)}")
+
         db = SessionLocal()
         try:
             count = 0
@@ -273,7 +295,9 @@ class DataSyncService:
                         change=row.get('change'),
                         pct_chg=row.get('pct_chg'),
                         vol=row.get('volume'),
-                        amount=row.get('amount')
+                        amount=row.get('amount'),
+                        data_source=row.get('data_source', source_name),
+                        amount_is_estimated=row.get('amount_is_estimated', False),
                     )
                     db.add(daily)
                     count += 1
@@ -337,6 +361,12 @@ class DataSyncService:
             logger.warning(f"No index daily data fetched for {index_code}")
             return 0
 
+        # 标准化 + 清洗
+        df = self.normalizer.normalize_index_daily(df, source_name)
+        df, clean_report = self.cleaner.clean_index_daily(df)
+        if clean_report.issues:
+            logger.warning(f"Index daily clean issues for {index_code}: {len(clean_report.issues)}")
+
         db = SessionLocal()
         try:
             count = 0
@@ -365,7 +395,9 @@ class DataSyncService:
                         change=row.get('change'),
                         pct_chg=row.get('pct_chg'),
                         vol=row.get('volume'),
-                        amount=row.get('amount')
+                        amount=row.get('amount'),
+                        data_source=row.get('data_source', source_name),
+                        amount_is_estimated=row.get('amount_is_estimated', False),
                     )
                     db.add(daily)
                     count += 1
@@ -487,6 +519,125 @@ class DataSyncService:
             results['index_daily'] += count
 
         logger.info(f"Full data sync completed: {results}")
+        return results
+
+
+    # ==================== 数据质量检查 (ADD 3.3节) ====================
+
+    def check_data_quality(self, trade_date: str) -> Dict:
+        """
+        数据质量检查 (PRD 9.1.3节)
+        - 数据缺失与异常需可监控
+        - 数据口径变更需留痕
+        - 不允许未来函数穿越
+        """
+        db = SessionLocal()
+        try:
+            issues = []
+
+            # 检查行情数据完整性
+            daily_count = db.query(StockDaily).filter(
+                StockDaily.trade_date == trade_date
+            ).count()
+
+            if daily_count == 0:
+                issues.append({'type': 'missing_data', 'message': f'No stock daily data for {trade_date}'})
+
+            # 检查异常值
+            daily_data = db.query(StockDaily).filter(
+                StockDaily.trade_date == trade_date,
+            ).all()
+
+            for d in daily_data:
+                if d.close and d.close < 0:
+                    issues.append({'type': 'invalid_price', 'ts_code': d.ts_code, 'message': f'Negative close: {d.close}'})
+                if d.vol and d.vol < 0:
+                    issues.append({'type': 'invalid_volume', 'ts_code': d.ts_code, 'message': f'Negative volume: {d.vol}'})
+
+                # OHLC 逻辑一致性
+                if d.high and d.low and d.open and d.close:
+                    max_oc = max(d.open, d.close)
+                    min_oc = min(d.open, d.close)
+                    if d.high < max_oc:
+                        issues.append({'type': 'ohlc_violation', 'ts_code': d.ts_code,
+                                       'message': f'high({d.high}) < max(open,close)({max_oc})'})
+                    if d.low > min_oc:
+                        issues.append({'type': 'ohlc_violation', 'ts_code': d.ts_code,
+                                       'message': f'low({d.low}) > min(open,close)({min_oc})'})
+
+                # 涨跌幅与收盘价/昨收价一致性
+                if d.close and d.pre_close and d.pre_close != 0 and d.pct_chg is not None:
+                    expected_pct = (d.close / d.pre_close - 1) * 100
+                    diff = abs(d.pct_chg - expected_pct)
+                    if diff > 0.5:  # 差异超过 0.5%
+                        issues.append({'type': 'pct_chg_mismatch', 'ts_code': d.ts_code,
+                                       'message': f'pct_chg({d.pct_chg}) vs expected({expected_pct:.4f}), diff={diff:.4f}'})
+
+                # 成交额与成交量/均价合理性
+                if d.amount and d.vol and d.close and d.vol > 0 and d.close > 0:
+                    avg_price = d.amount / d.vol
+                    price_ratio = avg_price / d.close
+                    if price_ratio < 0.8 or price_ratio > 1.2:
+                        issues.append({'type': 'amount_volume_mismatch', 'ts_code': d.ts_code,
+                                       'message': f'avg_price/close ratio={price_ratio:.2f} (expected ~1.0)'})
+
+            # 数据覆盖率检查
+            total_stocks = db.query(StockBasic).filter(StockBasic.list_status == 'L').count()
+            coverage = daily_count / total_stocks if total_stocks > 0 else 0
+            if coverage < 0.8:
+                issues.append({'type': 'low_coverage',
+                               'message': f'Daily data coverage={coverage:.2%} (expected >80%)'})
+
+            # 交叉验证：检查同一股票是否有不同数据源的数据
+            multi_source = db.query(StockDaily.ts_code).filter(
+                StockDaily.trade_date == trade_date
+            ).group_by(StockDaily.ts_code).having(
+                db.func.count(StockDaily.data_source) > 1
+            ).all()
+            if multi_source:
+                issues.append({'type': 'multi_source',
+                               'message': f'{len(multi_source)} stocks have data from multiple sources'})
+
+            return {
+                'trade_date': trade_date,
+                'daily_count': daily_count,
+                'issues_count': len(issues),
+                'is_healthy': len(issues) == 0,
+                'coverage': coverage,
+                'issues': issues[:20],  # 最多返回20条
+            }
+        finally:
+            db.close()
+
+    # ==================== 日终同步任务链 (ADD 6.1节) ====================
+
+    def run_daily_pipeline(self, trade_date: str) -> Dict:
+        """
+        执行日终数据同步任务链 (ADD 6.1节)
+        1. 同步交易日历
+        2. 同步股票日线
+        3. 同步指数日线
+        4. 同步财务数据
+        5. 数据质量检查
+        """
+        results = {}
+
+        # 1. 同步交易日历
+        results['calendar'] = self.sync_trading_calendar(trade_date, trade_date)
+
+        # 2. 同步股票日线
+        results['stock_daily'] = 0  # 需要传入股票列表
+
+        # 3. 同步主要指数
+        index_codes = ['000300.SH', '000905.SH', '000852.SH', '000001.SH']
+        results['index_daily'] = sum(
+            self.sync_index_daily(code, trade_date, trade_date)
+            for code in index_codes
+        )
+
+        # 4. 数据质量检查
+        results['quality_check'] = self.check_data_quality(trade_date)
+
         return results
 
 

@@ -81,7 +81,7 @@ export default function ModelDetail() {
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
         <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/models')}>返回</Button>
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>{model.name}</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 600 }}>{model.model_name}</Typography>
         <Chip label={typeLabel[model.model_type] || model.model_type} color="primary" size="small" />
         <Chip label={`v${model.version}`} size="small" />
       </Box>
@@ -90,7 +90,7 @@ export default function ModelDetail() {
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}><Typography variant="body2" color="text.secondary">模型ID</Typography><Typography>{model.id}</Typography></Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}><Typography variant="body2" color="text.secondary">类型</Typography><Typography>{typeLabel[model.model_type]}</Typography></Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 3 }}><Typography variant="body2" color="text.secondary">状态</Typography><Chip label={model.is_active ? '启用' : '停用'} size="small" color={model.is_active ? 'success' : 'default'} /></Grid>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}><Typography variant="body2" color="text.secondary">状态</Typography><Chip label={model.status === 'active' ? '启用' : model.status} size="small" color={model.status === 'active' ? 'success' : 'default'} /></Grid>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}><Typography variant="body2" color="text.secondary">描述</Typography><Typography>{model.description || '-'}</Typography></Grid>
         </Grid>
       </Paper>

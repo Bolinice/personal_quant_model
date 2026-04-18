@@ -2,11 +2,16 @@ import client from './client';
 
 export interface Model {
   id: number;
-  name: string;
+  model_code: string;
+  model_name: string;
   description: string | null;
   model_type: string;
   version: string;
-  is_active: boolean;
+  status: string;
+  factor_ids: number[] | null;
+  factor_weights: Record<string, number> | null;
+  ic_mean: number | null;
+  ic_ir: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -29,18 +34,18 @@ export interface ModelScore {
 }
 
 export interface ModelCreate {
-  name: string;
+  model_name: string;
   description?: string;
   model_type: string;
   version?: string;
 }
 
 export interface ModelUpdate {
-  name?: string;
+  model_name?: string;
   description?: string;
   model_type?: string;
   version?: string;
-  is_active?: boolean;
+  status?: string;
 }
 
 export const modelApi = {

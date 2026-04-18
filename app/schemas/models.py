@@ -1,42 +1,37 @@
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 
 class ModelBase(BaseModel):
-    name: str
+    model_code: str
+    model_name: str
     description: Optional[str] = None
-    model_type: str  # factor, timing, portfolio
+    model_type: str = "scoring"
     version: str = "1.0"
-    is_active: bool = True
+    status: str = "draft"
 
 class ModelCreate(ModelBase):
     pass
 
 class ModelUpdate(BaseModel):
-    name: Optional[str] = None
+    model_name: Optional[str] = None
     description: Optional[str] = None
     model_type: Optional[str] = None
     version: Optional[str] = None
-    is_active: Optional[bool] = None
-
-class ModelInDB(ModelBase):
-    id: int
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    status: Optional[str] = None
 
 class ModelOut(ModelBase):
     id: int
-    created_at: datetime
-    updated_at: datetime
+    model_code: Optional[str] = None
+    factor_ids: Optional[list] = None
+    factor_weights: Optional[dict] = None
+    config: Optional[dict] = Field(None, alias="model_config")
+    ic_mean: Optional[float] = None
+    ic_ir: Optional[float] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
-
-class Model(ModelOut):
-    pass
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 class ModelConfigBase(BaseModel):
     model_id: int

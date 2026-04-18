@@ -20,7 +20,7 @@ def get_alert_log_by_id(log_id: int, db: Session = None):
 
 @with_db
 def create_alert_log(log: AlertLogCreate, db: Session = None):
-    db_log = AlertLog(**log.dict())
+    db_log = AlertLog(**log.model_dump())
     db.add(db_log)
     db.commit()
     db.refresh(db_log)
@@ -31,7 +31,7 @@ def update_alert_log(log_id: int, log_update: AlertLogUpdate, db: Session = None
     db_log = get_alert_log_by_id(log_id, db)
     if db_log is None:
         return None
-    for var, value in log_update.dict(exclude_unset=True).items():
+    for var, value in log_update.model_dump(exclude_unset=True).items():
         setattr(db_log, var, value)
     db.commit()
     db.refresh(db_log)

@@ -1,280 +1,220 @@
 """
-数据源适配器基类
-定义统一的数据接口规范
+数据源基类
+定义统一的数据源接口，支持增量同步、错误重试、限流控制
 """
 from abc import ABC, abstractmethod
-from typing import List, Optional, Dict, Any
-from datetime import datetime, date
+from typing import List, Optional, Dict, Any, Tuple
+from datetime import date, datetime, timedelta
+from dataclasses import dataclass, field
 import pandas as pd
 from app.core.logging import logger
 
 
-class BaseDataSource(ABC):
-    """数据源基类"""
-
-    def __init__(self, name: str, config: Dict[str, Any] = None):
-        self.name = name
-        self.config = config or {}
-        self._connected = False
-
-    @abstractmethod
-    def connect(self) -> bool:
-        """连接数据源"""
-        pass
-
-    @abstractmethod
-    def is_connected(self) -> bool:
-        """检查连接状态"""
-        pass
-
-    # ==================== 行情数据 ====================
-
-    @abstractmethod
-    def get_stock_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
-        """
-        获取股票日线行情
-
-        Args:
-            ts_code: 股票代码 (如 '600000.SH')
-            start_date: 开始日期 (YYYY-MM-DD)
-            end_date: 结束日期 (YYYY-MM-DD)
-
-        Returns:
-            DataFrame with columns: trade_date, open, high, low, close, volume, amount, pct_chg
-        """
-        pass
-
-    @abstractmethod
-    def get_index_daily(self, index_code: str, start_date: str, end_date: str) -> pd.DataFrame:
-        """
-        获取指数日线行情
-
-        Args:
-            index_code: 指数代码 (如 '000300.SH')
-            start_date: 开始日期
-            end_date: 结束日期
-
-        Returns:
-            DataFrame with columns: trade_date, open, high, low, close, volume, amount, pct_chg
-        """
-        pass
-
-    @abstractmethod
-    def get_stock_daily_batch(self, ts_codes: List[str], start_date: str, end_date: str) -> pd.DataFrame:
-        """
-        批量获取多只股票日线行情
-
-        Args:
-            ts_codes: 股票代码列表
-            start_date: 开始日期
-            end_date: 结束日期
-
-        Returns:
-            DataFrame with columns: ts_code, trade_date, open, high, low, close, volume, amount, pct_chg
-        """
-        pass
-
-    # ==================== 基础数据 ====================
-
-    @abstractmethod
-    def get_stock_basic(self) -> pd.DataFrame:
-        """
-        获取股票基础信息
-
-        Returns:
-            DataFrame with columns: ts_code, symbol, name, industry, market, list_date, status
-        """
-        pass
-
-    @abstractmethod
-    def get_index_components(self, index_code: str, date: str = None) -> List[str]:
-        """
-        获取指数成分股
-
-        Args:
-            index_code: 指数代码
-            date: 日期 (可选，默认最新)
-
-        Returns:
-            成分股代码列表
-        """
-        pass
-
-    @abstractmethod
-    def get_trading_calendar(self, start_date: str, end_date: str) -> pd.DataFrame:
-        """
-        获取交易日历
-
-        Args:
-            start_date: 开始日期
-            end_date: 结束日期
-
-        Returns:
-            DataFrame with columns: trade_date, is_open, pretrade_date
-        """
-        pass
-
-    # ==================== 财务数据 ====================
-
-    @abstractmethod
-    def get_financial_indicator(self, ts_code: str, start_date: str = None, end_date: str = None) -> pd.DataFrame:
-        """
-        获取财务指标
-
-        Args:
-            ts_code: 股票代码
-            start_date: 开始日期
-            end_date: 结束日期
-
-        Returns:
-            DataFrame with columns: end_date, roe, roa, grossprofit_margin, netprofit_margin, etc.
-        """
-        pass
-
-    @abstractmethod
-    def get_income_statement(self, ts_code: str, start_date: str = None, end_date: str = None) -> pd.DataFrame:
-        """
-        获取利润表
-
-        Args:
-            ts_code: 股票代码
-            start_date: 开始日期
-            end_date: 结束日期
-
-        Returns:
-            DataFrame with income statement data
-        """
-        pass
-
-    @abstractmethod
-    def get_balance_sheet(self, ts_code: str, start_date: str = None, end_date: str = None) -> pd.DataFrame:
-        """
-        获取资产负债表
-
-        Args:
-            ts_code: 股票代码
-            start_date: 开始日期
-            end_date: 结束日期
-
-        Returns:
-            DataFrame with balance sheet data
-        """
-        pass
-
-    # ==================== 行业数据 ====================
-
-    @abstractmethod
-    def get_industry_classification(self, ts_code: str = None) -> pd.DataFrame:
-        """
-        获取行业分类
-
-        Args:
-            ts_code: 股票代码 (可选，不传则返回全部)
-
-        Returns:
-            DataFrame with columns: ts_code, industry, industry_name
-        """
-        pass
-
-    # ==================== 复权数据 ====================
-
-    @abstractmethod
-    def get_adj_factor(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
-        """
-        获取复权因子
-
-        Args:
-            ts_code: 股票代码
-            start_date: 开始日期
-            end_date: 结束日期
-
-        Returns:
-            DataFrame with columns: trade_date, adj_factor
-        """
-        pass
-
-    def get_stock_daily_adj(self, ts_code: str, start_date: str, end_date: str,
-                            adj: str = 'qfq') -> pd.DataFrame:
-        """
-        获取复权后的股票日线行情
-
-        Args:
-            ts_code: 股票代码
-            start_date: 开始日期
-            end_date: 结束日期
-            adj: 复权类型 ('qfq'-前复权, 'hfq'-后复权, None-不复权)
-
-        Returns:
-            复权后的行情数据
-        """
-        # 获取原始行情
-        daily = self.get_stock_daily(ts_code, start_date, end_date)
-
-        if daily.empty or adj is None:
-            return daily
-
-        # 获取复权因子
-        adj_factor = self.get_adj_factor(ts_code, start_date, end_date)
-
-        if adj_factor.empty:
-            return daily
-
-        # 合并复权因子
-        daily = daily.merge(adj_factor, on='trade_date', how='left')
-
-        # 应用复权
-        if adj == 'qfq':  # 前复权
-            # 使用最新的复权因子作为基准
-            latest_factor = adj_factor['adj_factor'].iloc[-1]
-            daily['adj_factor'] = daily['adj_factor'] / latest_factor
-        # 后复权使用原始因子
-
-        # 复权计算
-        for col in ['open', 'high', 'low', 'close']:
-            daily[col] = daily[col] * daily['adj_factor']
-
-        return daily.drop(columns=['adj_factor'])
+@dataclass
+class SyncResult:
+    """同步结果"""
+    success: bool = True
+    records_fetched: int = 0
+    records_saved: int = 0
+    records_updated: int = 0
+    records_failed: int = 0
+    error_message: str = None
+    duration_seconds: float = 0.0
+    details: Dict = field(default_factory=dict)
 
 
 class DataSourceManager:
-    """数据源管理器"""
+    """数据源管理器 - 注册和切换数据源"""
 
     def __init__(self):
         self._sources: Dict[str, BaseDataSource] = {}
-        self._primary_source: str = None
+        self._primary: Optional[str] = None
 
     def register(self, name: str, source: BaseDataSource, is_primary: bool = False):
-        """注册数据源"""
         self._sources[name] = source
-        if is_primary or self._primary_source is None:
-            self._primary_source = name
+        if is_primary:
+            self._primary = name
 
-    def get(self, name: str = None) -> BaseDataSource:
-        """获取数据源"""
-        if name:
-            return self._sources.get(name)
-        return self._sources.get(self._primary_source)
+    def get(self, name: str) -> Optional[BaseDataSource]:
+        return self._sources.get(name)
 
-    def get_available_sources(self) -> List[str]:
-        """获取可用数据源列表"""
-        return list(self._sources.keys())
+    def get_primary(self) -> Optional[BaseDataSource]:
+        if self._primary and self._primary in self._sources:
+            return self._sources[self._primary]
+        # fallback to first available
+        if self._sources:
+            return next(iter(self._sources.values()))
+        return None
 
     def connect_all(self) -> Dict[str, bool]:
-        """连接所有数据源"""
-        results = {}
+        """尝试连接所有数据源，返回状态"""
+        status = {}
         for name, source in self._sources.items():
             try:
-                results[name] = source.connect()
-            except Exception as e:
-                logger.error(f"Failed to connect {name}: {e}")
-                results[name] = False
-        return results
+                # 简单验证：调用connect方法
+                status[name] = source.connect()
+            except Exception:
+                status[name] = False
+        return status
 
 
-# 全局数据源管理器
+# 全局单例
 data_source_manager = DataSourceManager()
 
 
-def get_data_source(name: str = None) -> BaseDataSource:
-    """获取数据源的便捷函数"""
+def get_data_source(name: str) -> Optional[BaseDataSource]:
+    """获取指定名称的数据源"""
     return data_source_manager.get(name)
+
+
+class BaseDataSource(ABC):
+    """数据源基类 - 统一接口"""
+
+    def __init__(self, rate_limit: int = 200, max_retries: int = 3):
+        """
+        Args:
+            rate_limit: 每分钟API调用次数限制
+            max_retries: 最大重试次数
+        """
+        self.rate_limit = rate_limit
+        self.max_retries = max_retries
+        self._call_count = 0
+        self._last_reset = datetime.now()
+
+    @abstractmethod
+    def get_stock_basic(self, **kwargs) -> pd.DataFrame:
+        """获取股票基本信息"""
+        pass
+
+    @abstractmethod
+    def get_stock_daily(self, ts_code: str = None, start_date: str = None,
+                        end_date: str = None, **kwargs) -> pd.DataFrame:
+        """获取日线行情"""
+        pass
+
+    @abstractmethod
+    def get_index_daily(self, ts_code: str = None, start_date: str = None,
+                        end_date: str = None, **kwargs) -> pd.DataFrame:
+        """获取指数日线行情"""
+        pass
+
+    @abstractmethod
+    def get_financial_data(self, ts_code: str = None, start_date: str = None,
+                           end_date: str = None, **kwargs) -> pd.DataFrame:
+        """获取财务数据"""
+        pass
+
+    @abstractmethod
+    def get_trading_calendar(self, exchange: str = 'SSE',
+                             start_date: str = None,
+                             end_date: str = None) -> pd.DataFrame:
+        """获取交易日历"""
+        pass
+
+    def get_index_components(self, index_code: str, trade_date: str = None) -> pd.DataFrame:
+        """获取指数成分股"""
+        return pd.DataFrame()
+
+    def get_stock_status(self, ts_code: str = None, trade_date: str = None) -> pd.DataFrame:
+        """获取股票状态（ST、停牌等）"""
+        return pd.DataFrame()
+
+    def get_adj_factor(self, ts_code: str = None, start_date: str = None,
+                       end_date: str = None) -> pd.DataFrame:
+        """获取复权因子"""
+        return pd.DataFrame()
+
+    def get_industry_classification(self, ts_code: str = None,
+                                     standard: str = 'sw') -> pd.DataFrame:
+        """获取行业分类"""
+        return pd.DataFrame()
+
+    # ==================== 增量同步 ====================
+
+    def incremental_sync(self, data_type: str, last_sync_date: date,
+                         end_date: date = None) -> SyncResult:
+        """
+        增量同步数据
+        只同步last_sync_date之后的数据
+
+        Args:
+            data_type: 数据类型
+            last_sync_date: 上次同步日期
+            end_date: 结束日期（默认今天）
+        """
+        if end_date is None:
+            end_date = date.today()
+
+        start = last_sync_date + timedelta(days=1)
+        if start > end_date:
+            return SyncResult(success=True, records_fetched=0, details={'message': 'Already up to date'})
+
+        return self._sync_range(data_type, start, end_date)
+
+    def _sync_range(self, data_type: str, start_date: date,
+                    end_date: date) -> SyncResult:
+        """同步指定日期范围的数据"""
+        import time
+        start_time = time.time()
+
+        try:
+            method_map = {
+                'stock_daily': self.get_stock_daily,
+                'index_daily': self.get_index_daily,
+                'financial': self.get_financial_data,
+                'stock_basic': self.get_stock_basic,
+                'trading_calendar': self.get_trading_calendar,
+            }
+
+            method = method_map.get(data_type)
+            if not method:
+                return SyncResult(success=False, error_message=f"Unknown data type: {data_type}")
+
+            df = method(start_date=start_date.strftime('%Y%m%d'),
+                        end_date=end_date.strftime('%Y%m%d'))
+
+            duration = time.time() - start_time
+            return SyncResult(
+                success=True,
+                records_fetched=len(df) if df is not None and not df.empty else 0,
+                duration_seconds=round(duration, 2),
+            )
+        except Exception as e:
+            logger.error(f"Sync failed for {data_type}: {e}")
+            return SyncResult(success=False, error_message=str(e))
+
+    # ==================== 限流控制 ====================
+
+    def _rate_limit_check(self):
+        """检查API调用频率"""
+        now = datetime.now()
+        if (now - self._last_reset).seconds >= 60:
+            self._call_count = 0
+            self._last_reset = now
+
+        if self._call_count >= self.rate_limit:
+            import time
+            sleep_time = 60 - (now - self._last_reset).seconds
+            logger.warning(f"Rate limit reached, sleeping {sleep_time}s")
+            time.sleep(sleep_time)
+            self._call_count = 0
+            self._last_reset = datetime.now()
+
+        self._call_count += 1
+
+    # ==================== 重试机制 ====================
+
+    def _retry_call(self, func, *args, **kwargs):
+        """带重试的API调用"""
+        import time
+        for attempt in range(self.max_retries):
+            try:
+                self._rate_limit_check()
+                return func(*args, **kwargs)
+            except Exception as e:
+                if attempt < self.max_retries - 1:
+                    wait = 2 ** attempt  # 指数退避
+                    logger.warning(f"Retry {attempt + 1}/{self.max_retries} after {wait}s: {e}")
+                    time.sleep(wait)
+                else:
+                    raise

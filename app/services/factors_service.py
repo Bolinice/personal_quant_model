@@ -43,7 +43,7 @@ def get_factor_by_code(factor_code: str, db: Session = None):
 
 @with_db
 def create_factor(factor: FactorCreate, db: Session = None):
-    db_factor = Factor(**factor.dict())
+    db_factor = Factor(**factor.model_dump())
     db.add(db_factor)
     db.commit()
     db.refresh(db_factor)
@@ -54,7 +54,7 @@ def update_factor(factor_id: int, factor_update: FactorUpdate, db: Session = Non
     db_factor = db.query(Factor).filter(Factor.id == factor_id).first()
     if not db_factor:
         return None
-    update_data = factor_update.dict(exclude_unset=True)
+    update_data = factor_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_factor, key, value)
     db.commit()
@@ -266,7 +266,7 @@ def calculate_factor_correlation(factor_id: int, compare_factor_id: int, start_d
 
 @with_db
 def create_factor_analysis(factor_id: int, analysis_data: FactorAnalysisCreate, db: Session = None):
-    db_analysis = FactorAnalysis(**analysis_data.dict())
+    db_analysis = FactorAnalysis(**analysis_data.model_dump())
     db.add(db_analysis)
     db.commit()
     db.refresh(db_analysis)

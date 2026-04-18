@@ -15,7 +15,7 @@ def get_portfolios(model_id: int, trade_date: str = None, db: Session = None):
 
 @with_db
 def create_portfolio(portfolio: PortfolioCreate, db: Session = None):
-    db_portfolio = Portfolio(**portfolio.dict())
+    db_portfolio = Portfolio(**portfolio.model_dump())
     db.add(db_portfolio)
     db.commit()
     db.refresh(db_portfolio)
@@ -51,7 +51,7 @@ def get_rebalance_records(model_id: int, start_date: str, end_date: str, db: Ses
 
 @with_db
 def create_rebalance_record(record: RebalanceRecordCreate, db: Session = None):
-    db_record = RebalanceRecord(**record.dict())
+    db_record = RebalanceRecord(**record.model_dump())
     db.add(db_record)
     db.commit()
     db.refresh(db_record)

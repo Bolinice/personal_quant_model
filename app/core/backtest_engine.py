@@ -1,492 +1,724 @@
 """
 A股回测引擎
-实现完整的A股回测逻辑：T+1限制、涨跌停处理、停牌处理、交易成本等
+实现完整的A股回测逻辑：T+1限制、涨跌停处理、停牌处理、交易成本、滑点等
+符合ADD 12节回测规则和PRD 9.8节需求
+机构级增强: 参与率滑点模型、Walk-Forward验证、蒙特卡洛置换检验、通胀夏普比率
 """
 from typing import List, Optional, Dict, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
+from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 from sqlalchemy.orm import Session
-from app.db.base import SessionLocal, with_db
-from app.models.backtests import Backtest, BacktestResult, BacktestTrade
-from app.models.models import Model
-from app.models.market import StockDaily, TradingCalendar
 from app.core.logging import logger
 
 
+# A股交易成本常量 (ADD 11节)
+DEFAULT_COMMISSION_RATE = 0.00025  # 佣金率 万2.5
+DEFAULT_STAMP_TAX_RATE = 0.001     # 印花税率 千1（仅卖出）
+DEFAULT_TRANSFER_FEE_RATE = 0.00001  # 过户费率
+DEFAULT_SLIPPAGE_RATE = 0.001      # 默认滑点 0.1%
+MIN_COMMISSION = 5.0               # 最低佣金5元
+
+# 涨跌停限制 (ADD 12.4节)
+MAIN_BOARD_LIMIT = 0.10   # 主板 10%
+GEM_LIMIT = 0.20          # 创业板 20%
+STAR_LIMIT = 0.20         # 科创板 20%
+ST_LIMIT = 0.05           # ST 5%
+NORTH_LIMIT = 0.20        # 北交所 20%
+
+# 交易单位
+LOT_SIZE = 100  # A股最小交易单位100股
+
+
+@dataclass
+class TransactionCost:
+    """交易成本模型 (ADD 11节 + 机构级增强)"""
+    commission_rate: float = DEFAULT_COMMISSION_RATE
+    stamp_tax_rate: float = DEFAULT_STAMP_TAX_RATE
+    transfer_fee_rate: float = DEFAULT_TRANSFER_FEE_RATE
+    slippage_rate: float = DEFAULT_SLIPPAGE_RATE
+    min_commission: float = MIN_COMMISSION
+    # 参与率滑点参数
+    impact_coefficient: float = 0.3  # 市场冲击系数
+    base_spread: float = 0.0005  # 基础价差 5bps
+
+    def calc_buy_cost(self, amount: float,
+                      daily_volume: float = None,
+                      volatility: float = None) -> Dict[str, float]:
+        """
+        计算买入成本
+        支持参与率滑点模型: slippage = base_spread + impact * sqrt(participation_rate)
+        """
+        commission = max(amount * self.commission_rate, self.min_commission)
+        transfer_fee = amount * self.transfer_fee_rate
+
+        # 滑点: 参与率模型或固定比率
+        if daily_volume is not None and daily_volume > 0 and volatility is not None:
+            participation_rate = amount / daily_volume
+            slippage = amount * (self.base_spread + self.impact_coefficient * volatility * np.sqrt(participation_rate))
+        else:
+            slippage = amount * self.slippage_rate
+
+        total = commission + transfer_fee + slippage
+        return {
+            'commission': round(commission, 2),
+            'stamp_tax': 0.0,
+            'transfer_fee': round(transfer_fee, 2),
+            'slippage': round(slippage, 2),
+            'total_cost': round(total, 2),
+        }
+
+    def calc_sell_cost(self, amount: float,
+                       daily_volume: float = None,
+                       volatility: float = None) -> Dict[str, float]:
+        """计算卖出成本（含印花税）"""
+        commission = max(amount * self.commission_rate, self.min_commission)
+        stamp_tax = amount * self.stamp_tax_rate
+        transfer_fee = amount * self.transfer_fee_rate
+
+        if daily_volume is not None and daily_volume > 0 and volatility is not None:
+            participation_rate = amount / daily_volume
+            slippage = amount * (self.base_spread + self.impact_coefficient * volatility * np.sqrt(participation_rate))
+        else:
+            slippage = amount * self.slippage_rate
+
+        total = commission + stamp_tax + transfer_fee + slippage
+        return {
+            'commission': round(commission, 2),
+            'stamp_tax': round(stamp_tax, 2),
+            'transfer_fee': round(transfer_fee, 2),
+            'slippage': round(slippage, 2),
+            'total_cost': round(total, 2),
+        }
+
+
+@dataclass
+class Position:
+    """持仓信息"""
+    security_id: str
+    shares: int = 0
+    cost_price: float = 0.0
+    market_value: float = 0.0
+    weight: float = 0.0
+    board_type: str = 'main'  # main, gem, star, st
+
+
+@dataclass
+class BacktestState:
+    """回测状态"""
+    cash: float = 1000000.0
+    initial_capital: float = 1000000.0
+    positions: Dict[str, Position] = field(default_factory=dict)
+    nav_history: List[Dict] = field(default_factory=list)
+    trade_records: List[Dict] = field(default_factory=list)
+    position_history: List[Dict] = field(default_factory=list)
+
+
 class ABShareBacktestEngine:
-    """A股回测引擎"""
+    """A股回测引擎 - 符合ADD 12节和PRD 9.8节"""
 
-    # A股交易成本
-    COMMISSION_RATE = 0.0003  # 佣金率 0.03%
-    STAMP_TAX_RATE = 0.001    # 印花税率 0.1%（仅卖出）
-    TRANSFER_FEE_RATE = 0.00001  # 过户费率 0.001%
+    def __init__(self, db: Session = None,
+                 commission_rate: float = DEFAULT_COMMISSION_RATE,
+                 stamp_tax_rate: float = DEFAULT_STAMP_TAX_RATE,
+                 slippage_rate: float = DEFAULT_SLIPPAGE_RATE):
+        self.db = db
+        self.cost_model = TransactionCost(
+            commission_rate=commission_rate,
+            stamp_tax_rate=stamp_tax_rate,
+            slippage_rate=slippage_rate,
+        )
 
-    # 涨跌停限制
-    MAIN_BOARD_LIMIT = 0.10   # 主板涨跌停 10%
-    GEM_LIMIT = 0.20          # 创业板涨跌停 20%
-    STAR_LIMIT = 0.20         # 科创板涨跌停 20%
+    # ==================== A股交易规则 ====================
 
-    def __init__(self, db: Session = None):
-        self.db = db or SessionLocal()
+    def get_board_type(self, ts_code: str) -> str:
+        """判断板块类型"""
+        if ts_code.endswith('.SZ') and ts_code.startswith('3'):
+            return 'gem'  # 创业板
+        elif ts_code.endswith('.SH') and ts_code.startswith('688'):
+            return 'star'  # 科创板
+        elif ts_code.endswith('.BJ') or ts_code.startswith('8'):
+            return 'north'  # 北交所
+        return 'main'
 
-    def get_trading_calendar(self, start_date: str, end_date: str) -> List[datetime]:
-        """获取交易日历"""
-        calendars = self.db.query(TradingCalendar).filter(
-            TradingCalendar.exchange == 'SSE',
-            TradingCalendar.cal_date >= start_date,
-            TradingCalendar.cal_date <= end_date,
-            TradingCalendar.is_open == True
-        ).order_by(TradingCalendar.cal_date).all()
+    def get_limit_pct(self, board_type: str, is_st: bool = False) -> float:
+        """获取涨跌停比例"""
+        if is_st:
+            return ST_LIMIT
+        limits = {
+            'main': MAIN_BOARD_LIMIT,
+            'gem': GEM_LIMIT,
+            'star': STAR_LIMIT,
+            'north': NORTH_LIMIT,
+        }
+        return limits.get(board_type, MAIN_BOARD_LIMIT)
 
-        return [c.cal_date for c in calendars]
+    def is_limit_up(self, pct_chg: float, board_type: str = 'main',
+                    is_st: bool = False) -> bool:
+        """判断是否涨停 (ADD 12.4节)"""
+        limit = self.get_limit_pct(board_type, is_st)
+        return pct_chg >= (limit * 100 - 0.01)  # 允许0.01%误差
 
-    def get_stock_data(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
-        """获取股票数据"""
-        data = self.db.query(StockDaily).filter(
-            StockDaily.ts_code == ts_code,
-            StockDaily.trade_date >= start_date,
-            StockDaily.trade_date <= end_date
-        ).order_by(StockDaily.trade_date).all()
-
-        if not data:
-            return pd.DataFrame()
-
-        return pd.DataFrame([{
-            'trade_date': d.trade_date,
-            'open': float(d.open) if d.open else None,
-            'high': float(d.high) if d.high else None,
-            'low': float(d.low) if d.low else None,
-            'close': float(d.close) if d.close else None,
-            'volume': float(d.vol) if d.vol else None,
-            'amount': float(d.amount) if d.amount else None,
-            'pct_chg': float(d.pct_chg) if d.pct_chg else None,
-            'pre_close': float(d.pre_close) if d.pre_close else None,
-        } for d in data])
-
-    def is_limit_up(self, pct_chg: float, board_type: str = 'main') -> bool:
-        """判断是否涨停"""
-        limit = self.MAIN_BOARD_LIMIT
-        if board_type == 'gem':
-            limit = self.GEM_LIMIT
-        elif board_type == 'star':
-            limit = self.STAR_LIMIT
-
-        return pct_chg >= (limit - 0.001) * 100  # 允许小误差
-
-    def is_limit_down(self, pct_chg: float, board_type: str = 'main') -> bool:
+    def is_limit_down(self, pct_chg: float, board_type: str = 'main',
+                      is_st: bool = False) -> bool:
         """判断是否跌停"""
-        limit = self.MAIN_BOARD_LIMIT
-        if board_type == 'gem':
-            limit = self.GEM_LIMIT
-        elif board_type == 'star':
-            limit = self.STAR_LIMIT
-
-        return pct_chg <= -(limit - 0.001) * 100
-
-    def calc_transaction_cost(self, amount: float, is_buy: bool) -> float:
-        """
-        计算交易成本
-
-        Args:
-            amount: 成交金额
-            is_buy: 是否买入
-
-        Returns:
-            交易成本
-        """
-        cost = amount * self.COMMISSION_RATE  # 佣金
-        cost += amount * self.TRANSFER_FEE_RATE  # 过户费
-
-        if not is_buy:
-            cost += amount * self.STAMP_TAX_RATE  # 印花税（仅卖出）
-
-        return cost
+        limit = self.get_limit_pct(board_type, is_st)
+        return pct_chg <= -(limit * 100 - 0.01)
 
     def round_lot(self, shares: float) -> int:
-        """
-        将股数调整为100股整数倍（A股交易单位）
+        """调整为100股整数倍 (ADD 12.4节)"""
+        return int(shares // LOT_SIZE) * LOT_SIZE
 
-        Args:
-            shares: 股数
+    def is_tradable(self, ts_code: str, trade_date: date,
+                    action: str, stock_data: Dict = None) -> Tuple[bool, str]:
+        """
+        判断是否可交易 (ADD 12.4节 + 11.2.2节)
 
         Returns:
-            调整后的股数
+            (是否可交易, 原因)
         """
-        return int(shares // 100) * 100
+        if stock_data is None:
+            return False, "无数据"
 
-    # ==================== 回测核心逻辑 ====================
+        # 停牌检查
+        if stock_data.get('is_suspended', False):
+            return False, "停牌"
 
-    def run_backtest(self, backtest_id: int) -> Dict:
+        # 涨跌停检查
+        pct_chg = stock_data.get('pct_chg', 0)
+        board_type = self.get_board_type(ts_code)
+        is_st = stock_data.get('is_st', False)
+
+        if action == 'buy' and self.is_limit_up(pct_chg, board_type, is_st):
+            return False, "涨停无法买入"
+
+        if action == 'sell' and self.is_limit_down(pct_chg, board_type, is_st):
+            return False, "跌停无法卖出"
+
+        # 退市整理检查
+        if stock_data.get('is_delist', False):
+            return False, "退市整理"
+
+        return True, ""
+
+    # ==================== 交易执行 ====================
+
+    def execute_buy(self, state: BacktestState, ts_code: str,
+                    target_amount: float, price: float,
+                    trade_date: date, stock_data: Dict = None) -> Optional[Dict]:
         """
-        运行回测
+        执行买入 (ADD 12.3节)
 
         Args:
-            backtest_id: 回测ID
-
-        Returns:
-            回测结果
+            state: 回测状态
+            ts_code: 股票代码
+            target_amount: 目标买入金额
+            price: 买入价格
+            trade_date: 交易日期
+            stock_data: 当日行情数据
         """
-        # 获取回测配置
-        backtest = self.db.query(Backtest).filter(Backtest.id == backtest_id).first()
-        if not backtest:
-            raise ValueError(f"Backtest {backtest_id} not found")
+        # 可交易性检查
+        tradable, reason = self.is_tradable(ts_code, trade_date, 'buy', stock_data)
+        if not tradable:
+            return None
 
-        # 初始化回测状态
-        initial_capital = backtest.initial_capital
-        cash = initial_capital
-        positions = {}  # {ts_code: {'shares': int, 'cost_price': float}}
-        nav_history = []
-        trade_records = []
+        # 计算可买入金额（考虑成本）
+        max_amount = state.cash / (1 + self.cost_model.commission_rate + self.cost_model.transfer_fee_rate + self.cost_model.slippage_rate)
+        buy_amount = min(target_amount, max_amount)
 
-        # 获取交易日历
-        trading_days = self.get_trading_calendar(
-            backtest.start_date.strftime('%Y-%m-%d'),
-            backtest.end_date.strftime('%Y-%m-%d')
-        )
+        if buy_amount <= 0:
+            return None
 
-        if not trading_days:
-            raise ValueError("No trading days found")
+        # 计算股数（100股整数倍）
+        shares = self.round_lot(buy_amount / price)
+        if shares < LOT_SIZE:
+            return None
 
-        # 获取目标组合历史
-        # 这里简化处理，实际应该根据模型生成每日目标组合
-        # 假设我们有一个函数来获取每日目标组合
-        target_portfolios = self._get_target_portfolios(backtest.model_id, trading_days)
+        # 计算成交金额和成本
+        amount = shares * price
+        cost_detail = self.cost_model.calc_buy_cost(amount)
+        total_cost = cost_detail['total_cost']
 
-        # 回测循环
-        for i, trade_date in enumerate(trading_days):
-            date_str = trade_date.strftime('%Y-%m-%d')
+        if amount + total_cost > state.cash:
+            return None
 
-            # 1. 更新持仓市值
-            position_value = 0
-            for ts_code, pos in positions.items():
-                stock_data = self.get_stock_data(ts_code, date_str, date_str)
-                if not stock_data.empty:
-                    price = stock_data['close'].iloc[0]
-                    position_value += pos['shares'] * price
+        # 更新状态
+        state.cash -= (amount + total_cost)
 
-            # 2. 计算当日净值
-            total_nav = cash + position_value
-            nav_history.append({
-                'date': date_str,
-                'nav': total_nav,
-                'cash': cash,
-                'position_value': position_value
-            })
-
-            # 3. 检查是否需要调仓
-            if date_str in target_portfolios:
-                target_portfolio = target_portfolios[date_str]
-
-                # 生成调仓指令
-                orders = self._generate_rebalance_orders(
-                    positions, target_portfolio, cash, date_str
-                )
-
-                # 执行调仓（T+1：次日执行）
-                if i + 1 < len(trading_days):
-                    next_date = trading_days[i + 1].strftime('%Y-%m-%d')
-                    cash, new_positions, trades = self._execute_orders(
-                        orders, positions, cash, next_date
-                    )
-                    positions = new_positions
-                    trade_records.extend(trades)
-
-        # 计算回测结果
-        result = self._calculate_backtest_metrics(
-            nav_history, trade_records, backtest.benchmark, initial_capital
-        )
-
-        return result
-
-    def _get_target_portfolios(self, model_id: int, trading_days: List[datetime]) -> Dict:
-        """获取目标组合历史（简化实现）"""
-        # 这里应该调用模型评分和组合生成逻辑
-        # 简化：假设每周调仓，等权持有20只股票
-        from app.core.model_scorer import get_model_portfolio
-
-        portfolios = {}
-
-        # 每周调仓
-        for i, trade_date in enumerate(trading_days):
-            if i % 5 == 0:  # 每5个交易日调仓
-                date_str = trade_date.strftime('%Y-%m-%d')
-                try:
-                    portfolio = get_model_portfolio(model_id, date_str, top_n=20, db=self.db)
-                    if not portfolio.empty:
-                        portfolios[date_str] = portfolio
-                except Exception as e:
-                    logger.warning(f"Failed to get portfolio for {date_str}: {e}")
-
-        return portfolios
-
-    def _generate_rebalance_orders(self, current_positions: Dict,
-                                   target_portfolio: pd.DataFrame,
-                                   cash: float, trade_date: str) -> List[Dict]:
-        """生成调仓指令"""
-        orders = []
-
-        # 当前持仓
-        current_stocks = set(current_positions.keys())
-        target_stocks = set(target_portfolio['security_id'].tolist())
-
-        # 需要卖出的股票
-        to_sell = current_stocks - target_stocks
-        for ts_code in to_sell:
-            orders.append({
-                'ts_code': ts_code,
-                'action': 'sell',
-                'shares': current_positions[ts_code]['shares'],
-                'reason': 'not in target'
-            })
-
-        # 需要买入的股票
-        to_buy = target_stocks - current_stocks
-        for ts_code in to_buy:
-            weight = target_portfolio[target_portfolio['security_id'] == ts_code]['weight'].iloc[0]
-            # 估算可用资金
-            estimated_cash = cash + sum(
-                current_positions[s]['shares'] * 100  # 简化估算
-                for s in to_sell
+        if ts_code in state.positions:
+            pos = state.positions[ts_code]
+            total_shares = pos.shares + shares
+            pos.cost_price = (pos.cost_price * pos.shares + amount) / total_shares
+            pos.shares = total_shares
+        else:
+            state.positions[ts_code] = Position(
+                security_id=ts_code,
+                shares=shares,
+                cost_price=price,
+                board_type=self.get_board_type(ts_code),
             )
-            target_value = estimated_cash * weight / (1 + self.COMMISSION_RATE)
-            orders.append({
-                'ts_code': ts_code,
-                'action': 'buy',
-                'target_value': target_value,
-                'reason': 'new position'
-            })
 
-        # 需要调整仓位的股票
-        to_adjust = current_stocks & target_stocks
-        for ts_code in to_adjust:
-            current_value = current_positions[ts_code]['shares'] * 100  # 简化
-            target_weight = target_portfolio[target_portfolio['security_id'] == ts_code]['weight'].iloc[0]
-            # 简化处理，这里可以添加更精确的调整逻辑
+        trade = {
+            'trade_date': trade_date,
+            'security_id': ts_code,
+            'action': 'buy',
+            'price': price,
+            'quantity': shares,
+            'amount': round(amount, 2),
+            **cost_detail,
+            'trade_status': 'success',
+        }
+        state.trade_records.append(trade)
+        return trade
 
-        return orders
+    def execute_sell(self, state: BacktestState, ts_code: str,
+                     shares: int, price: float,
+                     trade_date: date, stock_data: Dict = None) -> Optional[Dict]:
+        """执行卖出"""
+        tradable, reason = self.is_tradable(ts_code, trade_date, 'sell', stock_data)
+        if not tradable:
+            return None
 
-    def _execute_orders(self, orders: List[Dict], positions: Dict,
-                       cash: float, trade_date: str) -> Tuple[float, Dict, List[Dict]]:
-        """执行调仓指令"""
-        new_positions = positions.copy()
-        trades = []
+        if ts_code not in state.positions:
+            return None
 
-        # 先执行卖出
-        for order in orders:
-            if order['action'] != 'sell':
-                continue
+        pos = state.positions[ts_code]
+        sell_shares = min(shares, pos.shares)
+        if sell_shares <= 0:
+            return None
 
-            ts_code = order['ts_code']
-            shares = order['shares']
+        amount = sell_shares * price
+        cost_detail = self.cost_model.calc_sell_cost(amount)
 
-            # 获取当日价格
-            stock_data = self.get_stock_data(ts_code, trade_date, trade_date)
-            if stock_data.empty:
-                continue
+        state.cash += (amount - cost_detail['total_cost'])
+        pos.shares -= sell_shares
 
-            price = stock_data['open'].iloc[0]  # 开盘价成交
-            pct_chg = stock_data['pct_chg'].iloc[0]
+        if pos.shares <= 0:
+            del state.positions[ts_code]
 
-            # 检查是否跌停（无法卖出）
-            if self.is_limit_down(pct_chg):
-                logger.warning(f"{ts_code} limit down on {trade_date}, cannot sell")
-                continue
+        trade = {
+            'trade_date': trade_date,
+            'security_id': ts_code,
+            'action': 'sell',
+            'price': price,
+            'quantity': sell_shares,
+            'amount': round(amount, 2),
+            **cost_detail,
+            'trade_status': 'success',
+        }
+        state.trade_records.append(trade)
+        return trade
 
-            # 计算成交金额和成本
-            amount = shares * price
-            cost = self.calc_transaction_cost(amount, is_buy=False)
+    # ==================== 净值计算 ====================
 
-            # 更新现金和持仓
-            cash += amount - cost
-            del new_positions[ts_code]
+    def calc_nav(self, state: BacktestState, trade_date: date,
+                 price_data: Dict[str, float]) -> Dict:
+        """计算当日净值"""
+        position_value = 0
+        for ts_code, pos in state.positions.items():
+            price = price_data.get(ts_code, 0)
+            pos.market_value = pos.shares * price
+            position_value += pos.market_value
 
-            trades.append({
-                'date': trade_date,
-                'ts_code': ts_code,
-                'action': 'sell',
-                'shares': shares,
-                'price': price,
-                'amount': amount,
-                'cost': cost
-            })
+        total_nav = state.cash + position_value
+        nav = total_nav / state.initial_capital
 
-        # 再执行买入
-        for order in orders:
-            if order['action'] != 'buy':
-                continue
+        # 计算回撤
+        if state.nav_history:
+            peak = max(h['nav'] for h in state.nav_history)
+            drawdown = (total_nav - peak * state.initial_capital) / (peak * state.initial_capital)
+        else:
+            drawdown = 0
 
-            ts_code = order['ts_code']
-            target_value = order['target_value']
+        nav_record = {
+            'trade_date': trade_date,
+            'nav': nav,
+            'total_value': total_nav,
+            'cash': state.cash,
+            'position_value': position_value,
+            'drawdown': drawdown,
+            'num_positions': len(state.positions),
+        }
+        state.nav_history.append(nav_record)
+        return nav_record
 
-            # 获取当日价格
-            stock_data = self.get_stock_data(ts_code, trade_date, trade_date)
-            if stock_data.empty:
-                continue
+    # ==================== 回测指标计算 ====================
 
-            price = stock_data['open'].iloc[0]
-            pct_chg = stock_data['pct_chg'].iloc[0]
-
-            # 检查是否涨停（无法买入）
-            if self.is_limit_up(pct_chg):
-                logger.warning(f"{ts_code} limit up on {trade_date}, cannot buy")
-                continue
-
-            # 计算可买入股数（考虑交易成本）
-            max_amount = cash / (1 + self.COMMISSION_RATE + self.TRANSFER_FEE_RATE)
-            buy_amount = min(target_value, max_amount)
-            shares = self.round_lot(buy_amount / price)
-
-            if shares < 100:  # 最小交易单位
-                continue
-
-            # 计算成本
-            amount = shares * price
-            cost = self.calc_transaction_cost(amount, is_buy=True)
-
-            if amount + cost > cash:
-                continue
-
-            # 更新现金和持仓
-            cash -= (amount + cost)
-            new_positions[ts_code] = {
-                'shares': shares,
-                'cost_price': price
-            }
-
-            trades.append({
-                'date': trade_date,
-                'ts_code': ts_code,
-                'action': 'buy',
-                'shares': shares,
-                'price': price,
-                'amount': amount,
-                'cost': cost
-            })
-
-        return cash, new_positions, trades
-
-    def _calculate_backtest_metrics(self, nav_history: List[Dict],
-                                   trade_records: List[Dict],
-                                   benchmark: str,
-                                   initial_capital: float) -> Dict:
-        """计算回测指标"""
-        nav_df = pd.DataFrame(nav_history)
-
-        if nav_df.empty:
+    def calc_metrics(self, nav_history: List[Dict],
+                     trade_records: List[Dict],
+                     benchmark_nav: List[Dict] = None) -> Dict:
+        """计算回测指标 (PRD 9.8.2节)"""
+        if not nav_history:
             return {}
 
-        # 计算收益率
-        nav_df['return'] = nav_df['nav'].pct_change()
-        nav_df['cum_return'] = nav_df['nav'] / initial_capital - 1
+        nav_df = pd.DataFrame(nav_history)
+        nav_series = nav_df['nav']
+
+        # 收益率
+        returns = nav_series.pct_change().dropna()
+        cum_return = nav_series.iloc[-1] - 1
 
         # 年化收益
-        total_days = len(nav_df)
-        annual_return = (nav_df['nav'].iloc[-1] / initial_capital) ** (252 / total_days) - 1
+        total_days = len(nav_series)
+        annual_return = (nav_series.iloc[-1]) ** (252 / total_days) - 1 if total_days > 0 else 0
 
         # 最大回撤
-        nav_df['cummax'] = nav_df['nav'].cummax()
-        nav_df['drawdown'] = (nav_df['nav'] - nav_df['cummax']) / nav_df['cummax']
-        max_drawdown = nav_df['drawdown'].min()
+        cummax = nav_series.cummax()
+        drawdown = (nav_series - cummax) / cummax
+        max_drawdown = drawdown.min()
+
+        # 最大回撤持续天数
+        is_dd = drawdown < 0
+        dd_groups = (~is_dd).cumsum()
+        max_dd_duration = is_dd.groupby(dd_groups).sum().max() if is_dd.any() else 0
+
+        # 波动率
+        volatility = returns.std() * np.sqrt(252) if len(returns) > 0 else 0
+
+        # 下行波动率
+        neg_returns = returns[returns < 0]
+        downside_vol = neg_returns.std() * np.sqrt(252) if len(neg_returns) > 0 else 0
 
         # 夏普比率
-        if nav_df['return'].std() > 0:
-            sharpe = nav_df['return'].mean() / nav_df['return'].std() * np.sqrt(252)
-        else:
-            sharpe = 0
+        sharpe = returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0
+
+        # 索提诺比率
+        sortino = returns.mean() * 252 / downside_vol if downside_vol > 0 else 0
 
         # 卡玛比率
         calmar = annual_return / abs(max_drawdown) if max_drawdown != 0 else 0
 
         # 换手率
-        total_buy = sum(t['amount'] for t in trade_records if t['action'] == 'buy')
-        avg_nav = nav_df['nav'].mean()
-        turnover_rate = total_buy / avg_nav if avg_nav > 0 else 0
+        total_buy = sum(t.get('amount', 0) for t in trade_records if t.get('action') == 'buy')
+        avg_nav = nav_df['total_value'].mean()
+        turnover_rate = total_buy / avg_nav / (total_days / 252) if avg_nav > 0 and total_days > 0 else 0
 
         # 胜率
-        win_days = (nav_df['return'] > 0).sum()
-        total_trade_days = nav_df['return'].notna().sum()
-        win_rate = win_days / total_trade_days if total_trade_days > 0 else 0
+        win_rate = (returns > 0).sum() / len(returns) if len(returns) > 0 else 0
+
+        # 盈亏比
+        profits = returns[returns > 0]
+        losses = returns[returns < 0]
+        pl_ratio = profits.mean() / abs(losses.mean()) if len(losses) > 0 and losses.mean() != 0 else 0
+
+        # 成本侵蚀率
+        total_cost = sum(t.get('total_cost', 0) for t in trade_records)
+        cost_erosion = total_cost / (nav_df['total_value'].iloc[-1] - nav_df['total_value'].iloc[0]) if nav_df['total_value'].iloc[-1] != nav_df['total_value'].iloc[0] else 0
+
+        result = {
+            'total_return': round(cum_return, 4),
+            'annual_return': round(annual_return, 4),
+            'max_drawdown': round(max_drawdown, 4),
+            'max_drawdown_duration': int(max_dd_duration),
+            'volatility': round(volatility, 4),
+            'downside_volatility': round(downside_vol, 4),
+            'sharpe': round(sharpe, 2),
+            'sortino': round(sortino, 2),
+            'calmar': round(calmar, 2),
+            'turnover_rate': round(turnover_rate, 4),
+            'win_rate': round(win_rate, 4),
+            'profit_loss_ratio': round(pl_ratio, 2),
+            'cost_erosion': round(cost_erosion, 4),
+            'total_trades': len(trade_records),
+            'total_cost': round(total_cost, 2),
+        }
+
+        # 基准对比
+        if benchmark_nav and len(benchmark_nav) > 0:
+            bm_df = pd.DataFrame(benchmark_nav)
+            bm_returns = bm_df['nav'].pct_change().dropna()
+            bm_annual_return = (bm_df['nav'].iloc[-1]) ** (252 / len(bm_df)) - 1
+
+            # 对齐
+            common_idx = returns.index.intersection(bm_returns.index)
+            if len(common_idx) > 0:
+                aligned_ret = returns.loc[common_idx]
+                aligned_bm = bm_returns.loc[common_idx]
+
+                # Alpha/Beta
+                beta = aligned_ret.cov(aligned_bm) / aligned_bm.var() if aligned_bm.var() > 0 else 0
+                alpha = annual_return - (0.03 + beta * (bm_annual_return - 0.03))
+
+                # 信息比率
+                excess_ret = aligned_ret - aligned_bm
+                info_ratio = excess_ret.mean() / excess_ret.std() * np.sqrt(252) if excess_ret.std() > 0 else 0
+
+                result.update({
+                    'benchmark_return': round(bm_annual_return, 4),
+                    'excess_return': round(annual_return - bm_annual_return, 4),
+                    'alpha': round(alpha, 4),
+                    'beta': round(beta, 4),
+                    'information_ratio': round(info_ratio, 2),
+                })
+
+        return result
+
+    # ==================== 调仓判断 ====================
+
+    def should_rebalance(self, trade_date: date, freq: str,
+                         trading_days: List[date] = None) -> bool:
+        """判断是否需要调仓 (ADD 12.1节)"""
+        if freq == 'daily':
+            return True
+        elif freq == 'weekly':
+            return trade_date.weekday() == 4  # 周五
+        elif freq == 'biweekly':
+            # 双周：每两周的周五
+            if trade_date.weekday() != 4:
+                return False
+            if trading_days:
+                idx = trading_days.index(trade_date) if trade_date in trading_days else -1
+                return idx >= 0 and idx % 10 == 0
+            return trade_date.day <= 7  # 简化：每月前7天内的周五
+        elif freq == 'monthly':
+            # 月频：每月最后一个交易日
+            if trading_days:
+                idx = trading_days.index(trade_date) if trade_date in trading_days else -1
+                if idx >= 0 and idx + 1 < len(trading_days):
+                    return trading_days[idx].month != trading_days[idx + 1].month
+                return idx == len(trading_days) - 1
+            return False
+        return False
+
+    # ==================== 机构级回测增强 ====================
+
+    def walk_forward_validation(self, nav_series: pd.Series,
+                                 train_window: int = 504,
+                                 test_window: int = 63,
+                                 gap: int = 20,
+                                 min_periods: int = 252) -> Dict:
+        """
+        Walk-Forward滚动窗口验证
+        避免过拟合，模拟真实投资中的模型更新过程
+
+        Args:
+            nav_series: 净值序列
+            train_window: 训练窗口(交易日数)
+            test_window: 测试窗口
+            gap: 间隔期(防止信息泄漏)
+            min_periods: 最小数据量
+
+        Returns:
+            各窗口回测结果汇总
+        """
+        T = len(nav_series)
+        if T < min_periods:
+            return {'error': 'Insufficient data for walk-forward validation'}
+
+        results = []
+        start = 0
+
+        while start + train_window + gap + test_window <= T:
+            train_end = start + train_window
+            test_start = train_end + gap
+            test_end = test_start + test_window
+
+            train_nav = nav_series.iloc[start:train_end]
+            test_nav = nav_series.iloc[test_start:test_end]
+
+            # 计算测试期指标
+            test_returns = test_nav.pct_change().dropna()
+            if len(test_returns) > 0:
+                sharpe = test_returns.mean() / test_returns.std() * np.sqrt(252) if test_returns.std() > 0 else 0
+                cummax = test_nav.cummax()
+                max_dd = ((test_nav - cummax) / cummax).min()
+
+                results.append({
+                    'train_start': nav_series.index[start],
+                    'train_end': nav_series.index[train_end - 1],
+                    'test_start': nav_series.index[test_start],
+                    'test_end': nav_series.index[min(test_end - 1, T - 1)],
+                    'sharpe': round(sharpe, 2),
+                    'max_drawdown': round(max_dd, 4),
+                    'cum_return': round(test_nav.iloc[-1] / test_nav.iloc[0] - 1, 4),
+                })
+
+            start += test_window  # 滚动
+
+        if not results:
+            return {'error': 'No valid walk-forward windows'}
+
+        # 汇总
+        sharpes = [r['sharpe'] for r in results]
+        drawdowns = [r['max_drawdown'] for r in results]
+        returns_list = [r['cum_return'] for r in results]
 
         return {
-            'total_return': nav_df['cum_return'].iloc[-1],
-            'annual_return': annual_return,
-            'max_drawdown': max_drawdown,
-            'sharpe_ratio': sharpe,
-            'calmar_ratio': calmar,
-            'turnover_rate': turnover_rate,
-            'win_rate': win_rate,
-            'nav_history': nav_df[['date', 'nav', 'cum_return', 'drawdown']].to_dict('records'),
-            'trade_records': trade_records
+            'n_windows': len(results),
+            'window_results': results,
+            'avg_sharpe': round(np.mean(sharpes), 2),
+            'std_sharpe': round(np.std(sharpes), 2),
+            'avg_max_drawdown': round(np.mean(drawdowns), 4),
+            'avg_return': round(np.mean(returns_list), 4),
+            'consistency': round(sum(1 for s in sharpes if s > 0) / len(sharpes), 4),  # 正Sharpe比例
+        }
+
+    def monte_carlo_permutation_test(self, strategy_returns: pd.Series,
+                                      n_permutations: int = 1000,
+                                      block_size: int = 5) -> Dict:
+        """
+        蒙特卡洛置换检验
+        打乱信号与收益的对应关系，检验策略是否统计显著
+
+        Args:
+            strategy_returns: 策略收益率序列
+            n_permutations: 置换次数
+            block_size: 块大小(保留自相关结构)
+        """
+        actual_sharpe = strategy_returns.mean() / strategy_returns.std() * np.sqrt(252) if strategy_returns.std() > 0 else 0
+
+        # 块置换: 保持时间序列结构
+        n = len(strategy_returns)
+        permuted_sharpes = []
+
+        for _ in range(n_permutations):
+            # 块置换
+            n_blocks = n // block_size
+            block_indices = np.arange(n_blocks)
+            np.random.shuffle(block_indices)
+
+            permuted = np.concatenate([
+                strategy_returns.iloc[i * block_size:(i + 1) * block_size].values
+                for i in block_indices
+            ])
+            # 处理剩余
+            remainder = n % block_size
+            if remainder > 0:
+                permuted = np.concatenate([permuted, strategy_returns.iloc[-remainder:].values])
+
+            perm_sharpe = permuted.mean() / permuted.std() * np.sqrt(252) if permuted.std() > 0 else 0
+            permuted_sharpes.append(perm_sharpe)
+
+        # p值 = 置换后Sharpe超过实际Sharpe的比例
+        p_value = sum(1 for s in permuted_sharpes if s >= actual_sharpe) / n_permutations
+
+        return {
+            'actual_sharpe': round(actual_sharpe, 2),
+            'p_value': round(p_value, 4),
+            'is_significant': p_value < 0.05,
+            'permuted_sharpe_mean': round(np.mean(permuted_sharpes), 2),
+            'permuted_sharpe_std': round(np.std(permuted_sharpes), 2),
+            'n_permutations': n_permutations,
+        }
+
+    def deflated_sharpe_ratio(self, sharpe: float, n_trials: int,
+                               backtest_length_years: float,
+                               skewness: float = 0,
+                               kurtosis: float = 3) -> Dict:
+        """
+        通胀夏普比率 (Deflated Sharpe Ratio, DSR)
+        考虑多次测试后最佳Sharpe的统计显著性
+        防止数据窥探偏差
+
+        Args:
+            sharpe: 观测到的Sharpe比率
+            n_trials: 测试的策略数量
+            backtest_length_years: 回测长度(年)
+            skewness: 收益率偏度
+            kurtosis: 收益率峰度
+        """
+        from scipy.stats import norm
+
+        # 期望最大Sharpe(在零假设下)
+        # E[max_SR] = (1 - gamma) * Phi^{-1}(1 - 1/N) + gamma * Phi^{-1}(1 - 1/(N*e))
+        # 简化: E[max_SR] ≈ sqrt(var(SR)) * sqrt(2 * ln(N))
+        var_sr = (1 - skewness * sharpe + (kurtosis - 1) / 4 * sharpe**2) / max(backtest_length_years, 0.5)
+        expected_max_sr = np.sqrt(var_sr) * np.sqrt(2 * np.log(max(n_trials, 2)))
+
+        # DSR = Phi((SR - E[max_SR]) / SE(SR))
+        se_sr = np.sqrt(var_sr)
+        if se_sr > 0:
+            dsr = norm.cdf((sharpe - expected_max_sr) / se_sr)
+        else:
+            dsr = 1.0 if sharpe > expected_max_sr else 0.0
+
+        return {
+            'sharpe': round(sharpe, 2),
+            'expected_max_sharpe': round(expected_max_sr, 2),
+            'dsr': round(dsr, 4),
+            'is_significant': dsr > 0.95,
+            'n_trials': n_trials,
+            'backtest_years': backtest_length_years,
+        }
+
+    def min_backtest_length(self, sharpe: float, confidence: float = 0.95) -> Dict:
+        """
+        最小回测长度 (Bailey & Lopez de Prado)
+        回测太短则Sharpe不可信
+
+        MinBTL = (z_alpha / SR)^2
+        """
+        from scipy.stats import norm
+        z = norm.ppf(confidence)
+
+        if abs(sharpe) < 0.01:
+            return {'min_years': float('inf'), 'is_sufficient': False}
+
+        min_years = (z / sharpe) ** 2
+
+        return {
+            'min_years': round(min_years, 2),
+            'confidence': confidence,
+            'sharpe': round(sharpe, 2),
+        }
+
+    def bootstrap_confidence_interval(self, returns: pd.Series,
+                                       metric: str = 'sharpe',
+                                       n_bootstrap: int = 1000,
+                                       confidence: float = 0.95,
+                                       block_size: int = 5) -> Dict:
+        """
+        Bootstrap置信区间
+        使用块Bootstrap保留自相关结构
+
+        Args:
+            returns: 收益率序列
+            metric: 指标类型 ('sharpe', 'max_drawdown', 'annual_return')
+            n_bootstrap: Bootstrap次数
+            confidence: 置信水平
+            block_size: 块大小
+        """
+        n = len(returns)
+        bootstrap_metrics = []
+
+        for _ in range(n_bootstrap):
+            # 块Bootstrap
+            indices = []
+            n_blocks = n // block_size
+            for _ in range(n_blocks):
+                start = np.random.randint(0, n - block_size + 1)
+                indices.extend(range(start, start + block_size))
+
+            indices = indices[:n]
+            sample = returns.iloc[indices]
+
+            # 计算指标
+            if metric == 'sharpe':
+                val = sample.mean() / sample.std() * np.sqrt(252) if sample.std() > 0 else 0
+            elif metric == 'max_drawdown':
+                cum = (1 + sample).cumprod()
+                dd = ((cum - cum.cummax()) / cum.cummax()).min()
+                val = dd
+            elif metric == 'annual_return':
+                val = (1 + sample).prod() ** (252 / n) - 1
+            else:
+                val = sample.mean() / sample.std() * np.sqrt(252) if sample.std() > 0 else 0
+
+            bootstrap_metrics.append(val)
+
+        alpha = (1 - confidence) / 2
+        lower = np.percentile(bootstrap_metrics, alpha * 100)
+        upper = np.percentile(bootstrap_metrics, (1 - alpha) * 100)
+
+        return {
+            'metric': metric,
+            'point_estimate': round(bootstrap_metrics[len(bootstrap_metrics)//2], 4),
+            'lower': round(lower, 4),
+            'upper': round(upper, 4),
+            'confidence': confidence,
+            'n_bootstrap': n_bootstrap,
         }
 
     def close(self):
-        """关闭数据库连接"""
         if self.db:
             self.db.close()
-
-
-@with_db
-def run_backtest_task(backtest_id: int, db: Session = None) -> Optional[BacktestResult]:
-    """
-    运行回测任务
-
-    Args:
-        backtest_id: 回测ID
-        db: 数据库会话
-
-    Returns:
-        回测结果
-    """
-    # 更新回测状态
-    backtest = db.query(Backtest).filter(Backtest.id == backtest_id).first()
-    if not backtest:
-        logger.error(f"Backtest {backtest_id} not found")
-        return None
-
-    backtest.status = 'running'
-    db.commit()
-
-    try:
-        engine = ABShareBacktestEngine(db)
-        result = engine.run_backtest(backtest_id)
-
-        # 保存结果
-        backtest_result = BacktestResult(
-            backtest_id=backtest_id,
-            total_return=result['total_return'],
-            annual_return=result['annual_return'],
-            max_drawdown=result['max_drawdown'],
-            sharpe_ratio=result['sharpe_ratio'],
-            calmar_ratio=result['calmar_ratio'],
-            turnover_rate=result['turnover_rate'],
-            win_rate=result['win_rate']
-        )
-
-        db.add(backtest_result)
-
-        # 保存交易记录
-        for trade in result['trade_records']:
-            trade_record = BacktestTrade(
-                backtest_id=backtest_id,
-                trade_date=trade['date'],
-                security_id=trade['ts_code'],
-                action=trade['action'],
-                quantity=trade['shares'],
-                price=trade['price'],
-                transaction_cost=trade['cost']
-            )
-            db.add(trade_record)
-
-        backtest.status = 'completed'
-        db.commit()
-
-        logger.info(f"Backtest {backtest_id} completed: annual_return={result['annual_return']:.2%}")
-
-        return backtest_result
-
-    except Exception as e:
-        logger.error(f"Backtest {backtest_id} failed: {e}")
-        backtest.status = 'failed'
-        db.commit()
-        return None

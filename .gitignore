@@ -33,6 +33,7 @@ logs/
 app/logs/
 
 # Environment
+.env
 app/.env
 
 # Node.js / Frontend

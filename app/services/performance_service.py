@@ -132,7 +132,10 @@ def get_industry_exposure(portfolio_id: int, date: str, db: Session = None):
 
 @with_db
 def get_style_exposure(portfolio_id: int, date: str, db: Session = None):
-    """获取风格暴露分析"""
+    """获取风格暴露分析 — 使用 RiskModel 计算真实暴露"""
+    from app.core.risk_model import RiskModel
+    import numpy as np
+
     # 获取持仓
     positions = db.query(SimulatedPortfolioPosition).filter(
         SimulatedPortfolioPosition.portfolio_id == portfolio_id,
@@ -142,27 +145,45 @@ def get_style_exposure(portfolio_id: int, date: str, db: Session = None):
     if not positions:
         return None
 
-    # 计算市值暴露
-    market_cap_exposure = 0
-    for position in positions:
-        # 获取股票基本信息
-        security = db.query(Security).filter(
-            Security.id == position.security_id
-        ).first()
+    # 构建持仓数据用于 Barra 因子暴露计算
+    stock_data = pd.DataFrame([{
+        'security_id': p.security_id,
+        'weight': p.weight,
+    } for p in positions])
 
+    # 尝试从 Security 获取市值和基本面数据
+    for idx, row in stock_data.iterrows():
+        security = db.query(Security).filter(Security.id == row['security_id']).first()
         if security:
-            # 简单的市值分类
-            if security.board == "主板":
-                market_cap_exposure += position.weight * 0.3
-            elif security.board == "创业板":
-                market_cap_exposure += position.weight * 0.5
-            elif security.board == "科创板":
-                market_cap_exposure += position.weight * 0.7
+            stock_data.loc[idx, 'total_market_cap'] = getattr(security, 'total_market_cap', None)
+            stock_data.loc[idx, 'market_cap'] = getattr(security, 'market_cap', None)
+            stock_data.loc[idx, 'bp'] = getattr(security, 'bp', None)
+            stock_data.loc[idx, 'ep_ttm'] = getattr(security, 'ep_ttm', None)
 
+    # 用 RiskModel 计算 Barra 因子暴露
+    risk_model = RiskModel()
+    exposures = risk_model.barra_factor_exposure(stock_data)
+
+    # 加权计算组合暴露
+    result = {}
+    if not exposures.empty:
+        weights = stock_data['weight'].values
+        for col in exposures.columns:
+            vals = exposures[col].values
+            # 加权平均
+            valid = ~np.isnan(vals)
+            if valid.any():
+                result[col] = float(np.average(vals[valid], weights=weights[valid]))
+            else:
+                result[col] = 0.0
+
+    # 确保返回标准格式
     return {
-        'market_cap': market_cap_exposure,
-        'value': 0.0,  # 估值暴露
-        'growth': 0.0   # 成长暴露
+        'market_cap': result.get('size', 0.0),
+        'value': result.get('book_to_price', 0.0),
+        'growth': result.get('growth', 0.0),
+        'momentum': result.get('momentum', 0.0),
+        'volatility': result.get('residual_volatility', 0.0),
     }
 
 def generate_performance_report(analysis: PerformanceAnalysis):

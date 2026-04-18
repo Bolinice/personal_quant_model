@@ -1,7 +1,9 @@
+from datetime import datetime
 from sqlalchemy.orm import Session
 from app.db.base import with_db
-from app.models.reports import Report, ReportTemplate
-from app.schemas.reports import ReportCreate, ReportUpdate, ReportOut, ReportTemplateCreate, ReportTemplateOut
+from app.core.logging import logger
+from app.models.reports import Report, ReportTemplate, ReportSchedule
+from app.schemas.reports import ReportCreate, ReportUpdate, ReportOut, ReportTemplateCreate, ReportTemplateOut, ReportScheduleCreate, ReportScheduleUpdate, ReportScheduleOut
 
 @with_db
 def get_reports(skip: int = 0, limit: int = 100, db: Session = None):
@@ -113,28 +115,132 @@ def delete_report_schedule(schedule_id: int, db: Session = None):
 
 @with_db
 def generate_report(report_id: int, db: Session = None):
-    """生成报告的函数（实际实现需要根据具体需求）"""
+    """生成报告 — 调用真实绩效分析和回测引擎"""
     report = get_report_by_id(report_id, db)
     if report is None:
         return None
 
-    # 这里应该是实际的报告生成逻辑
-    # 例如：从数据库获取数据，使用模板生成报告，保存到文件等
-    report.report_data = {"status": "generated", "generated_at": "2026-04-15T00:00:00"}
-    db.commit()
-    db.refresh(report)
-    return report
+    from datetime import date as date_type
+    import json
+
+    try:
+        content_parts = []
+        calc9_date = report.report_date or date_type.today()
+
+        if report.report_type == 'daily':
+            # 日报：汇总所有活跃模型表现
+            from app.models.models import Model, ModelPerformance
+            from app.models.portfolios import Portfolio, PortfolioPosition
+
+            active_models = db.query(Model).filter(Model.status == 'active').all()
+            content_parts.append(f"# 日报 {calc9_date}\n")
+
+            for model in active_models:
+                perf = db.query(ModelPerformance).filter(
+                    ModelPerformance.model_id == model.id,
+                ).order_by(ModelPerformance.trade_date.desc()).first()
+
+                portfolio = db.query(Portfolio).filter(
+                    Portfolio.model_id == model.id,
+                ).order_by(Portfolio.trade_date.desc()).first()
+
+                pos_count = 0
+                if portfolio:
+                    pos_count = db.query(PortfolioPosition).filter(
+                        PortfolioPosition.portfolio_id == portfolio.id
+                    ).count()
+
+                dr = f"{perf.daily_return:.2%}" if perf and perf.daily_return else "N/A"
+                cr = f"{perf.cumulative_return:.2%}" if perf and perf.cumulative_return else "N/A"
+                dd = f"{perf.max_drawdown:.2%}" if perf and perf.max_drawdown else "N/A"
+                sr = f"{perf.sharpe_ratio:.2f}" if perf and perf.sharpe_ratio else "N/A"
+
+                content_parts.append(
+                    f"## {model.model_name}\n"
+                    f"- 日收益: {dr} | 累计收益: {cr}\n"
+                    f"- 最大回撤: {dd} | 夏普: {sr}\n"
+                    f"- 持仓数: {pos_count}\n"
+                )
+
+        elif report.report_type == 'factor':
+            # 因子报告：IC/衰减/分组
+            from app.models.factors import Factor, FactorAnalysis
+
+            active_factors = db.query(Factor).filter(Factor.is_active == True).all()
+            content_parts.append(f"# 因子报告 {calc9_date}\n")
+            content_parts.append("| 因子 | 分类 | IC | Rank IC | ICIR | 覆盖率 |")
+            content_parts.append("|------|------|-----|---------|------|--------|")
+
+            for factor in active_factors:
+                analysis = db.query(FactorAnalysis).filter(
+                    FactorAnalysis.factor_id == factor.id,
+                ).order_by(FactorAnalysis.analysis_date.desc()).first()
+
+                ic = f"{analysis.ic:.4f}" if analysis and analysis.ic else "-"
+                ric = f"{analysis.rank_ic:.4f}" if analysis and analysis.rank_ic else "-"
+                icir = f"{analysis.ic_ir:.4f}" if analysis and analysis.ic_ir else "-"
+                cov = f"{analysis.coverage:.2%}" if analysis and analysis.coverage else "-"
+                content_parts.append(f"| {factor.factor_name} | {factor.category} | {ic} | {ric} | {icir} | {cov} |")
+
+        elif report.report_type == 'risk':
+            # 风控报告
+            from app.models.task_logs import TaskLog
+            from sqlalchemy import func
+
+            risk_tasks = db.query(TaskLog).filter(
+                TaskLog.task_type == "risk_check",
+                func.date(TaskLog.created_at) == calc9_date,
+            ).all()
+
+            content_parts.append(f"# 风控报告 {calc9_date}\n")
+            content_parts.append(f"- 风控检查次数: {len(risk_tasks)}")
+            alerts = []
+            for task in risk_tasks:
+                if task.result_json and isinstance(task.result_json, dict):
+                    alerts.extend(task.result_json.get("alerts", []))
+            content_parts.append(f"- 总预警数: {len(alerts)}")
+            critical = [a for a in alerts if a.get("severity") == "critical"]
+            if critical:
+                content_parts.append("\n## 严重预警")
+                for a in critical:
+                    content_parts.append(f"- **{a.get('message', '')}**")
+
+        else:
+            content_parts.append(f"# {report.title}\n\n报告类型: {report.report_type}")
+
+        report.content = "\n".join(content_parts)
+        report.status = "generated"
+        report.meta_json = {"generated_at": datetime.now().isoformat()}
+        db.commit()
+        db.refresh(report)
+        return report
+
+    except Exception as e:
+        logger.error(f"Report generation failed: {e}")
+        report.status = "error"
+        report.meta_json = {"error": str(e)}
+        db.commit()
+        return report
 
 @with_db
 def schedule_report_generation(schedule_id: int, db: Session = None):
-    """调度报告生成的函数"""
+    """调度报告生成 — 触发 Celery 异步任务"""
     schedule = get_report_schedule_by_id(schedule_id, db)
     if schedule is None:
         return None
 
-    # 这里应该是实际的调度逻辑
-    # 例如：设置定时任务，调用生成报告函数等
-    schedule.next_run_time = "2026-04-16T00:00:00"
-    db.commit()
-    db.refresh(schedule)
+    from datetime import datetime
+    from app.tasks.report_generate import run_daily_report_generate
+
+    # 触发异步报告生成任务
+    try:
+        task = run_daily_report_generate.delay()
+        schedule.next_run_time = datetime.now().isoformat()
+        schedule.meta_json = schedule.meta_json or {}
+        schedule.meta_json['last_task_id'] = task.id
+        db.commit()
+        db.refresh(schedule)
+    except Exception as e:
+        logger.error(f"Failed to schedule report generation: {e}")
+
     return schedule

@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 
 class ProductBase(BaseModel):
@@ -23,16 +23,14 @@ class ProductInDB(ProductBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ProductOut(ProductBase):
     id: int
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class Product(ProductOut):
     pass
@@ -50,15 +48,13 @@ class ProductReportInDB(ProductReportBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ProductReportOut(ProductReportBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ProductReport(ProductReportOut):
     pass
@@ -78,8 +74,7 @@ class SubscriptionPlanInDB(SubscriptionPlanBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SubscriptionPlanOut(SubscriptionPlanBase):
     id: int
@@ -87,8 +82,7 @@ class SubscriptionPlanOut(SubscriptionPlanBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SubscriptionPlan(SubscriptionPlanOut):
     pass

@@ -46,15 +46,13 @@ class ModelConfigInDB(ModelConfigBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ModelConfigOut(ModelConfigBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ModelConfig(ModelConfigOut):
     pass
@@ -71,15 +69,13 @@ class ModelFactorWeightInDB(ModelFactorWeightBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ModelFactorWeightOut(ModelFactorWeightBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ModelFactorWeight(ModelFactorWeightOut):
     pass
@@ -97,15 +93,13 @@ class ModelScoreInDB(ModelScoreBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ModelScoreOut(ModelScoreBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ModelScore(ModelScoreOut):
     pass

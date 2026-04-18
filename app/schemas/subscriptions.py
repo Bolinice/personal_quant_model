@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List, Dict, Any
 
 class SubscriptionBase(BaseModel):
@@ -27,16 +27,14 @@ class SubscriptionInDB(SubscriptionBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SubscriptionOut(SubscriptionBase):
     id: int
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class Subscription(SubscriptionOut):
     pass
@@ -53,15 +51,13 @@ class SubscriptionHistoryInDB(SubscriptionHistoryBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SubscriptionHistoryOut(SubscriptionHistoryBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SubscriptionHistory(SubscriptionHistoryOut):
     pass
@@ -78,15 +74,13 @@ class SubscriptionPermissionInDB(SubscriptionPermissionBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SubscriptionPermissionOut(SubscriptionPermissionBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SubscriptionPermission(SubscriptionPermissionOut):
     pass

@@ -82,6 +82,11 @@ class BaseDataSource(ABC):
         self._last_reset = datetime.now()
 
     @abstractmethod
+    def connect(self) -> bool:
+        """测试数据源连接是否可用"""
+        pass
+
+    @abstractmethod
     def get_stock_basic(self, **kwargs) -> pd.DataFrame:
         """获取股票基本信息"""
         pass

@@ -1,34 +1,32 @@
 import pytest
-import asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+import app.models  # noqa: F401 - register models with Base.metadata
 from app.db.base import Base, get_db
 from app.main import app
-from app.core.config import settings
 
-# 测试数据库URL
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
-
-# 创建测试数据库引擎
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False}
+# Use shared in-memory SQLite for tests (StaticPool keeps same DB across connections)
+_test_engine = create_engine(
+    "sqlite://",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
 )
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+_TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_test_engine)
+Base.metadata.create_all(bind=_test_engine)
 
-# 创建表
-Base.metadata.create_all(bind=engine)
 
-# 替换数据库依赖
-def override_get_db():
+def _override_get_db():
     try:
-        db = TestingSessionLocal()
+        db = _TestSessionLocal()
         yield db
     finally:
         db.close()
 
-app.dependency_overrides[get_db] = override_get_db
+
+app.dependency_overrides[get_db] = _override_get_db
 
 
 @pytest.fixture(scope="session")
@@ -39,7 +37,7 @@ def client():
 
 @pytest.fixture
 def db():
-    db = TestingSessionLocal()
+    db = _TestSessionLocal()
     try:
         yield db
     finally:

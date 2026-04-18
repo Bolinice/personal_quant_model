@@ -1,5 +1,5 @@
 from datetime import datetime, date
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, ConfigDict
 from typing import Optional, Dict, Any, List
 
 class FilterConfig(BaseModel):
@@ -37,8 +37,7 @@ class StockPoolInDB(StockPoolBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class StockPoolOut(StockPoolBase):
     id: int
@@ -46,8 +45,7 @@ class StockPoolOut(StockPoolBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class StockPool(StockPoolOut):
     pass
@@ -65,12 +63,10 @@ class StockPoolSnapshotInDB(StockPoolSnapshotBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class StockPoolSnapshotOut(StockPoolSnapshotBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

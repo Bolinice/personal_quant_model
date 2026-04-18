@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 
 class BacktestBase(BaseModel):
@@ -25,8 +25,7 @@ class BacktestInDB(BacktestBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class BacktestOut(BacktestBase):
     id: int
@@ -34,8 +33,7 @@ class BacktestOut(BacktestBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class Backtest(BacktestOut):
     pass
@@ -55,15 +53,13 @@ class BacktestResultInDB(BacktestResultBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class BacktestResultOut(BacktestResultBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class BacktestResult(BacktestResultOut):
     pass
@@ -83,15 +79,13 @@ class BacktestTradeInDB(BacktestTradeBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class BacktestTradeOut(BacktestTradeBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class BacktestTrade(BacktestTradeOut):
     pass

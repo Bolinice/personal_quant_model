@@ -1,30 +1,42 @@
+from datetime import date, datetime
 from sqlalchemy.orm import Session
 from app.db.base import with_db
 from app.models.market import StockDaily, IndexDaily, TradingCalendar, StockFinancial, StockIndustry, StockBasic
 from app.schemas.market import StockDailyCreate, IndexDailyCreate
 
+
+def _parse_date(date_str: str) -> date:
+    """Parse date string in various formats to date"""
+    for fmt in ('%Y%m%d', '%Y-%m-%d', '%Y-%m-%dT%H:%M:%S'):
+        try:
+            return datetime.strptime(date_str, fmt).date()
+        except ValueError:
+            continue
+    raise ValueError(f"Cannot parse date: {date_str}")
+
+
 @with_db
 def get_stock_daily(ts_code: str, start_date: str, end_date: str, db: Session = None):
     return db.query(StockDaily).filter(
         StockDaily.ts_code == ts_code,
-        StockDaily.trade_date >= start_date,
-        StockDaily.trade_date <= end_date
+        StockDaily.trade_date >= _parse_date(start_date),
+        StockDaily.trade_date <= _parse_date(end_date)
     ).all()
 
 @with_db
 def get_index_daily(index_code: str, start_date: str, end_date: str, db: Session = None):
     return db.query(IndexDaily).filter(
         IndexDaily.index_code == index_code,
-        IndexDaily.trade_date >= start_date,
-        IndexDaily.trade_date <= end_date
+        IndexDaily.trade_date >= _parse_date(start_date),
+        IndexDaily.trade_date <= _parse_date(end_date)
     ).all()
 
 @with_db
 def get_trading_calendar(exchange: str, start_date: str, end_date: str, is_open: bool = None, db: Session = None):
     query = db.query(TradingCalendar).filter(
         TradingCalendar.exchange == exchange,
-        TradingCalendar.cal_date >= start_date,
-        TradingCalendar.cal_date <= end_date
+        TradingCalendar.cal_date >= _parse_date(start_date),
+        TradingCalendar.cal_date <= _parse_date(end_date)
     )
     if is_open is not None:
         query = query.filter(TradingCalendar.is_open == is_open)
@@ -58,8 +70,8 @@ def create_trading_calendar(calendar_data, db: Session = None):
 def get_stock_financial(ts_code: str, start_date: str, end_date: str, report_type: str = None, db: Session = None):
     query = db.query(StockFinancial).filter(
         StockFinancial.ts_code == ts_code,
-        StockFinancial.ann_date >= start_date,
-        StockFinancial.ann_date <= end_date
+        StockFinancial.ann_date >= _parse_date(start_date),
+        StockFinancial.ann_date <= _parse_date(end_date)
     )
     if report_type:
         query = query.filter(StockFinancial.report_type == report_type)
@@ -69,7 +81,7 @@ def get_stock_financial(ts_code: str, start_date: str, end_date: str, report_typ
 def get_stock_industry(ts_code: str, trade_date: str, db: Session = None):
     return db.query(StockIndustry).filter(
         StockIndustry.ts_code == ts_code,
-        StockIndustry.trade_date == trade_date
+        StockIndustry.trade_date == _parse_date(trade_date)
     ).all()
 
 @with_db

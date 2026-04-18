@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 
 class SimulatedPortfolioBase(BaseModel):
@@ -23,16 +23,14 @@ class SimulatedPortfolioInDB(SimulatedPortfolioBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SimulatedPortfolioOut(SimulatedPortfolioBase):
     id: int
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SimulatedPortfolio(SimulatedPortfolioOut):
     pass
@@ -50,15 +48,13 @@ class SimulatedPortfolioPositionInDB(SimulatedPortfolioPositionBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SimulatedPortfolioPositionOut(SimulatedPortfolioPositionBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SimulatedPortfolioPosition(SimulatedPortfolioPositionOut):
     pass
@@ -77,15 +73,13 @@ class SimulatedPortfolioNavInDB(SimulatedPortfolioNavBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SimulatedPortfolioNavOut(SimulatedPortfolioNavBase):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SimulatedPortfolioNav(SimulatedPortfolioNavOut):
     pass

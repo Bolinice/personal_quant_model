@@ -663,6 +663,176 @@ class FactorEngine:
 
         return result
 
+    # ==================== 无数据库便捷函数 ====================
+
+    @staticmethod
+    def calc_factors_from_data(price_df: pd.DataFrame,
+                               financial_df: pd.DataFrame = None,
+                               neutralize: bool = False,
+                               industry_col: str = None,
+                               cap_col: str = None) -> pd.DataFrame:
+        """
+        不依赖数据库的因子计算便捷函数
+        直接从 DataFrame 计算所有可用因子并预处理
+
+        Args:
+            price_df: 行情数据，需包含 ts_code, close, open, high, low, volume, amount, trade_date
+            financial_df: 财务数据（可选）
+            neutralize: 是否中性化
+            industry_col: 行业列名
+            cap_col: 市值列名
+
+        Returns:
+            预处理后的因子DataFrame
+        """
+        preprocessor = FactorPreprocessor()
+
+        # 计算各类因子
+        factor_dfs = []
+
+        # 动量因子
+        momentum = FactorEngine._calc_momentum_static(price_df)
+        if not momentum.empty:
+            factor_dfs.append(momentum)
+
+        # 波动率因子
+        volatility = FactorEngine._calc_volatility_static(price_df)
+        if not volatility.empty:
+            factor_dfs.append(volatility)
+
+        # 流动性因子
+        liquidity = FactorEngine._calc_liquidity_static(price_df)
+        if not liquidity.empty:
+            factor_dfs.append(liquidity)
+
+        # 微观结构因子
+        microstructure = FactorEngine._calc_microstructure_static(price_df)
+        if not microstructure.empty:
+            factor_dfs.append(microstructure)
+
+        # 价值/成长/质量因子（需要财务数据）
+        if financial_df is not None and not financial_df.empty:
+            valuation = FactorEngine._calc_valuation_static(financial_df, price_df)
+            if not valuation.empty:
+                factor_dfs.append(valuation)
+            growth = FactorEngine._calc_growth_static(financial_df)
+            if not growth.empty:
+                factor_dfs.append(growth)
+            quality = FactorEngine._calc_quality_static(financial_df)
+            if not quality.empty:
+                factor_dfs.append(quality)
+
+        if not factor_dfs:
+            return pd.DataFrame()
+
+        # 合并所有因子
+        merged = factor_dfs[0]
+        for f in factor_dfs[1:]:
+            if 'security_id' in f.columns and 'security_id' in merged.columns:
+                merged = pd.merge(merged, f, on='security_id', how='outer')
+
+        if merged.empty:
+            return merged
+
+        # 预处理
+        factor_cols = [c for c in merged.columns if c != 'security_id']
+        merged = preprocessor.preprocess_dataframe(
+            merged, factor_cols,
+            industry_col=industry_col,
+            cap_col=cap_col,
+            neutralize=neutralize,
+            direction_map=FACTOR_DIRECTIONS,
+        )
+
+        return merged
+
+    @staticmethod
+    def _calc_momentum_static(price_df: pd.DataFrame) -> pd.DataFrame:
+        """计算动量因子（不依赖db）"""
+        result = pd.DataFrame()
+        if 'close' not in price_df.columns:
+            return result
+        result['security_id'] = price_df.get('ts_code', price_df.index)
+        close = price_df['close']
+        result['ret_1m'] = close.pct_change(20)
+        result['ret_3m'] = close.pct_change(60)
+        result['ret_6m'] = close.pct_change(120)
+        result['ret_12m'] = close.pct_change(240)
+        result['ret_1m_reversal'] = -result['ret_1m']
+        return result
+
+    @staticmethod
+    def _calc_volatility_static(price_df: pd.DataFrame) -> pd.DataFrame:
+        """计算波动率因子（不依赖db）"""
+        result = pd.DataFrame()
+        if 'close' not in price_df.columns:
+            return result
+        result['security_id'] = price_df.get('ts_code', price_df.index)
+        daily_ret = price_df['close'].pct_change()
+        result['vol_20d'] = daily_ret.rolling(20).std() * np.sqrt(252)
+        result['vol_60d'] = daily_ret.rolling(60).std() * np.sqrt(252)
+        return result
+
+    @staticmethod
+    def _calc_liquidity_static(price_df: pd.DataFrame) -> pd.DataFrame:
+        """计算流动性因子（不依赖db）"""
+        result = pd.DataFrame()
+        result['security_id'] = price_df.get('ts_code', price_df.index)
+        if 'turnover_rate' in price_df.columns:
+            result['turnover_20d'] = price_df['turnover_rate'].rolling(20).mean()
+            result['turnover_60d'] = price_df['turnover_rate'].rolling(60).mean()
+        if 'amount' in price_df.columns and 'close' in price_df.columns:
+            abs_ret = price_df['close'].pct_change().abs()
+            amount = price_df['amount']
+            result['amihud_20d'] = (abs_ret / amount.replace(0, np.nan)).rolling(20).mean()
+        if 'close' in price_df.columns:
+            daily_ret = price_df['close'].pct_change()
+            result['zero_return_ratio'] = (daily_ret.abs() < 0.001).rolling(20).mean()
+        return result
+
+    @staticmethod
+    def _calc_microstructure_static(price_df: pd.DataFrame) -> pd.DataFrame:
+        """计算微观结构因子（不依赖db）"""
+        result = pd.DataFrame()
+        result['security_id'] = price_df.get('ts_code', price_df.index)
+        if all(c in price_df.columns for c in ['open', 'close']):
+            result['overnight_return'] = price_df['open'] / price_df['close'].shift(1) - 1
+            result['overnight_return'] = result['overnight_return'].rolling(20, min_periods=5).mean()
+        return result
+
+    @staticmethod
+    def _calc_valuation_static(financial_df: pd.DataFrame, price_df: pd.DataFrame) -> pd.DataFrame:
+        """计算价值因子（不依赖db）"""
+        result = pd.DataFrame()
+        result['security_id'] = financial_df.get('ts_code', financial_df.index)
+        if 'pe_ttm' in financial_df.columns:
+            result['ep_ttm'] = 1 / financial_df['pe_ttm'].replace(0, np.nan)
+        if 'pb' in financial_df.columns:
+            result['bp'] = 1 / financial_df['pb'].replace(0, np.nan)
+        if 'ps_ttm' in financial_df.columns:
+            result['sp_ttm'] = 1 / financial_df['ps_ttm'].replace(0, np.nan)
+        return result
+
+    @staticmethod
+    def _calc_growth_static(financial_df: pd.DataFrame) -> pd.DataFrame:
+        """计算成长因子（不依赖db）"""
+        result = pd.DataFrame()
+        result['security_id'] = financial_df.get('ts_code', financial_df.index)
+        result['yoy_revenue'] = financial_df.get('yoy_revenue')
+        result['yoy_net_profit'] = financial_df.get('yoy_net_profit')
+        return result
+
+    @staticmethod
+    def _calc_quality_static(financial_df: pd.DataFrame) -> pd.DataFrame:
+        """计算质量因子（不依赖db）"""
+        result = pd.DataFrame()
+        result['security_id'] = financial_df.get('ts_code', financial_df.index)
+        result['roe'] = financial_df.get('roe')
+        result['roa'] = financial_df.get('roa')
+        result['gross_profit_margin'] = financial_df.get('grossprofit_margin', financial_df.get('gross_profit_margin'))
+        result['net_profit_margin'] = financial_df.get('netprofit_margin', financial_df.get('net_profit_margin'))
+        return result
+
     def calc_all_factors(self, financial_df: pd.DataFrame, price_df: pd.DataFrame,
                          industry_col: str = None, cap_col: str = None,
                          neutralize: bool = True,

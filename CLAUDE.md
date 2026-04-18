@@ -24,6 +24,7 @@
 - [PRD](document/PRD.md) — 产品需求文档 V2.1
 - [TDD](document/TDD.md) — 技术架构与数据库设计 V2.1
 - [ADD](document/ADD.md) — 算法设计说明书 V1.0
+- [WORKFLOW](document/WORKFLOW.md) — 工作流文档（日终流水线、数据流、自然语言解读）
 - [API](document/API.md) — API 接口文档
 - [DEPLOYMENT](document/DEPLOYMENT.md) — 部署指南
 - [user_guide](document/user_guide.md) — 客户端使用指南

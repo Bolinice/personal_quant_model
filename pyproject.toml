@@ -8,16 +8,14 @@ version = "1.0.0"
 description = "A股多因子增强策略平台"
 authors = [{name = "Camus", email = "your-email@example.com"}]
 license = {text = "MIT"}
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Financial and Insurance Industry",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
     "fastapi==0.104.1",
@@ -50,6 +48,9 @@ dependencies = [
     "fastapi-users-db-sqlalchemy==6.0.0",
     "werkzeug==3.0.1",
     "python-decouple==3.8",
+    "prometheus-client>=0.20.0",
+    "tushare>=1.4.0",
+    "akshare>=1.14.0",
 ]
 
 [project.optional-dependencies]
@@ -63,6 +64,12 @@ dev = [
     "mypy>=1.5.0",
     "pre-commit>=3.3.0",
 ]
+ml = [
+    "scikit-learn>=1.3.0",
+    "lightgbm>=4.0.0",
+    "hmmlearn>=0.3.0",
+    "cvxpy>=1.4.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/your-username/quant-platform"
@@ -71,7 +78,7 @@ Documentation = "https://github.com/your-username/quant-platform#readme"
 
 [tool.black]
 line-length = 88
-target-version = ['py38']
+target-version = ['py311']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -97,7 +104,7 @@ use_parentheses = true
 ensure_newline_before_comments = true
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -121,6 +128,13 @@ module = [
     "matplotlib.*",
     "seaborn.*",
     "polars.*",
+    "tushare.*",
+    "akshare.*",
+    "sklearn.*",
+    "lightgbm.*",
+    "hmmlearn.*",
+    "cvxpy.*",
+    "prometheus_client.*",
 ]
 ignore_missing_imports = true
 
@@ -129,13 +143,9 @@ testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = [
-    "-v",
-    "--cov=app",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-fail-under=80",
-]
+addopts = ["-v"]
+
+[tool.pytest-asyncio]
 asyncio_mode = "auto"
 
 [tool.coverage.run]

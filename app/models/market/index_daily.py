@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Float, Numeric, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Date, Float, Numeric, Boolean
 from sqlalchemy.sql import func
 from app.db.base import Base
 
@@ -7,7 +7,7 @@ class IndexDaily(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     index_code = Column(String(16), index=True)
-    trade_date = Column(DateTime, index=True)
+    trade_date = Column(Date, index=True)
     open = Column(Numeric(20, 4))
     high = Column(Numeric(20, 4))
     low = Column(Numeric(20, 4))

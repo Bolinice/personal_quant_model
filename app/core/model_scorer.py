@@ -312,6 +312,54 @@ class MultiFactorScorer:
             'feature_importance': feature_importance,
         }
 
+    # ==================== 无数据库便捷函数 ====================
+
+    @staticmethod
+    def score_from_factor_df(factor_df: pd.DataFrame,
+                             method: str = 'equal',
+                             weights: Dict[str, float] = None,
+                             ic_values: Dict[str, float] = None,
+                             icir_values: Dict[str, float] = None) -> pd.DataFrame:
+        """
+        不依赖数据库的评分便捷函数
+        直接从因子DataFrame计算综合评分
+
+        Args:
+            factor_df: 因子得分矩阵（行=股票，列=因子）
+            method: 加权方法 ('equal', 'manual', 'ic', 'icir')
+            weights: 人工权重
+            ic_values: IC值
+            icir_values: ICIR值
+
+        Returns:
+            评分结果DataFrame，包含 total_score, rank, quantile
+        """
+        scorer = MultiFactorScorer.__new__(MultiFactorScorer)
+        scorer.db = None
+
+        # 排除非因子列
+        skip_cols = {'security_id', 'ts_code', 'trade_date', 'data_source', 'amount_is_estimated'}
+        factor_cols = [c for c in factor_df.columns if c not in skip_cols]
+        scores_matrix = factor_df[factor_cols].copy()
+
+        # 计算综合得分
+        if method == 'equal':
+            factor_df['total_score'] = scorer.equal_weight(scores_matrix)
+        elif method == 'manual' and weights:
+            factor_df['total_score'] = scorer.manual_weight(scores_matrix, weights)
+        elif method == 'ic' and ic_values:
+            factor_df['total_score'] = scorer.ic_weight(scores_matrix, ic_values)
+        elif method == 'icir' and icir_values:
+            factor_df['total_score'] = scorer.icir_weight(scores_matrix, icir_values)
+        else:
+            factor_df['total_score'] = scorer.equal_weight(scores_matrix)
+
+        # 排名
+        factor_df['rank'] = factor_df['total_score'].rank(ascending=False)
+        factor_df['quantile'] = factor_df['total_score'].rank(pct=True)
+
+        return factor_df
+
     # ==================== 综合评分计算 ====================
 
     def calculate_scores(self, model_id: int, trade_date: date,

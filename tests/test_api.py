@@ -3,12 +3,39 @@ API集成测试
 """
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+import app.models  # noqa: F401 - register models
+from app.db.base import Base, get_db
+from app.main import app
+
+
+# Use shared in-memory SQLite (static pool keeps same DB across connections)
+_test_engine = create_engine(
+    "sqlite://",
+    connect_args={"check_same_thread": False},
+    poolclass=__import__("sqlalchemy.pool", fromlist=["StaticPool"]).StaticPool,
+)
+_TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_test_engine)
+Base.metadata.create_all(bind=_test_engine)
+
+
+def _override_get_db():
+    try:
+        db = _TestSessionLocal()
+        yield db
+    finally:
+        db.close()
+
+
+app.dependency_overrides[get_db] = _override_get_db
 
 
 @pytest.fixture
 def client():
-    from app.main import app
-    return TestClient(app)
+    with TestClient(app) as c:
+        yield c
 
 
 class TestHealthCheck:
@@ -40,13 +67,11 @@ class TestMarketAPI:
     """市场数据API测试"""
 
     def test_get_market_data(self, client):
-        # Market API requires ts_code, start_date, end_date params
         response = client.get("/api/v1/market/stock-daily", params={
             "ts_code": "000001.SZ",
             "start_date": "2024-01-01",
             "end_date": "2024-01-31",
         })
-        # With empty test DB, expect 404 (no data) not 422 (validation error)
         assert response.status_code in [200, 404]
 
 

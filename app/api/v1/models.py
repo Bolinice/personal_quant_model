@@ -1,10 +1,10 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.base import get_db
 from app.services.models_service import get_models, get_model_by_code, create_model, update_model, get_model_factor_weights, create_model_factor_weights, update_model_factor_weights, get_model_scores, create_model_scores, calculate_model_scores
-from app.models.models import Model, ModelFactorWeight, ModelScore
-from app.schemas.models import ModelCreate, ModelUpdate, ModelOut, ModelFactorWeightCreate, ModelFactorWeightOut, ModelScoreCreate, ModelScoreOut
+from app.models.models import Model, ModelFactorWeight, ModelScore, ModelPerformance
+from app.schemas.models import ModelCreate, ModelUpdate, ModelOut, ModelFactorWeightCreate, ModelFactorWeightOut, ModelScoreCreate, ModelScoreOut, ModelPerformanceOut
 
 router = APIRouter()
 
@@ -15,7 +15,7 @@ def read_models(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
 
 @router.get("/{model_id}", response_model=ModelOut)
 def read_model(model_id: int, db: Session = Depends(get_db)):
-    model = get_model_by_code(str(model_id), db=db)
+    model = db.query(Model).filter(Model.id == model_id).first()
     if model is None:
         raise HTTPException(status_code=404, detail="Model not found")
     return model
@@ -52,3 +52,10 @@ def read_model_scores(model_id: int, trade_date: str, selected_only: bool = Fals
 @router.post("/{model_id}/score", response_model=List[ModelScoreOut])
 def calculate_model_scores_endpoint(model_id: int, trade_date: str, db: Session = Depends(get_db)):
     return calculate_model_scores(model_id, trade_date, db=db)
+
+@router.get("/{model_id}/performance", response_model=List[ModelPerformanceOut])
+def read_model_performance(model_id: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    perf = db.query(ModelPerformance).filter(
+        ModelPerformance.model_id == model_id
+    ).order_by(ModelPerformance.trade_date.desc()).offset(skip).limit(limit).all()
+    return perf

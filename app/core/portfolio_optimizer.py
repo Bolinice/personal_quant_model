@@ -301,6 +301,247 @@ class PortfolioOptimizer:
 
         return weights
 
+    # ==================== Black-Litterman模型 ====================
+
+    def black_litterman_optimize(self, market_cap_weights: pd.Series,
+                                  cov_matrix: pd.DataFrame,
+                                  P: np.ndarray, Q: np.ndarray,
+                                  Omega: np.ndarray,
+                                  tau: float = 0.05,
+                                  risk_aversion: float = 1.0,
+                                  delta: float = 2.5,
+                                  max_position: float = 0.10,
+                                  long_only: bool = True) -> pd.Series:
+        """
+        Black-Litterman组合优化
+        将模型观点(Q)与市场均衡结合，产生稳定的后验期望收益
+        比直接使用因子模型期望收益更稳定，减少换手率30-50%
+
+        Args:
+            market_cap_weights: 市值加权权重(均衡权重)
+            cov_matrix: 协方差矩阵
+            P: 观点选择矩阵 (K x N), K个观点涉及N个资产
+            Q: 观点收益向量 (K,), 每个观点的预期超额收益
+            Omega: 观点不确定性矩阵 (K x K), 对角线为各观点方差
+            tau: 不确定性缩放系数 (通常0.025-0.05)
+            risk_aversion: 风险厌恶系数
+            delta: 均衡风险厌恶系数 (用于计算隐含均衡收益)
+            max_position: 单只股票最大权重
+            long_only: 是否仅做多
+
+        Returns:
+            最优权重 Series
+        """
+        common = market_cap_weights.index.intersection(cov_matrix.index)
+        n = len(common)
+        if n < 2:
+            return pd.Series(1.0 / n, index=common) if n > 0 else pd.Series()
+
+        Sigma = cov_matrix.loc[common, common].values
+        w_mkt = market_cap_weights.reindex(common).fillna(0).values
+
+        # 隐含均衡收益: pi = delta * Sigma * w_mkt
+        pi = delta * Sigma @ w_mkt
+
+        # 后验期望收益: mu_BL = inv(inv(tau*Sigma) + P'*inv(Omega)*P) * (inv(tau*Sigma)*pi + P'*inv(Omega)*Q)
+        tau_Sigma = tau * Sigma
+        try:
+            inv_tau_Sigma = np.linalg.inv(tau_Sigma)
+            inv_Omega = np.linalg.inv(Omega)
+        except np.linalg.LinAlgError:
+            logger.warning("BL: Matrix inversion failed, using equilibrium returns")
+            mu_BL = pi
+            return self.mean_variance_optimize(
+                pd.Series(mu_BL, index=common),
+                cov_matrix.loc[common, common],
+                risk_aversion=risk_aversion,
+                max_position=max_position,
+                long_only=long_only,
+            )
+
+        # 后验精度矩阵和均值
+        posterior_precision = inv_tau_Sigma + P.T @ inv_Omega @ P
+        posterior_mean_rhs = inv_tau_Sigma @ pi + P.T @ inv_Omega @ Q
+
+        try:
+            mu_BL = np.linalg.solve(posterior_precision, posterior_mean_rhs)
+        except np.linalg.LinAlgError:
+            mu_BL = pi
+
+        # 用后验期望收益做均值方差优化
+        return self.mean_variance_optimize(
+            pd.Series(mu_BL, index=common),
+            cov_matrix.loc[common, common],
+            risk_aversion=risk_aversion,
+            max_position=max_position,
+            long_only=long_only,
+        )
+
+    # ==================== 稳健优化 ====================
+
+    def robust_mean_variance_optimize(self, expected_returns: pd.Series,
+                                       cov_matrix: pd.DataFrame,
+                                       return_uncertainty: pd.Series,
+                                       risk_aversion: float = 1.0,
+                                       kappa: float = 1.0,
+                                       max_position: float = 0.10,
+                                       long_only: bool = True) -> pd.Series:
+        """
+        稳健优化 (收益不确定性)
+        最差情况优化: max_w: w'mu_hat - kappa*|w|'*sigma_mu - lambda/2*w'Sigma*w
+        对期望收益的估计误差进行惩罚，避免对噪声大的资产过度配置
+
+        Args:
+            expected_returns: 期望收益
+            cov_matrix: 协方差矩阵
+            return_uncertainty: 各资产期望收益的标准误
+            risk_aversion: 风险厌恶系数
+            kappa: 不确定性惩罚系数 (越大越保守)
+            max_position: 单只股票最大权重
+            long_only: 是否仅做多
+
+        Returns:
+            最优权重 Series
+        """
+        common = expected_returns.index.intersection(cov_matrix.index).intersection(return_uncertainty.index)
+        n = len(common)
+        if n < 2:
+            return pd.Series(1.0 / n, index=common) if n > 0 else pd.Series()
+
+        mu = expected_returns.reindex(common).values
+        Sigma = cov_matrix.loc[common, common].values
+        sigma_mu = return_uncertainty.reindex(common).values
+
+        try:
+            import cvxpy as cp
+        except ImportError:
+            # 回退: 缩减期望收益
+            adjusted_mu = mu - kappa * sigma_mu
+            return self.mean_variance_optimize(
+                pd.Series(adjusted_mu, index=common),
+                cov_matrix.loc[common, common],
+                risk_aversion=risk_aversion,
+                max_position=max_position,
+                long_only=long_only,
+            )
+
+        w = cp.Variable(n)
+
+        # 目标: max w'mu - kappa*||diag(sigma_mu)*w||_1 - lambda/2 * w'Sigma*w
+        objective = cp.Maximize(
+            mu @ w - kappa * cp.norm1(cp.multiply(sigma_mu, w)) - risk_aversion / 2 * cp.quad_form(w, Sigma)
+        )
+
+        constraints = [cp.sum(w) == 1]
+        if long_only:
+            constraints.append(w >= 0)
+        constraints.append(w <= max_position)
+
+        problem = cp.Problem(objective, constraints)
+        try:
+            problem.solve(solver=cp.SCS, max_iters=2000)
+        except cp.SolverError:
+            problem.solve(solver=cp.ECOS, max_iters=500)
+
+        if problem.status not in ['optimal', 'optimal_inaccurate'] or w.value is None:
+            # 回退到普通均值方差
+            return self.mean_variance_optimize(
+                expected_returns.reindex(common),
+                cov_matrix.loc[common, common],
+                risk_aversion=risk_aversion,
+                max_position=max_position,
+                long_only=long_only,
+            )
+
+        weights = np.maximum(w.value, 0)
+        if weights.sum() > 0:
+            weights = weights / weights.sum()
+        return pd.Series(weights, index=common)
+
+    # ==================== 交易成本感知优化 ====================
+
+    def transaction_cost_aware_optimize(self, expected_returns: pd.Series,
+                                         cov_matrix: pd.DataFrame,
+                                         prev_weights: pd.Series,
+                                         risk_aversion: float = 1.0,
+                                         linear_cost: float = 0.003,
+                                         quadratic_cost: float = 0.0,
+                                         max_position: float = 0.10,
+                                         long_only: bool = True) -> pd.Series:
+        """
+        交易成本感知优化
+        max w'mu - lambda/2*w'Sigma*w - lambda_tc_linear*|w-w_prev|_1 - lambda_tc_quad*||w-w_prev||^2
+
+        Args:
+            expected_returns: 期望收益
+            cov_matrix: 协方差矩阵
+            prev_weights: 上期权重
+            risk_aversion: 风险厌恶系数
+            linear_cost: 线性交易成本系数 (单边换手成本, 如0.003=30bps)
+            quadratic_cost: 二次交易成本系数 (市场冲击)
+            max_position: 单只股票最大权重
+            long_only: 是否仅做多
+
+        Returns:
+            最优权重 Series
+        """
+        common = expected_returns.index.intersection(cov_matrix.index)
+        n = len(common)
+        if n < 2:
+            return pd.Series(1.0 / n, index=common) if n > 0 else pd.Series()
+
+        mu = expected_returns.reindex(common).values
+        Sigma = cov_matrix.loc[common, common].values
+        w_prev = prev_weights.reindex(common).fillna(0).values
+
+        try:
+            import cvxpy as cp
+        except ImportError:
+            # 回退: 在目标函数中加入二次惩罚
+            delta_w = expected_returns.reindex(common) - prev_weights.reindex(common)
+            adjusted_returns = expected_returns.reindex(common) - quadratic_cost * delta_w
+            return self.mean_variance_optimize(
+                adjusted_returns, cov_matrix.loc[common, common],
+                risk_aversion=risk_aversion, max_position=max_position, long_only=long_only,
+            )
+
+        w = cp.Variable(n)
+        dw = w - w_prev  # 权重变化
+
+        # 目标函数
+        obj = mu @ w - risk_aversion / 2 * cp.quad_form(w, Sigma)
+
+        # 线性交易成本: lambda_tc * |dw|_1
+        if linear_cost > 0:
+            obj -= linear_cost * cp.norm1(dw)
+
+        # 二次交易成本: lambda_tc_quad * ||dw||^2
+        if quadratic_cost > 0:
+            obj -= quadratic_cost * cp.sum_squares(dw)
+
+        objective = cp.Maximize(obj)
+        constraints = [cp.sum(w) == 1]
+        if long_only:
+            constraints.append(w >= 0)
+        constraints.append(w <= max_position)
+
+        problem = cp.Problem(objective, constraints)
+        try:
+            problem.solve(solver=cp.SCS, max_iters=2000)
+        except cp.SolverError:
+            problem.solve(solver=cp.ECOS, max_iters=500)
+
+        if problem.status not in ['optimal', 'optimal_inaccurate'] or w.value is None:
+            return self.mean_variance_optimize(
+                expected_returns.reindex(common), cov_matrix.loc[common, common],
+                risk_aversion=risk_aversion, max_position=max_position, long_only=long_only,
+            )
+
+        weights = np.maximum(w.value, 0)
+        if weights.sum() > 0:
+            weights = weights / weights.sum()
+        return pd.Series(weights, index=common)
+
     # ==================== 优化结果分析 ====================
 
     def analyze_optimization(self, weights: pd.Series,

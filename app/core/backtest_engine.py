@@ -4,7 +4,7 @@ A股回测引擎
 符合ADD 12节回测规则和PRD 9.8节需求
 机构级增强: 参与率滑点模型、Walk-Forward验证、蒙特卡洛置换检验、通胀夏普比率
 """
-from typing import List, Optional, Dict, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from datetime import datetime, date, timedelta
 from dataclasses import dataclass, field
 import numpy as np
@@ -44,8 +44,8 @@ class TransactionCost:
     base_spread: float = 0.0005  # 基础价差 5bps
 
     def calc_buy_cost(self, amount: float,
-                      daily_volume: float = None,
-                      volatility: float = None) -> Dict[str, float]:
+                      daily_volume: Optional[float] = None,
+                      volatility: Optional[float] = None) -> Dict[str, float]:
         """
         计算买入成本
         支持参与率滑点模型: slippage = base_spread + impact * sqrt(participation_rate)
@@ -70,8 +70,8 @@ class TransactionCost:
         }
 
     def calc_sell_cost(self, amount: float,
-                       daily_volume: float = None,
-                       volatility: float = None) -> Dict[str, float]:
+                       daily_volume: Optional[float] = None,
+                       volatility: Optional[float] = None) -> Dict[str, float]:
         """计算卖出成本（含印花税）"""
         commission = max(amount * self.commission_rate, self.min_commission)
         stamp_tax = amount * self.stamp_tax_rate
@@ -118,10 +118,10 @@ class BacktestState:
 class ABShareBacktestEngine:
     """A股回测引擎 - 符合ADD 12节和PRD 9.8节"""
 
-    def __init__(self, db: Session = None,
+    def __init__(self, db: Optional[Session] = None,
                  commission_rate: float = DEFAULT_COMMISSION_RATE,
                  stamp_tax_rate: float = DEFAULT_STAMP_TAX_RATE,
-                 slippage_rate: float = DEFAULT_SLIPPAGE_RATE):
+                 slippage_rate: float = DEFAULT_SLIPPAGE_RATE) -> None:
         self.db = db
         self.cost_model = TransactionCost(
             commission_rate=commission_rate,
@@ -170,7 +170,7 @@ class ABShareBacktestEngine:
         return int(shares // LOT_SIZE) * LOT_SIZE
 
     def is_tradable(self, ts_code: str, trade_date: date,
-                    action: str, stock_data: Dict = None) -> Tuple[bool, str]:
+                    action: str, stock_data: Optional[Dict[str, Any]] = None) -> Tuple[bool, str]:
         """
         判断是否可交易 (ADD 12.4节 + 11.2.2节)
 
@@ -205,7 +205,7 @@ class ABShareBacktestEngine:
 
     def execute_buy(self, state: BacktestState, ts_code: str,
                     target_amount: float, price: float,
-                    trade_date: date, stock_data: Dict = None) -> Optional[Dict]:
+                    trade_date: date, stock_data: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
         """
         执行买入 (ADD 12.3节)
 
@@ -273,7 +273,7 @@ class ABShareBacktestEngine:
 
     def execute_sell(self, state: BacktestState, ts_code: str,
                      shares: int, price: float,
-                     trade_date: date, stock_data: Dict = None) -> Optional[Dict]:
+                     trade_date: date, stock_data: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
         """执行卖出"""
         tradable, reason = self.is_tradable(ts_code, trade_date, 'sell', stock_data)
         if not tradable:
@@ -312,16 +312,46 @@ class ABShareBacktestEngine:
     # ==================== 净值计算 ====================
 
     def calc_nav(self, state: BacktestState, trade_date: date,
-                 price_data: Dict[str, float]) -> Dict:
-        """计算当日净值"""
+                 price_data: Dict[str, float],
+                 prev_price_data: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+        """
+        计算当日净值 (含持仓级P&L归因)
+
+        Args:
+            state: 回测状态
+            trade_date: 交易日期
+            price_data: 当日价格 {ts_code: price}
+            prev_price_data: 前日价格 (用于P&L归因)
+        """
         position_value = 0
+        position_pnl = {}  # 持仓级P&L
+
         for ts_code, pos in state.positions.items():
             price = price_data.get(ts_code, 0)
+            prev_price = prev_price_data.get(ts_code, price) if prev_price_data else price
             pos.market_value = pos.shares * price
             position_value += pos.market_value
 
+            # 持仓级P&L: pnl_i = shares_i * (price_t - price_{t-1})
+            if prev_price > 0:
+                pnl = pos.shares * (price - prev_price)
+                position_pnl[ts_code] = {
+                    'shares': pos.shares,
+                    'price': price,
+                    'prev_price': prev_price,
+                    'pnl': round(pnl, 2),
+                    'weight': 0,  # 后面计算
+                }
+
         total_nav = state.cash + position_value
         nav = total_nav / state.initial_capital
+
+        # 填充权重
+        for ts_code in position_pnl:
+            if total_nav > 0:
+                position_pnl[ts_code]['weight'] = round(
+                    state.positions[ts_code].market_value / total_nav, 6
+                )
 
         # 计算回撤
         if state.nav_history:
@@ -338,15 +368,92 @@ class ABShareBacktestEngine:
             'position_value': position_value,
             'drawdown': drawdown,
             'num_positions': len(state.positions),
+            'position_pnl': position_pnl,
         }
         state.nav_history.append(nav_record)
+        logger.debug(
+            "NAV calculated",
+            extra={
+                "trade_date": str(trade_date),
+                "nav": round(nav, 6),
+                "total_value": round(total_nav, 2),
+                "drawdown": round(drawdown, 4),
+                "num_positions": len(state.positions),
+            },
+        )
         return nav_record
+
+    def position_pnl_attribution(self, nav_history: List[Dict[str, Any]],
+                                  factor_exposures: Optional[Dict[str, Dict[str, float]]] = None) -> Dict[str, Any]:
+        """
+        持仓级P&L因子归因
+        将P&L按因子暴露聚合: pnl_from_factor_k = Σ_i pnl_i * exposure_i_k
+
+        Args:
+            nav_history: 净值历史(含position_pnl)
+            factor_exposures: 因子暴露 {ts_code: {factor_name: exposure_value}}
+
+        Returns:
+            因子P&L归因结果
+        """
+        if not nav_history or factor_exposures is None:
+            return {}
+
+        # 汇总各持仓的总P&L
+        total_pnl_by_stock = {}
+        for record in nav_history:
+            position_pnl = record.get('position_pnl', {})
+            for ts_code, pnl_info in position_pnl.items():
+                if ts_code not in total_pnl_by_stock:
+                    total_pnl_by_stock[ts_code] = 0
+                total_pnl_by_stock[ts_code] += pnl_info.get('pnl', 0)
+
+        # 按因子暴露聚合
+        factor_pnl = {}
+        unattributed_pnl = 0
+
+        for ts_code, stock_pnl in total_pnl_by_stock.items():
+            exposures = factor_exposures.get(ts_code, {})
+            if not exposures:
+                unattributed_pnl += stock_pnl
+                continue
+
+            # 按因子暴露加权分配P&L
+            total_exposure = sum(abs(v) for v in exposures.values())
+            if total_exposure == 0:
+                unattributed_pnl += stock_pnl
+                continue
+
+            for factor_name, exposure in exposures.items():
+                if factor_name not in factor_pnl:
+                    factor_pnl[factor_name] = 0
+                # P&L按暴露占比分配
+                factor_pnl[factor_name] += stock_pnl * (exposure / total_exposure)
+
+        total_pnl = sum(total_pnl_by_stock.values())
+
+        result = {
+            'factor_pnl': {k: round(v, 2) for k, v in factor_pnl.items()},
+            'unattributed_pnl': round(unattributed_pnl, 2),
+            'total_pnl': round(total_pnl, 2),
+            'factor_pnl_pct': {k: round(v / total_pnl, 4) for k, v in factor_pnl.items()} if total_pnl != 0 else {},
+        }
+        logger.info(
+            "P&L attribution computed",
+            extra={
+                "total_pnl": round(total_pnl, 2),
+                "unattributed_pnl": round(unattributed_pnl, 2),
+                "n_factors": len(factor_pnl),
+                "n_stocks": len(total_pnl_by_stock),
+            },
+        )
+        return result
 
     # ==================== 回测指标计算 ====================
 
-    def calc_metrics(self, nav_history: List[Dict],
-                     trade_records: List[Dict],
-                     benchmark_nav: List[Dict] = None) -> Dict:
+    def calc_metrics(self, nav_history: List[Dict[str, Any]],
+                     trade_records: List[Dict[str, Any]],
+                     benchmark_nav: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         """计算回测指标 (PRD 9.8.2节)"""
         if not nav_history:
             return {}
@@ -456,7 +563,7 @@ class ABShareBacktestEngine:
     # ==================== 调仓判断 ====================
 
     def should_rebalance(self, trade_date: date, freq: str,
-                         trading_days: List[date] = None) -> bool:
+                         trading_days: Optional[List[date]] = None) -> bool:
         """判断是否需要调仓 (ADD 12.1节)"""
         if freq == 'daily':
             return True
@@ -486,7 +593,7 @@ class ABShareBacktestEngine:
                                  train_window: int = 504,
                                  test_window: int = 63,
                                  gap: int = 20,
-                                 min_periods: int = 252) -> Dict:
+                                 min_periods: int = 252) -> Dict[str, Any]:
         """
         Walk-Forward滚动窗口验证
         避免过拟合，模拟真实投资中的模型更新过程
@@ -555,7 +662,7 @@ class ABShareBacktestEngine:
 
     def monte_carlo_permutation_test(self, strategy_returns: pd.Series,
                                       n_permutations: int = 1000,
-                                      block_size: int = 5) -> Dict:
+                                      block_size: int = 5) -> Dict[str, Any]:
         """
         蒙特卡洛置换检验
         打乱信号与收益的对应关系，检验策略是否统计显著
@@ -604,7 +711,7 @@ class ABShareBacktestEngine:
     def deflated_sharpe_ratio(self, sharpe: float, n_trials: int,
                                backtest_length_years: float,
                                skewness: float = 0,
-                               kurtosis: float = 3) -> Dict:
+                               kurtosis: float = 3) -> Dict[str, Any]:
         """
         通胀夏普比率 (Deflated Sharpe Ratio, DSR)
         考虑多次测试后最佳Sharpe的统计显著性
@@ -641,7 +748,7 @@ class ABShareBacktestEngine:
             'backtest_years': backtest_length_years,
         }
 
-    def min_backtest_length(self, sharpe: float, confidence: float = 0.95) -> Dict:
+    def min_backtest_length(self, sharpe: float, confidence: float = 0.95) -> Dict[str, Any]:
         """
         最小回测长度 (Bailey & Lopez de Prado)
         回测太短则Sharpe不可信
@@ -666,7 +773,7 @@ class ABShareBacktestEngine:
                                        metric: str = 'sharpe',
                                        n_bootstrap: int = 1000,
                                        confidence: float = 0.95,
-                                       block_size: int = 5) -> Dict:
+                                       block_size: int = 5) -> Dict[str, Any]:
         """
         Bootstrap置信区间
         使用块Bootstrap保留自相关结构
@@ -719,6 +826,297 @@ class ABShareBacktestEngine:
             'n_bootstrap': n_bootstrap,
         }
 
-    def close(self):
+    def close(self) -> None:
         if self.db:
             self.db.close()
+
+    # ==================== Walk-Forward模型重训练回测 ====================
+
+    def walk_forward_backtest(self, model_factory: Callable[[date, date], Any],
+                               train_start: date,
+                               train_end: date,
+                               test_end: date,
+                               retrain_freq: int = 63,
+                               train_window: int = 504,
+                               gap: int = 21,
+                               initial_capital: float = 1000000.0,
+                               universe: Optional[List[str]] = None,
+                               price_data: Optional[Dict[Tuple[str, date], Dict[str, Any]]] = None,
+                               trading_days: Optional[List[date]] = None) -> Dict[str, Any]:
+        """
+        Walk-Forward模型重训练回测
+        每个窗口: 训练模型 → 测试期交易 → 下一窗口重新训练
+        避免过拟合，模拟真实投资中的模型定期更新
+
+        Args:
+            model_factory: 可调用对象, model_factory(train_start, train_end) -> signal_generator
+            train_start: 初始训练期开始
+            train_end: 初始训练期结束
+            test_end: 测试结束日期
+            retrain_freq: 重训练频率(交易日数, 63≈1季度)
+            train_window: 训练窗口长度
+            gap: 训练/测试间隔(防止信息泄漏)
+            initial_capital: 初始资金
+            universe: 股票池
+            price_data: 行情数据
+            trading_days: 交易日列表
+
+        Returns:
+            各窗口回测结果汇总
+        """
+        if trading_days is None:
+            return {'error': 'trading_days required for walk_forward_backtest'}
+
+        # 按时间排序交易日
+        trading_days = sorted(trading_days)
+        results = []
+        all_nav = []
+        all_trades = []
+
+        # 划分窗口
+        current_test_start = train_end
+        window_id = 0
+
+        while current_test_start < test_end:
+            # 计算当前窗口的训练期
+            current_train_end_idx = None
+            for i, td in enumerate(trading_days):
+                if td >= current_test_start:
+                    current_train_end_idx = i - gap
+                    break
+
+            if current_train_end_idx is None or current_train_end_idx < 0:
+                break
+
+            current_train_start_idx = max(0, current_train_end_idx - train_window)
+            current_train_start = trading_days[current_train_start_idx]
+            current_train_end = trading_days[current_train_end_idx]
+
+            # 测试期
+            current_test_end_idx = min(
+                current_train_end_idx + gap + retrain_freq,
+                len(trading_days) - 1
+            )
+            current_test_end = trading_days[current_test_end_idx]
+            actual_test_start = trading_days[current_train_end_idx + gap]
+
+            # 训练模型
+            try:
+                signal_generator = model_factory(current_train_start, current_train_end)
+            except Exception as e:
+                logger.warning(f"Walk-forward window {window_id}: model training failed: {e}")
+                current_test_start = trading_days[min(current_test_end_idx + 1, len(trading_days) - 1)]
+                window_id += 1
+                continue
+
+            # 测试期回测
+            window_trading_days = [td for td in trading_days if actual_test_start <= td <= current_test_end]
+            if len(window_trading_days) < 5:
+                break
+
+            try:
+                window_result = self.run_backtest(
+                    signal_generator=signal_generator,
+                    universe=universe or [],
+                    start_date=actual_test_start,
+                    end_date=current_test_end,
+                    rebalance_freq='weekly',
+                    initial_capital=initial_capital,
+                    trading_days=window_trading_days,
+                    price_data=price_data or {},
+                )
+
+                results.append({
+                    'window_id': window_id,
+                    'train_start': current_train_start,
+                    'train_end': current_train_end,
+                    'test_start': actual_test_start,
+                    'test_end': current_test_end,
+                    'metrics': window_result.get('metrics', {}),
+                    'total_days': window_result.get('total_days', 0),
+                })
+
+                if 'nav_history' in window_result:
+                    all_nav.extend(window_result['nav_history'])
+                if 'trade_records' in window_result:
+                    all_trades.extend(window_result['trade_records'])
+
+            except Exception as e:
+                logger.warning(f"Walk-forward window {window_id}: backtest failed: {e}")
+
+            current_test_start = trading_days[min(current_test_end_idx + 1, len(trading_days) - 1)]
+            window_id += 1
+
+        if not results:
+            return {'error': 'No valid walk-forward windows completed'}
+
+        # 汇总
+        window_sharpes = [r['metrics'].get('sharpe_ratio', 0) for r in results if r.get('metrics')]
+        window_returns = [r['metrics'].get('total_return', 0) for r in results if r.get('metrics')]
+
+        avg_sharpe = round(np.mean(window_sharpes), 2) if window_sharpes else 0
+        avg_return = round(np.mean(window_returns), 4) if window_returns else 0
+
+        logger.info(
+            "Walk-forward backtest completed",
+            extra={
+                "n_windows": len(results),
+                "avg_sharpe": avg_sharpe,
+                "avg_return": avg_return,
+                "std_sharpe": round(np.std(window_sharpes), 2) if window_sharpes else 0,
+                "consistency": round(sum(1 for s in window_sharpes if s > 0) / len(window_sharpes), 4) if window_sharpes else 0,
+            },
+        )
+
+        return {
+            'n_windows': len(results),
+            'window_results': results,
+            'avg_sharpe': avg_sharpe,
+            'std_sharpe': round(np.std(window_sharpes), 2) if window_sharpes else 0,
+            'avg_return': avg_return,
+            'consistency': round(sum(1 for s in window_sharpes if s > 0) / len(window_sharpes), 4) if window_sharpes else 0,
+            'nav_history': all_nav,
+            'trade_records': all_trades,
+        }
+
+    # ==================== 回测主循环 ====================
+
+    def run_backtest(self, signal_generator: Callable[[date, List[str], BacktestState], Dict[str, float]],
+                     universe: List[str],
+                     start_date: date, end_date: date,
+                     rebalance_freq: str = 'monthly',
+                     initial_capital: float = 1000000.0,
+                     trading_days: Optional[List[date]] = None,
+                     price_data: Optional[Dict[Tuple[str, date], Dict[str, Any]]] = None,
+                     max_turnover: float = 1.0,
+                     benchmark_nav: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """
+        回测主循环 (机构级: 完整信号→权重→交易→NAV流程)
+
+        Args:
+            signal_generator: 可调用对象, 签名 (trade_date, universe, state) -> Dict[str, float]
+                             返回 {ts_code: target_weight}
+            universe: 股票池
+            start_date: 开始日期
+            end_date: 结束日期
+            rebalance_freq: 调仓频率 ('daily', 'weekly', 'biweekly', 'monthly')
+            initial_capital: 初始资金
+            trading_days: 交易日列表
+            price_data: 行情数据 {(ts_code, trade_date): {close, open, pct_chg, volume, amount, is_suspended, is_st, ...}}
+            max_turnover: 单次最大换手率 (0-1, 1=无限制)
+            benchmark_nav: 基准净值 [{trade_date, nav}]
+
+        Returns:
+            回测结果 {nav_history, trade_records, metrics, ...}
+        """
+        state = BacktestState(cash=initial_capital, initial_capital=initial_capital)
+        prev_weights = pd.Series(dtype=float)  # 上期权重
+
+        if trading_days is None:
+            # 简化: 生成工作日
+            trading_days = pd.bdate_range(start_date, end_date).date.tolist()
+
+        for trade_date in trading_days:
+            if trade_date < start_date or trade_date > end_date:
+                continue
+
+            # 判断是否调仓日
+            is_rebalance = self.should_rebalance(trade_date, rebalance_freq, trading_days)
+
+            if is_rebalance:
+                # 获取目标权重
+                try:
+                    target_weights = signal_generator(trade_date, universe, state)
+                except Exception as e:
+                    logger.warning(f"Signal generator failed on {trade_date}: {e}")
+                    target_weights = {}
+
+                if target_weights:
+                    target_w = pd.Series(target_weights)
+
+                    # 换手率控制
+                    if not prev_weights.empty and max_turnover < 1.0:
+                        turnover = (target_w.subtract(prev_weights, fill_value=0).abs().sum()) / 2
+                        if turnover > max_turnover:
+                            alpha = max_turnover / turnover
+                            target_w = prev_weights.reindex(target_w.index, fill_value=0) + alpha * (
+                                target_w - prev_weights.reindex(target_w.index, fill_value=0)
+                            )
+                            # 归一化
+                            if target_w.sum() > 0:
+                                target_w = target_w / target_w.sum()
+
+                    # 执行交易: 先卖后买
+                    # 计算当前持仓市值
+                    current_total = state.cash + sum(
+                        pos.market_value for pos in state.positions.values()
+                    )
+
+                    # 卖出: 不在目标组合中的持仓
+                    for ts_code in list(state.positions.keys()):
+                        if ts_code not in target_w or target_w[ts_code] < 1e-6:
+                            pos = state.positions[ts_code]
+                            stock_key = (ts_code, trade_date)
+                            stock_info = price_data.get(stock_key, {}) if price_data else {}
+                            sell_price = stock_info.get('close', pos.cost_price)
+                            self.execute_sell(state, ts_code, pos.shares, sell_price,
+                                            trade_date, stock_info)
+
+                    # 买入: 目标组合中的持仓
+                    for ts_code, weight in target_w.items():
+                        if weight < 1e-6:
+                            continue
+
+                        target_amount = weight * current_total
+                        stock_key = (ts_code, trade_date)
+                        stock_info = price_data.get(stock_key, {}) if price_data else {}
+                        buy_price = stock_info.get('close', 0)
+
+                        if buy_price <= 0:
+                            continue
+
+                        # 计算已有持仓金额
+                        current_amount = 0
+                        if ts_code in state.positions:
+                            current_amount = state.positions[ts_code].shares * buy_price
+
+                        # 只在需要增仓时买入
+                        if target_amount > current_amount * 1.05:  # 5%缓冲避免微小交易
+                            self.execute_buy(state, ts_code, target_amount - current_amount,
+                                           buy_price, trade_date, stock_info)
+
+                    # 更新上期权重
+                    total_value = state.cash + sum(
+                        pos.shares * (price_data.get((ts_code, trade_date), {}).get('close', pos.cost_price) if price_data else pos.cost_price)
+                        for ts_code, pos in state.positions.items()
+                    )
+                    if total_value > 0:
+                        prev_weights = pd.Series({
+                            ts_code: (pos.shares * (price_data.get((ts_code, trade_date), {}).get('close', pos.cost_price) if price_data else pos.cost_price)) / total_value
+                            for ts_code, pos in state.positions.items()
+                        })
+
+            # 每日mark-to-market
+            price_dict = {}
+            if price_data:
+                for ts_code in state.positions:
+                    stock_key = (ts_code, trade_date)
+                    stock_info = price_data.get(stock_key, {})
+                    if 'close' in stock_info:
+                        price_dict[ts_code] = stock_info['close']
+
+            if price_dict or state.positions:
+                self.calc_nav(state, trade_date, price_dict)
+
+        # 计算回测指标
+        metrics = self.calc_metrics(state.nav_history, state.trade_records, benchmark_nav)
+
+        return {
+            'nav_history': state.nav_history,
+            'trade_records': state.trade_records,
+            'metrics': metrics,
+            'initial_capital': initial_capital,
+            'final_value': state.cash + sum(pos.market_value for pos in state.positions.values()),
+            'total_trades': len(state.trade_records),
+            'total_days': len(state.nav_history),
+        }

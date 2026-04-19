@@ -1,107 +1,103 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Box, Typography, Button, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Paper, Chip, IconButton, Dialog, DialogTitle,
-  DialogContent, DialogActions, TextField, MenuItem, Snackbar, Alert,
-} from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import { modelApi, Model, ModelCreate } from '../../api/models';
+import { Box, Grid, Typography, Snackbar, Alert } from '@mui/material';
+import { motion } from 'framer-motion';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import LockIcon from '@mui/icons-material/Lock';
+import { stockPoolApi } from '@/api';
+import type { StockPool } from '@/api';
+import { PageHeader, GlassPanel, NeonChip } from '@/components/ui';
 
-const MODEL_TYPES = ['factor', 'timing', 'portfolio'];
+const FREE_POOLS = new Set(['HS300', 'ZZ500']);
+
+const POOL_COLORS: Record<string, string> = {
+  HS300: '#22d3ee', ZZ500: '#8b5cf6', ZZ1000: '#10b981', ALL_A: '#f59e0b',
+};
+
+const POOL_NEON: Record<string, 'cyan' | 'purple' | 'green' | 'amber'> = {
+  HS300: 'cyan', ZZ500: 'purple', ZZ1000: 'green', ALL_A: 'amber',
+};
 
 export default function ModelList() {
   const navigate = useNavigate();
-  const [models, setModels] = useState<Model[]>([]);
+  const [pools, setPools] = useState<StockPool[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
-  const [form, setForm] = useState<ModelCreate>({ model_name: '', model_type: 'factor', description: '' });
+  const [error, setError] = useState('');
 
-  const loadModels = async () => {
-    try {
-      const res = await modelApi.list({ limit: 200 });
-      setModels(res.data);
-    } catch { setSnackbar({ open: true, message: '加载模型列表失败', severity: 'error' }); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { loadModels(); }, []);
-
-  const handleCreate = async () => {
-    try {
-      await modelApi.create(form);
-      setDialogOpen(false);
-      setForm({ model_name: '', model_type: 'factor', description: '' });
-      setSnackbar({ open: true, message: '模型创建成功', severity: 'success' });
-      loadModels();
-    } catch { setSnackbar({ open: true, message: '创建失败', severity: 'error' }); }
-  };
-
-  const typeLabel: Record<string, string> = { factor: '多因子', timing: '择时', portfolio: '组合' };
-  const typeColor: Record<string, 'primary' | 'secondary' | 'success'> = { factor: 'primary', timing: 'secondary', portfolio: 'success' };
+  useEffect(() => {
+    stockPoolApi.list({ limit: 200 })
+      .then((res) => setPools(res.data.filter((p) => p.is_active)))
+      .catch(() => setError('加载股票池失败'))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>模型管理</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>新建模型</Button>
-      </Box>
+      <PageHeader title="模型管理" />
 
       {loading ? <Typography>加载中...</Typography> : (
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>ID</TableCell>
-                <TableCell>模型名称</TableCell>
-                <TableCell>类型</TableCell>
-                <TableCell>版本</TableCell>
-                <TableCell>状态</TableCell>
-                <TableCell>描述</TableCell>
-                <TableCell>更新时间</TableCell>
-                <TableCell>操作</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {models.map((m) => (
-                <TableRow key={m.id} hover>
-                  <TableCell>{m.id}</TableCell>
-                  <TableCell>{m.model_name}</TableCell>
-                  <TableCell><Chip label={typeLabel[m.model_type] || m.model_type} size="small" color={typeColor[m.model_type]} /></TableCell>
-                  <TableCell>{m.version}</TableCell>
-                  <TableCell><Chip label={m.status === 'active' ? '启用' : m.status} size="small" color={m.status === 'active' ? 'success' : 'default'} /></TableCell>
-                  <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.description || '-'}</TableCell>
-                  <TableCell>{m.updated_at?.slice(0, 10)}</TableCell>
-                  <TableCell>
-                    <IconButton size="small" onClick={() => navigate(`/models/${m.id}`)}><VisibilityIcon fontSize="small" /></IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {models.length === 0 && <TableRow><TableCell colSpan={8} align="center">暂无模型数据</TableCell></TableRow>}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <Grid container spacing={2.5}>
+          {pools.map((pool, i) => {
+            const color = POOL_COLORS[pool.pool_code] || '#94a3b8';
+            const neon = POOL_NEON[pool.pool_code];
+            const isPaid = !FREE_POOLS.has(pool.pool_code);
+            return (
+              <Grid size={{ xs: 12, sm: 6 }} key={pool.pool_code}>
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: i * 0.08 }}
+                >
+                  <GlassPanel
+                    glow
+                    glowColor={color}
+                    animate={false}
+                    onClick={() => navigate(`/models/${pool.pool_code}`)}
+                    sx={{
+                      cursor: 'pointer',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      transition: 'all 0.3s ease',
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: `0 0 24px ${color}15`,
+                      },
+                    }}
+                  >
+                    <Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                        <Typography sx={{ fontWeight: 700, color: '#e2e8f0', fontSize: '1.1rem' }}>
+                          {pool.pool_name}
+                        </Typography>
+                        {neon && <NeonChip label="启用" size="small" neonColor={neon} />}
+                        {isPaid && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1, py: 0.25, borderRadius: 1, background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+                            <LockIcon sx={{ fontSize: 14, color: '#f59e0b' }} />
+                            <Typography sx={{ fontSize: '0.7rem', fontWeight: 600, color: '#f59e0b' }}>付费</Typography>
+                          </Box>
+                        )}
+                      </Box>
+                      <Typography variant="body2" sx={{ color: '#64748b' }}>
+                        {pool.description || `${pool.pool_name}增强策略`}
+                      </Typography>
+                    </Box>
+                    <ArrowForwardIcon sx={{ color: `${color}66`, transition: 'color 0.2s' }} />
+                  </GlassPanel>
+                </motion.div>
+              </Grid>
+            );
+          })}
+          {pools.length === 0 && (
+            <Grid size={12}>
+              <Typography sx={{ textAlign: 'center', color: '#64748b', py: 4 }}>暂无股票池数据</Typography>
+            </Grid>
+          )}
+        </Grid>
       )}
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>新建模型</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-          <TextField label="模型名称" value={form.model_name} onChange={(e) => setForm({ ...form, model_name: e.target.value })} fullWidth required />
-          <TextField label="模型类型" select value={form.model_type} onChange={(e) => setForm({ ...form, model_type: e.target.value })} fullWidth>
-            {MODEL_TYPES.map((t) => <MenuItem key={t} value={t}>{typeLabel[t]}</MenuItem>)}
-          </TextField>
-          <TextField label="描述" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} fullWidth multiline rows={2} />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>取消</Button>
-          <Button variant="contained" onClick={handleCreate}>创建</Button>
-        </DialogActions>
-      </Dialog>
-
-      <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
-        <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>{snackbar.message}</Alert>
+      <Snackbar open={!!error} autoHideDuration={3000} onClose={() => setError('')} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert severity="error" onClose={() => setError('')}>{error}</Alert>
       </Snackbar>
     </Box>
   );

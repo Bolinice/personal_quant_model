@@ -1,7 +1,7 @@
 # A股多因子增强策略平台 - 部署指南
 
-**文档版本**：V1.0
-**最后更新**：2026-04-18
+**文档版本**：V1.1
+**最后更新**：2026-04-19
 
 ---
 
@@ -234,8 +234,9 @@ docker-compose up -d --force-recreate  # 重新创建服务
 ## 6. 性能优化
 
 ### 数据库
-- 配置连接池（SQLAlchemy pool_size=20, max_overflow=10）
-- 为高频查询添加索引（参见 TDD 第 10 节）
+- 配置连接池（SQLAlchemy pool_size=20, max_overflow=40）
+- 为高频查询添加复合索引（参见 TDD 第 10 节）
+- **索引迁移**：已有数据库执行 `python scripts/add_indexes.py` 添加复合索引
 - 大表按 trade_date 分区
 
 ### Redis
@@ -244,7 +245,7 @@ docker-compose up -d --force-recreate  # 重新创建服务
 - 使用 Pipeline 批量操作
 
 ### Celery
-- 配置 worker 并发数（建议 CPU 核数 × 2）
+- 配置 worker 并发数：`worker_concurrency=8`（建议 CPU 核数 × 2）
 - 设置任务超时（回测 30min，因子计算 10min）
 - 实现任务重试机制
 
@@ -252,3 +253,42 @@ docker-compose up -d --force-recreate  # 重新创建服务
 - 启用 Gzip 压缩
 - 配置 API 限流
 - 热点查询使用 Redis 缓存
+
+### V1.1 性能优化（新增）
+
+#### 数据库复合索引
+```bash
+# 为已有数据库添加复合索引（支持 SQLite 和 PostgreSQL）
+python scripts/add_indexes.py
+```
+
+新增索引：
+- `stock_daily(ts_code, trade_date)` — 最关键，覆盖90%+查询
+- `stock_financial(ts_code, end_date)` — 按股票+报告期查询
+- `stock_financial(ann_date)` — 避免未来函数的关键查询
+- `index_daily(index_code, trade_date)` — 指数+日期查询
+- `index_components(index_code, trade_date)` — 成分股+日期查询
+- `index_components(index_code, ts_code)` — 成分股+股票查询
+
+#### 连接池配置
+```python
+# app/db/base.py
+pool_size=20,      # 原10，提升并发处理能力
+max_overflow=40,   # 原20，允许更多突发连接
+```
+
+#### Celery Worker 配置
+```python
+# app/core/celery_config.py
+worker_concurrency=8,  # 原4，充分利用多核
+```
+
+#### 缓存配置
+- `CacheService`: 通用缓存，容量2000，TTL 300s，LRU驱逐
+- `factor_cache`: 因子专用缓存，容量5000，TTL 600s
+- 回测预计算缓存：进程生命周期内有效
+
+#### 并行化配置
+- 数据同步：`ThreadPoolExecutor(max_workers=4)` IO密集并行
+- IC计算：`ProcessPoolExecutor` CPU密集并行
+- 批量写入：`bulk_save_objects` 替代逐行 `db.add()`

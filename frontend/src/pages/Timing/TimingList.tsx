@@ -1,20 +1,27 @@
 import { useState, useEffect } from 'react';
 import {
-  Box, Typography, Paper, Button, TextField, Table, TableBody,
-  TableCell, TableContainer, TableHead, TableRow, Chip, Snackbar, Alert, MenuItem,
+  Box, Typography, Button, TextField, Table, TableBody, TableCell,
+  TableContainer, TableHead, TableRow, MenuItem, Snackbar, Alert,
 } from '@mui/material';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { timingApi, TimingSignal, TimingConfig } from '../../api/timing';
-import { modelApi, Model } from '../../api/models';
+import { timingApi } from '@/api';
+import type { TimingSignal, TimingConfig } from '@/api';
+import { modelApi } from '@/api';
+import type { Model } from '@/api';
+import { PageHeader, GlassPanel, GlassTable, NeonChip } from '@/components/ui';
 
 export default function TimingList() {
   const [models, setModels] = useState<Model[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
   const [signals, setSignals] = useState<TimingSignal[]>([]);
   const [config, setConfig] = useState<TimingConfig | null>(null);
-  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [dateRange, setDateRange] = useState(() => {
+    const end = new Date().toISOString().slice(0, 10);
+    const start = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+    return { start, end };
+  });
   const [tradeDate, setTradeDate] = useState(new Date().toISOString().slice(0, 10));
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
   const [configForm, setConfigForm] = useState({ config_type: 'ma_timing', config_value: '{}' });
@@ -73,14 +80,14 @@ export default function TimingList() {
     signal: s.signal_type === 'long' ? 1 : s.signal_type === 'short' ? -1 : 0,
   }));
 
-  const signalColor: Record<string, 'success' | 'error' | 'default'> = { long: 'success', short: 'error', neutral: 'default' };
+  const signalNeonColor: Record<string, 'green' | 'red' | 'default'> = { long: 'green', short: 'red', neutral: 'default' };
   const signalLabel: Record<string, string> = { long: '做多', short: '做空', neutral: '中性' };
 
   return (
     <Box>
-      <Typography variant="h5" sx={{ fontWeight: 600, mb: 3 }}>择时管理</Typography>
+      <PageHeader title="择时管理" />
 
-      <Paper sx={{ p: 2, mb: 3 }}>
+      <GlassPanel sx={{ mb: 3 }}>
         <Typography variant="h6" gutterBottom>选择模型</Typography>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
           <TextField label="模型" select size="small" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} sx={{ minWidth: 200 }}>
@@ -90,11 +97,11 @@ export default function TimingList() {
           <TextField label="结束日期" type="date" size="small" value={dateRange.end} onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })} />
           <Button variant="outlined" onClick={loadSignals}>查询信号</Button>
         </Box>
-      </Paper>
+      </GlassPanel>
 
       {selectedModel && (
         <>
-          <Paper sx={{ p: 2, mb: 3 }}>
+          <GlassPanel sx={{ mb: 3 }}>
             <Typography variant="h6" gutterBottom>信号计算</Typography>
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
               <TextField label="交易日期" type="date" size="small" value={tradeDate} onChange={(e) => setTradeDate(e.target.value)} />
@@ -102,27 +109,27 @@ export default function TimingList() {
               <Button variant="outlined" onClick={() => handleCalculateSignal('breadth')}>宽度信号</Button>
               <Button variant="outlined" onClick={() => handleCalculateSignal('volatility')}>波动率信号</Button>
             </Box>
-          </Paper>
+          </GlassPanel>
 
-          <Paper sx={{ p: 2, mb: 3 }}>
+          <GlassPanel sx={{ mb: 3 }}>
             <Typography variant="h6" gutterBottom>仓位信号图</Typography>
             <Box sx={{ height: 350 }}>
               {signalChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={signalChartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" fontSize={12} />
-                    <YAxis fontSize={12} domain={[0, 1]} />
-                    <Tooltip />
-                    <ReferenceLine y={0.5} stroke="#666" strokeDasharray="3 3" />
-                    <Line type="stepAfter" dataKey="exposure" stroke="#4fc3f7" strokeWidth={2} dot={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" />
+                    <XAxis dataKey="date" fontSize={12} tick={{ fill: '#64748b' }} />
+                    <YAxis fontSize={12} domain={[0, 1]} tick={{ fill: '#64748b' }} />
+                    <Tooltip contentStyle={{ backgroundColor: 'rgba(15,23,42,0.9)', border: '1px solid rgba(148,163,184,0.15)', borderRadius: 8 }} />
+                    <ReferenceLine y={0.5} stroke="rgba(148,163,184,0.3)" strokeDasharray="3 3" />
+                    <Line type="stepAfter" dataKey="exposure" stroke="#22d3ee" strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               ) : <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>暂无信号数据</Typography>}
             </Box>
-          </Paper>
+          </GlassPanel>
 
-          <Paper sx={{ p: 2, mb: 3 }}>
+          <GlassPanel sx={{ mb: 3 }}>
             <Typography variant="h6" gutterBottom>信号列表</Typography>
             <TableContainer>
               <Table size="small">
@@ -137,7 +144,7 @@ export default function TimingList() {
                   {signals.map((s) => (
                     <TableRow key={s.id}>
                       <TableCell>{s.trade_date?.slice(0, 10)}</TableCell>
-                      <TableCell><Chip label={signalLabel[s.signal_type] || s.signal_type} size="small" color={signalColor[s.signal_type]} /></TableCell>
+                      <TableCell><NeonChip label={signalLabel[s.signal_type] || s.signal_type} size="small" neonColor={signalNeonColor[s.signal_type]} /></TableCell>
                       <TableCell>{(s.exposure * 100).toFixed(1)}%</TableCell>
                     </TableRow>
                   ))}
@@ -145,9 +152,9 @@ export default function TimingList() {
                 </TableBody>
               </Table>
             </TableContainer>
-          </Paper>
+          </GlassPanel>
 
-          <Paper sx={{ p: 2 }}>
+          <GlassPanel>
             <Typography variant="h6" gutterBottom>择时参数配置</Typography>
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
               <TextField label="配置类型" select size="small" value={configForm.config_type} onChange={(e) => setConfigForm({ ...configForm, config_type: e.target.value })} sx={{ minWidth: 200 }}>
@@ -158,7 +165,7 @@ export default function TimingList() {
               <Button variant="contained" startIcon={<SettingsIcon />} onClick={handleSaveConfig}>保存配置</Button>
             </Box>
             <TextField label="配置值 (JSON)" fullWidth multiline rows={4} value={configForm.config_value} onChange={(e) => setConfigForm({ ...configForm, config_value: e.target.value })} sx={{ fontFamily: 'monospace' }} />
-          </Paper>
+          </GlassPanel>
         </>
       )}
 

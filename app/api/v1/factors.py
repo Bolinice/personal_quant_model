@@ -15,7 +15,7 @@ def read_factors(skip: int = 0, limit: int = 100, category: str = None, status: 
 
 @router.get("/{factor_id}", response_model=FactorOut)
 def read_factor(factor_id: int, db: Session = Depends(get_db)):
-    factor = get_factor_by_code(str(factor_id), db=db)
+    factor = db.query(Factor).filter(Factor.id == factor_id).first()
     if factor is None:
         raise HTTPException(status_code=404, detail="Factor not found")
     return factor

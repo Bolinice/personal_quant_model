@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Box, Typography, Button, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Paper, Chip, IconButton, Snackbar, Alert,
+  Box, Typography, Button, Table, TableBody, TableCell,
+  TableHead, TableRow, IconButton, Snackbar, Alert,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import { backtestApi, Backtest } from '../../api/backtests';
+import { backtestApi } from '@/api';
+import type { Backtest } from '@/api';
+import { PageHeader, GlassTable, NeonChip } from '@/components/ui';
 
-const statusColor: Record<string, 'default' | 'primary' | 'success' | 'error' | 'warning'> = {
-  pending: 'default', running: 'primary', completed: 'success', failed: 'error', cancelled: 'warning',
+const statusNeonColor: Record<string, 'default' | 'cyan' | 'green' | 'red' | 'amber'> = {
+  pending: 'default', running: 'cyan', completed: 'green', failed: 'red', cancelled: 'amber',
 };
 const statusLabel: Record<string, string> = {
   pending: '待运行', running: '运行中', completed: '已完成', failed: '失败', cancelled: '已取消',
@@ -42,13 +44,13 @@ export default function BacktestList() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>回测管理</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/backtests/create')}>新建回测</Button>
-      </Box>
+      <PageHeader
+        title="回测管理"
+        actions={<Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/backtests/create')}>新建回测</Button>}
+      />
 
       {loading ? <Typography>加载中...</Typography> : (
-        <TableContainer component={Paper}>
+        <GlassTable>
           <Table>
             <TableHead>
               <TableRow>
@@ -70,7 +72,7 @@ export default function BacktestList() {
                   <TableCell>{b.start_date?.slice(0, 10)}</TableCell>
                   <TableCell>{b.end_date?.slice(0, 10)}</TableCell>
                   <TableCell>{b.initial_capital?.toLocaleString()}</TableCell>
-                  <TableCell><Chip label={statusLabel[b.status] || b.status} size="small" color={statusColor[b.status]} /></TableCell>
+                  <TableCell><NeonChip label={statusLabel[b.status] || b.status} size="small" neonColor={statusNeonColor[b.status]} /></TableCell>
                   <TableCell>{b.created_at?.slice(0, 10)}</TableCell>
                   <TableCell>
                     {b.status === 'pending' && (
@@ -83,7 +85,7 @@ export default function BacktestList() {
               {backtests.length === 0 && <TableRow><TableCell colSpan={8} align="center">暂无回测数据</TableCell></TableRow>}
             </TableBody>
           </Table>
-        </TableContainer>
+        </GlassTable>
       )}
 
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar({ ...snackbar, open: false })}>

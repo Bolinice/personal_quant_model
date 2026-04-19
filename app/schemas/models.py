@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 
@@ -82,9 +82,13 @@ class ModelFactorWeight(ModelFactorWeightOut):
 
 class ModelScoreBase(BaseModel):
     model_id: int
-    security_id: int
-    total_score: float
-    trade_date: datetime
+    security_id: str
+    score: Optional[float] = None
+    rank: Optional[int] = None
+    quantile: Optional[float] = None
+    is_selected: Optional[bool] = False
+    factor_contributions: Optional[dict] = None
+    trade_date: date
 
 class ModelScoreCreate(ModelScoreBase):
     pass
@@ -103,3 +107,21 @@ class ModelScoreOut(ModelScoreBase):
 
 class ModelScore(ModelScoreOut):
     pass
+
+class ModelPerformanceBase(BaseModel):
+    model_id: int
+    trade_date: date
+    daily_return: Optional[float] = None
+    cumulative_return: Optional[float] = None
+    max_drawdown: Optional[float] = None
+    sharpe_ratio: Optional[float] = None
+    ic: Optional[float] = None
+    rank_ic: Optional[float] = None
+    turnover: Optional[float] = None
+    num_selected: Optional[int] = None
+
+class ModelPerformanceOut(ModelPerformanceBase):
+    id: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

@@ -3,7 +3,7 @@
 实现ADD 9节: 均线择时、市场宽度择时、波动率择时、回撤控制择时、多信号融合
 机构级增强: HMM市场状态识别、DMA动态模型平均、北向资金择时、政策日历择时、贝叶斯共轭更新
 """
-from typing import List, Optional, Dict, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import date, datetime, timedelta
 from enum import Enum
 import numpy as np
@@ -33,7 +33,7 @@ class MarketRegime(str, Enum):
 class TimingEngine:
     """择时引擎 - 符合ADD 9节"""
 
-    def __init__(self, db: Session = None):
+    def __init__(self, db: Optional[Session] = None) -> None:
         self.db = db
 
     # ==================== 1. 均线择时 (ADD 9.1节) ====================
@@ -64,6 +64,16 @@ class TimingEngine:
         below = short_ma < long_ma
         signal[above & ~golden_cross] = TimingSignalType.LONG
         signal[below & ~death_cross] = TimingSignalType.SHORT
+
+        logger.info(
+            "MA cross signal computed",
+            extra={
+                "short_window": short_window,
+                "long_window": long_window,
+                "n_golden_cross": int(golden_cross.sum()),
+                "n_death_cross": int(death_cross.sum()),
+            },
+        )
 
         return signal
 
@@ -98,6 +108,15 @@ class TimingEngine:
         signal = pd.Series(TimingSignalType.NEUTRAL, index=breadth.index)
         signal[breadth_ma > 0.6] = TimingSignalType.LONG
         signal[breadth_ma < 0.4] = TimingSignalType.SHORT
+
+        logger.info(
+            "Breadth signal computed",
+            extra={
+                "window": window,
+                "n_long": int((signal == TimingSignalType.LONG).sum()),
+                "n_short": int((signal == TimingSignalType.SHORT).sum()),
+            },
+        )
 
         return signal
 
@@ -180,7 +199,7 @@ class TimingEngine:
 
     def fuse_signals(self, signals: Dict[str, pd.Series],
                      method: FusionMethod = FusionMethod.EQUAL,
-                     weights: Dict[str, float] = None) -> pd.Series:
+                     weights: Optional[Dict[str, float]] = None) -> pd.Series:
         """
         多信号融合 (ADD 9.5节)
 
@@ -190,6 +209,7 @@ class TimingEngine:
             weights: 信号权重
         """
         if not signals:
+            logger.warning("fuse_signals called with empty signals dict")
             return pd.Series()
 
         # 将信号转换为数值: long=1, neutral=0, short=-1
@@ -216,8 +236,8 @@ class TimingEngine:
             else:
                 combined = signal_df.mean(axis=1)
         elif method == FusionMethod.BAYESIAN:
-            # 贝叶斯融合 (ADD 9.5.3节) - 简化实现
-            combined = signal_df.mean(axis=1)
+            # 贝叶斯融合: 顺序Beta共轭更新+指数遗忘
+            combined = self._bayesian_fuse(signal_df, returns=None)
         else:
             combined = signal_df.mean(axis=1)
 
@@ -226,7 +246,95 @@ class TimingEngine:
         result[combined > 0.2] = TimingSignalType.LONG
         result[combined < -0.2] = TimingSignalType.SHORT
 
+        n_long = int((result == TimingSignalType.LONG).sum())
+        n_short = int((result == TimingSignalType.SHORT).sum())
+        n_neutral = int((result == TimingSignalType.NEUTRAL).sum())
+        logger.info(
+            "Timing signals fused",
+            extra={
+                "method": method.value,
+                "n_signals": len(signals),
+                "signal_names": list(signals.keys()),
+                "n_long": n_long,
+                "n_short": n_short,
+                "n_neutral": n_neutral,
+            },
+        )
+
         return result
+
+    def _bayesian_fuse(self, signal_df: pd.DataFrame,
+                        returns: Optional[pd.Series] = None,
+                        prior_alpha: float = 5.0,
+                        prior_beta: float = 5.0,
+                        decay: float = 0.98) -> pd.Series:
+        """
+        顺序Beta共轭更新+指数遗忘
+        每个信号维护(alpha_k, beta_k)参数:
+          - 命中: alpha_k = alpha_k * decay + 1, beta_k = beta_k * decay
+          - 未命中: alpha_k = alpha_k * decay, beta_k = beta_k * decay + 1
+        后验均值 E[p] = alpha / (alpha + beta) 作为信号权重
+
+        Args:
+            signal_df: 数值化信号DataFrame
+            returns: 市场收益率(用于判断命中)
+            prior_alpha: Beta先验alpha
+            prior_beta: Beta先验beta
+            decay: 指数遗忘因子(0-1, 越小遗忘越快)
+        """
+        n_signals = signal_df.shape[1]
+        n_periods = len(signal_df)
+        signal_names = signal_df.columns.tolist()
+
+        # 初始化Beta参数
+        alphas = np.full(n_signals, prior_alpha)
+        betas = np.full(n_signals, prior_beta)
+
+        combined = pd.Series(0.0, index=signal_df.index)
+
+        for t in range(n_periods):
+            # 当前权重 = 后验均值
+            weights = alphas / (alphas + betas)
+            weight_sum = weights.sum()
+            if weight_sum > 0:
+                weights = weights / weight_sum
+
+            # 加权组合
+            combined.iloc[t] = np.dot(weights, signal_df.iloc[t].values)
+
+            # 更新Beta参数(如果有收益率数据)
+            if returns is not None and t > 0 and not np.isnan(returns.iloc[t]):
+                actual_dir = 1 if returns.iloc[t] > 0 else -1
+                for i in range(n_signals):
+                    signal_dir = signal_df.iloc[t - 1, i]
+                    if signal_dir == 0:
+                        continue
+
+                    # 指数遗忘
+                    alphas[i] *= decay
+                    betas[i] *= decay
+
+                    # 判断命中
+                    hit = (np.sign(signal_dir) == actual_dir)
+                    if hit:
+                        alphas[i] += 1
+                    else:
+                        betas[i] += 1
+
+        final_weights = alphas / (alphas + betas)
+        logger.info(
+            "Bayesian fuse completed",
+            extra={
+                "n_signals": n_signals,
+                "n_periods": n_periods,
+                "signal_names": signal_names,
+                "final_weights": {name: round(float(w), 4) for name, w in zip(signal_names, final_weights)},
+                "has_returns": returns is not None,
+                "decay": decay,
+            },
+        )
+
+        return combined
 
     def calc_target_exposure(self, signal: pd.Series,
                              base_exposure: float = 1.0,
@@ -310,6 +418,10 @@ class TimingEngine:
         X_valid = X[valid_mask]
 
         if len(X_valid) < 100:
+            logger.warning(
+                "HMM regime detection: insufficient valid data",
+                extra={"n_valid": len(X_valid), "min_required": 100},
+            )
             return pd.Series(MarketRegime.SIDEWAYS, index=features.index)
 
         # 训练HMM
@@ -319,6 +431,10 @@ class TimingEngine:
             model.fit(X_valid)
             states = model.predict(X_valid)
         except ValueError:
+            logger.warning(
+                "HMM regime detection: model fitting failed, returning sideways",
+                extra={"n_regimes": n_regimes, "n_samples": len(X_valid)},
+            )
             return pd.Series(MarketRegime.SIDEWAYS, index=features.index)
 
         # 将状态映射到市场状态
@@ -366,7 +482,7 @@ class TimingEngine:
         return signal
 
     def policy_calendar_signal(self, trade_dates: pd.Series,
-                                policy_events: List[Dict] = None) -> pd.Series:
+                                policy_events: Optional[List[Dict[str, Any]]] = None) -> pd.Series:
         """
         政策日历择时
         A股政策事件(两会、政治局会议等)对市场有可预测影响
@@ -405,7 +521,7 @@ class TimingEngine:
 
         return signal
 
-    def _default_policy_calendar(self) -> List[Dict]:
+    def _default_policy_calendar(self) -> List[Dict[str, Any]]:
         """A股默认政策日历(年度重要事件)"""
         current_year = datetime.now().year
         return [
@@ -418,7 +534,7 @@ class TimingEngine:
         ]
 
     def seasonal_signal(self, close: pd.Series,
-                         dates: pd.Series = None) -> pd.Series:
+                         dates: Optional[pd.Series] = None) -> pd.Series:
         """
         A股季节性择时
         春季躁动、Sell in May、年末效应等
@@ -451,7 +567,7 @@ class TimingEngine:
         return signal
 
     def fuse_signals_dma(self, signals: Dict[str, pd.Series],
-                          returns: pd.Series = None,
+                          returns: Optional[pd.Series] = None,
                           forgetting_factor: float = 0.95,
                           min_evidence: int = 30) -> pd.Series:
         """
@@ -512,10 +628,20 @@ class TimingEngine:
         result[combined > 0.2] = TimingSignalType.LONG
         result[combined < -0.2] = TimingSignalType.SHORT
 
+        logger.info(
+            "DMA signal fusion completed",
+            extra={
+                "n_signals": len(signals),
+                "signal_names": list(signals.keys()),
+                "has_returns": returns is not None,
+                "forgetting_factor": forgetting_factor,
+            },
+        )
+
         return result
 
     def fuse_signals_bayesian(self, signals: Dict[str, pd.Series],
-                               returns: pd.Series = None,
+                               returns: Optional[pd.Series] = None,
                                prior_alpha: float = 10.0,
                                prior_beta: float = 10.0,
                                lookback: int = 60) -> pd.Series:
@@ -581,13 +707,145 @@ class TimingEngine:
         result[combined > 0.2] = TimingSignalType.LONG
         result[combined < -0.2] = TimingSignalType.SHORT
 
+        logger.info(
+            "Bayesian signal fusion completed",
+            extra={
+                "n_signals": len(signals),
+                "signal_names": list(signals.keys()),
+                "bayesian_weights": {k: round(v, 4) for k, v in bayesian_weights.items()},
+                "prior_alpha": prior_alpha,
+                "prior_beta": prior_beta,
+            },
+        )
+
         return result
 
-    # ==================== 7. 择时信号回测验证 ====================
+    # ==================== 7. 择时信号评估框架 ====================
+
+    def evaluate_timing_signal(self, signal: pd.Series,
+                                returns: pd.Series,
+                                regime_series: Optional[pd.Series] = None) -> Dict[str, Any]:
+        """
+        择时信号评估框架
+        全面评估择时信号的质量: 命中率、盈亏因子、信噪比、状态条件命中率
+
+        Args:
+            signal: 择时信号序列 (TimingSignalType)
+            returns: 实际收益率序列
+            regime_series: 市场状态序列 (可选, 用于分状态评估)
+
+        Returns:
+            评估指标字典
+        """
+        common = signal.index.intersection(returns.index)
+        if len(common) < 10:
+            logger.warning(
+                "Timing signal evaluation: insufficient overlapping data",
+                extra={"n_common": len(common), "min_required": 10},
+            )
+            return {}
+
+        sig = signal.loc[common]
+        ret = returns.loc[common]
+
+        # 数值化信号
+        sig_numeric = sig.map({
+            TimingSignalType.LONG: 1,
+            TimingSignalType.NEUTRAL: 0,
+            TimingSignalType.SHORT: -1,
+        }).fillna(0)
+
+        # 1. 命中率: 信号方向与实际方向一致的比例
+        actual_dir = np.sign(ret)
+        active_mask = sig_numeric != 0
+        if active_mask.sum() > 0:
+            hits = (np.sign(sig_numeric[active_mask]) == actual_dir[active_mask]).sum()
+            hit_rate = hits / active_mask.sum()
+        else:
+            hit_rate = 0
+
+        # 2. 盈亏因子 (Profit/Loss Factor)
+        # 信号为多时的收益 vs 信号为空时的亏损
+        long_mask = sig_numeric > 0
+        short_mask = sig_numeric < 0
+
+        long_profits = ret[long_mask & (ret > 0)].sum()
+        long_losses = abs(ret[long_mask & (ret < 0)].sum())
+        short_profits = abs(ret[short_mask & (ret < 0)].sum())  # 空头正确时市场下跌
+        short_losses = ret[short_mask & (ret > 0)].sum()  # 空头错误时市场上涨
+
+        total_profit = long_profits + short_profits
+        total_loss = long_losses + short_losses
+        pl_factor = total_profit / total_loss if total_loss > 0 else float('inf')
+
+        # 3. 信噪比 (Signal-to-Noise Ratio)
+        # 信号贡献的收益 / 总波动
+        signal_returns = sig_numeric * ret
+        snr = signal_returns.mean() / signal_returns.std() if signal_returns.std() > 0 else 0
+
+        # 4. 多/空分别的命中率
+        long_hit_rate = 0
+        if long_mask.sum() > 0:
+            long_hit_rate = (ret[long_mask] > 0).sum() / long_mask.sum()
+
+        short_hit_rate = 0
+        if short_mask.sum() > 0:
+            short_hit_rate = (ret[short_mask] < 0).sum() / short_mask.sum()
+
+        result = {
+            'hit_rate': round(hit_rate, 4),
+            'profit_loss_factor': round(pl_factor, 4),
+            'signal_to_noise_ratio': round(snr, 4),
+            'long_hit_rate': round(long_hit_rate, 4),
+            'short_hit_rate': round(short_hit_rate, 4),
+            'n_long': int(long_mask.sum()),
+            'n_short': int(short_mask.sum()),
+            'n_neutral': int((sig_numeric == 0).sum()),
+            'total_profit': round(total_profit, 6),
+            'total_loss': round(total_loss, 6),
+        }
+
+        # 5. 状态条件命中率
+        if regime_series is not None:
+            regime_common = common.intersection(regime_series.index)
+            if len(regime_common) > 0:
+                regime_result = {}
+                for regime in regime_series.loc[regime_common].unique():
+                    regime_mask = (regime_series.loc[regime_common] == regime)
+                    regime_sig = sig_numeric.loc[regime_common][regime_mask]
+                    regime_ret = ret.loc[regime_common][regime_mask]
+                    regime_active = regime_sig != 0
+                    if regime_active.sum() > 0:
+                        regime_hits = (np.sign(regime_sig[regime_active]) == np.sign(regime_ret[regime_active])).sum()
+                        regime_hit_rate = regime_hits / regime_active.sum()
+                    else:
+                        regime_hit_rate = 0
+                    regime_result[regime] = {
+                        'hit_rate': round(regime_hit_rate, 4),
+                        'n_observations': int(regime_mask.sum()),
+                    }
+                result['regime_conditional'] = regime_result
+
+        logger.info(
+            "Timing signal evaluated",
+            extra={
+                "hit_rate": round(hit_rate, 4),
+                "n_observations": len(common),
+                "profit_loss_factor": round(pl_factor, 4),
+                "signal_to_noise_ratio": round(snr, 4),
+                "long_hit_rate": round(long_hit_rate, 4),
+                "short_hit_rate": round(short_hit_rate, 4),
+                "has_regime": regime_series is not None,
+            },
+        )
+
+        return result
+
+    # ==================== 8. 择时信号回测验证 ====================
 
     def backtest_timing_signal(self, close: pd.Series,
                                signal: pd.Series,
-                               initial_capital: float = 1000000.0) -> Dict:
+                               initial_capital: float = 1000000.0) -> Dict[str, Any]:
         """
         择时信号回测验证 (ADD 9.6节)
         """
@@ -606,17 +864,29 @@ class TimingEngine:
         total_return = nav.iloc[-1] - 1
         max_dd = ((nav - nav.cummax()) / nav.cummax()).min()
 
-        return {
+        result = {
             'total_return': round(total_return, 4),
             'max_drawdown': round(max_dd, 4),
             'buy_hold_return': round(buy_hold_nav.iloc[-1] - 1, 4),
             'signal_distribution': {
-                'long': (signal == TimingSignalType.LONG).sum(),
-                'short': (signal == TimingSignalType.SHORT).sum(),
-                'neutral': (signal == TimingSignalType.NEUTRAL).sum(),
+                'long': int((signal == TimingSignalType.LONG).sum()),
+                'short': int((signal == TimingSignalType.SHORT).sum()),
+                'neutral': int((signal == TimingSignalType.NEUTRAL).sum()),
             },
         }
 
-    def close(self):
+        logger.info(
+            "Timing signal backtested",
+            extra={
+                "total_return": round(total_return, 4),
+                "max_drawdown": round(max_dd, 4),
+                "buy_hold_return": round(buy_hold_nav.iloc[-1] - 1, 4),
+                "initial_capital": initial_capital,
+            },
+        )
+
+        return result
+
+    def close(self) -> None:
         if self.db:
             self.db.close()

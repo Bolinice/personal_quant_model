@@ -71,7 +71,8 @@ class FactorAnalyzer:
                        date_col: str = 'trade_date', security_col: str = 'ts_code',
                        factor_col: str = 'value', return_col: str = 'pct_chg') -> pd.Series:
         """
-        计算IC时间序列
+        计算IC时间序列 (向量化: merge+groupby，避免逐日期filter)
+        IC = corr(因子值_t, 收益率_{t+1})
 
         Args:
             factor_df: 因子数据框，包含日期、股票代码、因子值
@@ -85,22 +86,47 @@ class FactorAnalyzer:
             IC时间序列
         """
         dates = sorted(factor_df[date_col].unique())
+        if len(dates) < 2:
+            return pd.Series()
+
+        # 构建日期映射: factor_date -> next_date (前瞻收益)
+        date_to_next = {dates[i]: dates[i + 1] for i in range(len(dates) - 1)}
+
+        # 给return_df标记对应的factor_date
+        return_df_shifted = return_df.copy()
+        # 反向映射: next_date -> factor_date
+        next_to_date = {v: k for k, v in date_to_next.items()}
+        return_df_shifted['_factor_date'] = return_df_shifted[date_col].map(next_to_date)
+        return_df_shifted = return_df_shifted.dropna(subset=['_factor_date'])
+
+        if return_df_shifted.empty:
+            return pd.Series()
+
+        # 向量化: merge factor at date with return at date+1
+        merged = pd.merge(
+            factor_df[[date_col, security_col, factor_col]],
+            return_df_shifted[['_factor_date', security_col, return_col]],
+            left_on=[date_col, security_col],
+            right_on=['_factor_date', security_col],
+            how='inner',
+        ).drop(columns=['_factor_date'])
+
+        if merged.empty:
+            return pd.Series()
+
+        # 按日期分组计算IC
         ic_series = {}
-
-        for i, date in enumerate(dates[:-1]):
-            next_date = dates[i + 1]
-
-            factor_today = factor_df[factor_df[date_col] == date].set_index(security_col)[factor_col]
-            return_next = return_df[return_df[date_col] == next_date].set_index(security_col)[return_col]
-
-            ic = self.calc_ic(factor_today, return_next)
-            ic_series[date] = ic
+        for dt, group in merged.groupby(date_col):
+            if len(group) < 10:
+                continue
+            ic = group[factor_col].corr(group[return_col], method='pearson')
+            ic_series[dt] = ic
 
         return pd.Series(ic_series)
 
     def calc_ic_statistics(self, ic_series: pd.Series) -> Dict:
         """
-        计算IC统计指标
+        计算IC统计指标 (机构级: Newey-West调整t统计量)
 
         Args:
             ic_series: IC时间序列
@@ -110,13 +136,28 @@ class FactorAnalyzer:
         """
         ic_series = ic_series.dropna()
 
+        # 朴素t统计量
+        naive_t = stats.ttest_1samp(ic_series, 0)[0] if len(ic_series) > 1 else 0
+        naive_p = stats.ttest_1samp(ic_series, 0)[1] if len(ic_series) > 1 else 1
+
+        # Newey-West调整t统计量 (修正IC序列自相关)
+        try:
+            from app.core.risk_model import newey_west_tstat, newey_west_se
+            nw_t = newey_west_tstat(ic_series)
+            nw_se = newey_west_se(ic_series)
+        except ImportError:
+            nw_t = naive_t
+            nw_se = ic_series.std() / np.sqrt(len(ic_series)) if len(ic_series) > 0 else np.nan
+
         return {
             'ic_mean': ic_series.mean(),
             'ic_std': ic_series.std(),
             'icir': ic_series.mean() / ic_series.std() if ic_series.std() > 0 else 0,
             'ic_positive_ratio': (ic_series > 0).mean(),
-            'ic_t_stat': stats.ttest_1samp(ic_series, 0)[0] if len(ic_series) > 1 else 0,
-            'ic_p_value': stats.ttest_1samp(ic_series, 0)[1] if len(ic_series) > 1 else 1,
+            'ic_t_stat': naive_t,
+            'ic_p_value': naive_p,
+            'ic_nw_t_stat': round(nw_t, 4),  # Newey-West调整t统计量
+            'ic_nw_se': round(nw_se, 6) if not np.isnan(nw_se) else np.nan,
         }
 
     # ==================== 分层回测 ====================
@@ -156,7 +197,8 @@ class FactorAnalyzer:
     def calc_group_returns_series(self, factor_df: pd.DataFrame, return_df: pd.DataFrame,
                                   n_groups: int = 10) -> pd.DataFrame:
         """
-        计算分组收益时间序列
+        计算分组收益时间序列 (向量化: merge+groupby，避免逐日期filter)
+        因子值_t 与 收益率_{t+1} 分组
 
         Args:
             factor_df: 因子数据框
@@ -167,27 +209,47 @@ class FactorAnalyzer:
             分组收益时间序列
         """
         dates = sorted(factor_df['trade_date'].unique())
-        results = []
+        if len(dates) < 2:
+            return pd.DataFrame()
 
-        for i, date in enumerate(dates[:-1]):
-            next_date = dates[i + 1]
+        # 构建日期映射: factor_date -> next_date
+        date_to_next = {dates[i]: dates[i + 1] for i in range(len(dates) - 1)}
+        next_to_date = {v: k for k, v in date_to_next.items()}
 
-            factor_today = factor_df[factor_df['trade_date'] == date]
-            return_next = return_df[return_df['trade_date'] == next_date]
+        return_df_shifted = return_df.copy()
+        return_df_shifted['_factor_date'] = return_df_shifted['trade_date'].map(next_to_date)
+        return_df_shifted = return_df_shifted.dropna(subset=['_factor_date'])
 
-            merged = factor_today.merge(return_next, on='ts_code', how='inner')
+        if return_df_shifted.empty:
+            return pd.DataFrame()
 
-            if len(merged) < n_groups * 2:
-                continue
+        # 向量化: merge
+        merged = factor_df[['trade_date', 'ts_code', 'value']].merge(
+            return_df_shifted[['_factor_date', 'ts_code', 'pct_chg']],
+            left_on=['trade_date', 'ts_code'],
+            right_on=['_factor_date', 'ts_code'],
+            how='inner',
+        ).drop(columns=['_factor_date'])
 
-            group_returns, _ = self.calc_group_returns(
-                merged['value'], merged['pct_chg'], n_groups
-            )
+        if merged.empty:
+            return pd.DataFrame()
 
-            group_returns.name = date
-            results.append(group_returns)
+        # 按日期分组，每组内按因子值分位数分组
+        def _qcut_group(s):
+            if len(s) < n_groups * 2:
+                return pd.Series(pd.NA, index=s.index)
+            try:
+                return pd.qcut(s, n_groups, labels=False, duplicates='drop')
+            except ValueError:
+                return pd.Series(pd.NA, index=s.index)
 
-        return pd.DataFrame(results)
+        merged['_group'] = merged.groupby('trade_date')['value'].transform(_qcut_group)
+        merged = merged.dropna(subset=['_group'])
+        merged['_group'] = merged['_group'].astype(int)
+
+        # 按日期+分组计算平均收益
+        group_returns = merged.groupby(['trade_date', '_group'])['pct_chg'].mean().unstack('_group')
+        return group_returns
 
     # ==================== 因子衰减分析 ====================
 
@@ -195,7 +257,7 @@ class FactorAnalyzer:
                       max_lag: int = 20, date_col: str = 'trade_date',
                       security_col: str = 'ts_code', return_col: str = 'pct_chg') -> pd.Series:
         """
-        计算IC衰减
+        计算IC衰减 (向量化: 一次排序，逐lag仅shift+corr)
 
         Args:
             factor_values: 当期因子值
@@ -209,14 +271,18 @@ class FactorAnalyzer:
             各滞后期的IC值
         """
         ic_decay = {}
+        # 预排序一次
+        sorted_returns = returns_df.sort_values([security_col, date_col])
 
         for lag in range(1, max_lag + 1):
-            # 获取滞后期的收益率
-            lag_returns = returns_df.groupby(security_col).apply(
-                lambda x: x.sort_values(date_col)[return_col].shift(-lag)
-            ).reset_index(level=0, drop=True)
-
-            ic = self.calc_ic(factor_values, lag_returns)
+            # 向量化shift
+            lag_returns = sorted_returns.groupby(security_col)[return_col].shift(-lag)
+            # 对齐index
+            aligned_idx = factor_values.index.intersection(lag_returns.dropna().index)
+            if len(aligned_idx) < 10:
+                ic_decay[f'lag_{lag}'] = np.nan
+                continue
+            ic = factor_values.loc[aligned_idx].corr(lag_returns.loc[aligned_idx])
             ic_decay[f'lag_{lag}'] = ic
 
         return pd.Series(ic_decay)

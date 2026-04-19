@@ -33,13 +33,9 @@ class FactorPreprocessor:
         return series.fillna(0)
 
     def fill_missing_industry_mean(self, df: pd.DataFrame, value_col: str, industry_col: str) -> pd.Series:
-        """用行业均值填充缺失值"""
-        result = df[value_col].copy()
-        for industry in df[industry_col].unique():
-            mask = df[industry_col] == industry
-            industry_mean = df.loc[mask, value_col].mean()
-            result.loc[mask & df[value_col].isna()] = industry_mean
-        return result
+        """用行业均值填充缺失值 (向量化: groupby.transform替代逐行业循环)"""
+        industry_mean = df.groupby(industry_col)[value_col].transform('mean')
+        return df[value_col].fillna(industry_mean)
 
     def fill_missing_cross_section_median(self, series: pd.Series) -> pd.Series:
         """用横截面中位数填充缺失值"""
@@ -90,7 +86,7 @@ class FactorPreprocessor:
 
     def fill_missing_decay_forward(self, series: pd.Series, decay_rate: float = 0.05) -> pd.Series:
         """
-        指数衰减前向填充
+        指数衰减前向填充 (向量化: ffill+指数衰减替代逐行循环)
         适用于季度财务数据：距离公告日越远，数据权重越低
         weight = exp(-decay_rate * days_since_announcement)
 
@@ -99,16 +95,23 @@ class FactorPreprocessor:
             decay_rate: 衰减率
         """
         result = series.copy()
-        last_valid = np.nan
-        days_since = 0
+        # ffill获取最近有效值
+        filled = series.ffill()
+        # 计算每个位置距上次有效值的步数
+        is_na = series.isna()
+        if not is_na.any():
+            return result
 
-        for i in range(len(result)):
-            if not np.isnan(result.iloc[i]):
-                last_valid = result.iloc[i]
-                days_since = 0
-            elif not np.isnan(last_valid):
-                days_since += 1
-                result.iloc[i] = last_valid * np.exp(-decay_rate * days_since)
+        # 向量化计算步数: 对每个NA位置，计算连续NA的计数
+        # 用cumsum trick: 非NA位置重置计数
+        na_blocks = is_na.cumsum() - is_na.cumsum().where(~is_na).ffill().fillna(0)
+        na_blocks = na_blocks.astype(int)
+
+        # 应用衰减
+        decay_weights = np.exp(-decay_rate * na_blocks)
+        result = filled * decay_weights
+        # 保留原始非NA值
+        result[~is_na] = series[~is_na]
 
         return result
 
@@ -506,9 +509,11 @@ class FactorPreprocessor:
     def preprocess_dataframe(self, df: pd.DataFrame, factor_cols: List[str],
                             industry_col: str = None, cap_col: str = None,
                             neutralize: bool = False,
-                            direction_map: Dict[str, int] = None) -> pd.DataFrame:
+                            direction_map: Dict[str, int] = None,
+                            config: Dict[str, Dict] = None,
+                            min_coverage: float = 0.6) -> pd.DataFrame:
         """
-        批量预处理多个因子
+        批量预处理多个因子 (机构级: 逐因子配置 + 覆盖率过滤)
 
         Args:
             df: 包含因子值的数据框
@@ -517,14 +522,39 @@ class FactorPreprocessor:
             cap_col: 市值列（用于中性化）
             neutralize: 是否进行中性化
             direction_map: 因子方向映射 {col: direction}
+            config: 逐因子预处理配置 {col: {fill_method, winsorize_method, winsorize_param, standardize_method}}
+                    未配置的因子使用默认值
+            min_coverage: 最低覆盖率阈值, 低于此值的因子跳过
         """
         result = df.copy()
 
         for col in factor_cols:
+            if col not in result.columns:
+                continue
+
+            # 覆盖率过滤
+            coverage = 1 - result[col].isna().mean()
+            if coverage < min_coverage:
+                logger.warning(f"Factor {col} coverage {coverage:.2%} < {min_coverage:.0%}, skipping")
+                result[col] = np.nan
+                continue
+
             direction = direction_map.get(col, 1) if direction_map else 1
 
-            # 基础预处理
-            result[col] = self.preprocess(df[col], direction=direction)
+            # 逐因子配置
+            if config and col in config:
+                cfg = config[col]
+                result[col] = self.preprocess(
+                    df[col],
+                    fill_method=cfg.get('fill_method', 'median'),
+                    winsorize_method=cfg.get('winsorize_method', 'mad'),
+                    winsorize_param=cfg.get('winsorize_param', 3.0),
+                    standardize_method=cfg.get('standardize_method', 'zscore'),
+                    direction=direction,
+                )
+            else:
+                # 默认预处理
+                result[col] = self.preprocess(df[col], direction=direction)
 
             # 中性化
             if neutralize:
@@ -536,6 +566,84 @@ class FactorPreprocessor:
                     result[col] = self.neutralize_market_cap(result, col, cap_col)
 
         return result
+
+    # ==================== 7. 因子正交化 ====================
+
+    def orthogonalize_factors(self, df: pd.DataFrame, factor_cols: List[str],
+                               target_col: str = None,
+                               method: str = 'residual') -> pd.DataFrame:
+        """
+        因子正交化 (机构级: 消除因子间共线性)
+        典型用途: 对价值因子做size中性化, 得到size-neutral value
+
+        Args:
+            df: 因子DataFrame
+            factor_cols: 需要正交化的因子列
+            target_col: 正交化目标列 (如'size'或'log_market_cap')
+                       如果为None, 使用Gram-Schmidt顺序正交
+            method: 'residual' = 截面回归取残差, 'gram_schmidt' = Gram-Schmidt
+
+        Returns:
+            正交化后的DataFrame
+        """
+        result = df.copy()
+
+        if target_col is not None and target_col in df.columns:
+            # 对每个因子做target中性化
+            for col in factor_cols:
+                if col == target_col or col not in result.columns:
+                    continue
+                result[col] = self.cross_sectional_residual(result, col, [target_col])
+        else:
+            # Gram-Schmidt顺序正交
+            for i, col in enumerate(factor_cols):
+                if col not in result.columns:
+                    continue
+                if i == 0:
+                    continue  # 第一个因子不需要正交化
+                # 对前面的所有因子取残差
+                control_cols = [c for c in factor_cols[:i] if c in result.columns]
+                if control_cols:
+                    result[col] = self.cross_sectional_residual(result, col, control_cols)
+
+        return result
+
+    def cross_sectional_residual(self, df: pd.DataFrame, factor_col: str,
+                                   control_cols: List[str]) -> pd.Series:
+        """
+        截面回归取残差
+        factor = alpha + beta1*control1 + beta2*control2 + ... + epsilon
+        返回epsilon (控制control后的纯净因子)
+
+        Args:
+            df: DataFrame
+            factor_col: 因子列名
+            control_cols: 控制变量列名列表
+
+        Returns:
+            残差序列
+        """
+        y = df[factor_col].values
+        X = df[control_cols].values
+
+        valid_mask = ~(np.isnan(y) | np.isnan(X).any(axis=1))
+        if valid_mask.sum() < len(control_cols) + 2:
+            return df[factor_col]  # 样本不足, 返回原值
+
+        try:
+            X_valid = X[valid_mask]
+            y_valid = y[valid_mask]
+            X_with_const = np.column_stack([np.ones(X_valid.shape[0]), X_valid])
+            beta = np.linalg.lstsq(X_with_const, y_valid, rcond=None)[0]
+            predicted = X_with_const @ beta
+            residuals = y_valid - predicted
+
+            result = pd.Series(np.nan, index=df.index)
+            result.iloc[valid_mask] = residuals
+            return result
+        except np.linalg.LinAlgError:
+            logger.warning(f"Cross-sectional residual failed for {factor_col}, returning original")
+            return df[factor_col]
 
     # ==================== 7. 稳定性检查 ====================
 

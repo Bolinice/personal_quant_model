@@ -7,8 +7,8 @@
 | 项 | 内容 |
 |---|---|
 | 文档名称 | A股多因子增强策略平台 技术架构与数据库设计文档 |
-| 文档版本 | V1.0 |
-| 关联文档 | PRD V2.1、算法设计说明书 V1.0 |
+| 文档版本 | V2.0 |
+| 关联文档 | PRD V2.1、算法设计说明书 V1.1 |
 | 文档状态 | 评审版 |
 | 适用对象 | 技术负责人、后端研发、数据工程师、量化工程师、运维、测试 |
 | 系统类型 | 中低频量化研究与策略交付平台 |
@@ -1051,11 +1051,16 @@ MVP：
 
 ## 10.1 高频查询索引
 重点索引：
-- 行情表：`(stock_id, trade_date)`、`(trade_date)`
-- 因子值表：`(factor_id, trade_date, stock_id)`
+- 行情表：`(ts_code, trade_date)` 复合索引（最关键，覆盖90%+查询）、`(trade_date)` 单列索引
+- 财务表：`(ts_code, end_date)` 复合索引、`(ann_date)` 公告日期索引（避免未来函数关键查询）
+- 指数日线表：`(index_code, trade_date)` 复合索引
+- 指数成分表：`(index_code, trade_date)` 复合索引、`(index_code, ts_code)` 复合索引
+- 因子值表：`(factor_id, trade_date, stock_id)` 复合索引
 - 模型分数表：`(model_id, trade_date, rank_no)`
 - 回测净值表：`(backtest_id, trade_date)`
 - 模拟净值表：`(sim_portfolio_id, trade_date)`
+
+> **V2.0 更新**：新增 `stock_daily(ts_code, trade_date)`、`stock_financial(ts_code, end_date)`、`stock_financial(ann_date)`、`index_daily(index_code, trade_date)`、`index_components(index_code, trade_date)`、`index_components(index_code, ts_code)` 六个复合索引。迁移脚本：`scripts/add_indexes.py`
 
 ## 10.2 分区建议
 大表按 `trade_date` 月分区或年分区：
@@ -1069,6 +1074,43 @@ MVP：
 - 热数据：近 1~2 年
 - 冷数据：历史归档
 - 回测明细与因子明细可归档到分析库
+
+## 10.4 性能优化（V2.0）
+
+### 10.4.1 N+1查询消除
+| 模块 | 优化前 | 优化后 |
+|------|--------|--------|
+| `model_scorer.calculate_scores()` | 每因子单独查 Factor + FactorValue (26+次) | 批量 `IN` 查询 (2次) |
+| `model_scorer._build_factor_ic_data()` | 同上 | 批量查询 |
+| `model_scorer._get_forward_return_data()` | 逐股票循环计算前瞻收益 | 向量化 `groupby().shift()` |
+| `factor_engine._get_forward_returns()` | 逐股票循环 | 向量化 `groupby().shift()` + `pivot` |
+| `factor_engine.calc_factor_decay()` | 每lag一次DB查询 (20次) | 一次查询 + 向量化计算各lag |
+| 数据同步脚本 | 逐行 `SELECT` 检查存在性再 `INSERT` | 批量 `IN` 查询已存在键 + `bulk_save_objects` |
+
+### 10.4.2 并行化
+| 场景 | 实现 |
+|------|------|
+| IC计算 | `ProcessPoolExecutor` 并行计算各日期截面因子 |
+| 数据同步 | `ThreadPoolExecutor` (4线程) 并行同步股票数据 |
+| Celery Worker | `worker_concurrency=8` (原4) |
+
+### 10.4.3 缓存
+| 缓存 | 容量 | TTL | 用途 |
+|------|------|-----|------|
+| `CacheService` (通用) | 2000 | 300s | 热点查询 |
+| `factor_cache` (因子专用) | 5000 | 600s | 因子值、IC分析结果 |
+| 回测因子预计算缓存 | 无限 | 进程生命周期 | 避免回测时重复计算截面因子 |
+
+缓存特性：TTL + LRU驱逐 + 命中率统计
+
+### 10.4.4 回测优化
+- `price_data` 构建：`itertuples` 替代 `iterrows` (5-10x加速)
+- 调仓日因子预计算：回测前一次性计算所有调仓日因子，缓存供 `signal_generator` 使用
+- 因子截面计算：向量化 `unstack` + `groupby` 替代逐股票循环
+
+### 10.4.5 连接池
+- `pool_size`: 10 → 20
+- `max_overflow`: 20 → 40
 
 ---
 

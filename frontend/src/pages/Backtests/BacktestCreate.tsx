@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Box, Typography, Paper, Button, TextField, Snackbar, Alert,
+  Box, Typography, Button, TextField, Snackbar, Alert,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { backtestApi, BacktestCreate } from '../../api/backtests';
+import { backtestApi } from '@/api';
+import type { BacktestCreate } from '@/api';
+import { PageHeader, GlassPanel } from '@/components/ui';
 
 export default function BacktestCreate() {
   const navigate = useNavigate();
@@ -27,12 +29,12 @@ export default function BacktestCreate() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/backtests')}>返回</Button>
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>新建回测</Typography>
-      </Box>
+      <PageHeader
+        title="新建回测"
+        actions={<Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/backtests')}>返回</Button>}
+      />
 
-      <Paper sx={{ p: 3, maxWidth: 600 }}>
+      <GlassPanel sx={{ maxWidth: 600 }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <TextField label="回测名称" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} fullWidth required />
           <TextField label="开始日期" type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} fullWidth />
@@ -44,7 +46,7 @@ export default function BacktestCreate() {
             <Button variant="contained" onClick={handleCreate}>创建</Button>
           </Box>
         </Box>
-      </Paper>
+      </GlassPanel>
 
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
         <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>{snackbar.message}</Alert>

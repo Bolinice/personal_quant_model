@@ -33,7 +33,7 @@ celery_app.conf.update(
     task_time_limit=3600,  # 1小时超时
     task_soft_time_limit=3000,  # 50分钟软超时
     worker_prefetch_multiplier=1,
-    worker_concurrency=4,
+    worker_concurrency=8,
     task_acks_late=True,
     worker_max_tasks_per_child=1000,
     broker_connection_max_retries=10,

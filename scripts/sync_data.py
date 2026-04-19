@@ -23,12 +23,12 @@ def main():
     start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')  # 同步一年数据
 
     print(f"\n同步时间范围: {start_date} ~ {end_date}")
-    print(f"主数据源: {settings.primary_data_source}")
+    print(f"主数据源: {settings.PRIMARY_DATA_SOURCE}")
 
     # 创建同步服务
     service = DataSyncService(
-        primary_source=settings.primary_data_source,
-        tushare_token=settings.tushare_token if settings.tushare_token else None
+        primary_source=settings.PRIMARY_DATA_SOURCE,
+        tushare_token=settings.TUSHARE_TOKEN if settings.TUSHARE_TOKEN else None
     )
 
     # 检查数据源连接
@@ -76,7 +76,7 @@ def main():
 
         if hs300_codes:
             print(f"      将同步沪深300成分股 ({len(hs300_codes)} 只)")
-            count = service.sync_stock_daily_batch(hs300_codes[:50], start_date, end_date)  # 先同步50只
+            count = service.sync_stock_daily_batch(hs300_codes, start_date, end_date)
             print(f"      同步 {count} 条记录")
         else:
             print("      无法获取沪深300成分股，跳过")

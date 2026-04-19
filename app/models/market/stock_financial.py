@@ -1,9 +1,13 @@
-from sqlalchemy import Column, Integer, String, DateTime, Date, Numeric, JSON
+from sqlalchemy import Column, Integer, String, DateTime, Date, Numeric, JSON, Index
 from sqlalchemy.sql import func
 from app.db.base import Base
 
 class StockFinancial(Base):
     __tablename__ = "stock_financial"
+    __table_args__ = (
+        Index("ix_sf_code_end_date", "ts_code", "end_date"),
+        Index("ix_sf_ann_date", "ann_date"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     ts_code = Column(String(16), index=True)

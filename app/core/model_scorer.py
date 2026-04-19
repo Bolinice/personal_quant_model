@@ -156,6 +156,84 @@ class MultiFactorScorer:
 
         return weighted_sum / ic_sum
 
+    def compute_ic_weights(self, factor_df: pd.DataFrame,
+                            return_df: pd.DataFrame,
+                            lookback: int = 60,
+                            method: str = 'icir',
+                            forward_period: int = 20) -> Dict[str, float]:
+        """
+        计算IC/ICIR权重 (向量化: merge+groupby替代三重循环)
+
+        Args:
+            factor_df: 因子值DataFrame, 需包含 trade_date, security_id, factor_code, value
+            return_df: 收益率DataFrame, 需包含 trade_date, security_id, forward_return
+            lookback: 回看期数
+            method: 'ic' = IC均值加权, 'icir' = ICIR加权
+            forward_period: 前瞻期
+
+        Returns:
+            {factor_code: weight}
+        """
+        if factor_df.empty or return_df.empty:
+            return {}
+
+        factor_codes = factor_df['factor_code'].unique() if 'factor_code' in factor_df.columns else []
+        if len(factor_codes) == 0:
+            return {}
+
+        # 取最近lookback期的日期
+        all_dates = sorted(factor_df['trade_date'].unique())
+        recent_dates = set(all_dates[-lookback:])
+
+        # 向量化: merge因子和收益，一次计算所有IC
+        merged = pd.merge(
+            factor_df[factor_df['trade_date'].isin(recent_dates)][['trade_date', 'security_id', 'factor_code', 'value']],
+            return_df[['trade_date', 'security_id', 'forward_return']],
+            on=['trade_date', 'security_id'],
+            how='inner',
+        )
+        if merged.empty:
+            return {}
+
+        # 按factor_code+trade_date分组计算IC
+        def _calc_ic(g):
+            if len(g) < 10:
+                return np.nan
+            valid = g['value'].notna() & g['forward_return'].notna()
+            if valid.sum() < 10:
+                return np.nan
+            return g.loc[valid, 'value'].corr(g.loc[valid, 'forward_return'])
+
+        ic_df = merged.groupby(['factor_code', 'trade_date']).apply(_calc_ic, include_groups=False).reset_index(name='ic')
+        ic_df = ic_df.dropna(subset=['ic'])
+
+        if ic_df.empty:
+            return {}
+
+        # 计算权重
+        weights = {}
+        for fc in factor_codes:
+            fc_ic = ic_df[ic_df['factor_code'] == fc]['ic']
+            if len(fc_ic) == 0:
+                continue
+            if method == 'ic':
+                weights[fc] = fc_ic.mean()
+            elif method == 'icir':
+                ic_mean = fc_ic.mean()
+                ic_std = fc_ic.std()
+                if ic_std > 0:
+                    weights[fc] = ic_mean / ic_std
+                else:
+                    weights[fc] = 0
+
+        # 归一化: 只保留正权重
+        positive_weights = {k: v for k, v in weights.items() if v > 0}
+        if not positive_weights:
+            return weights
+
+        total = sum(positive_weights.values())
+        return {k: v / total for k, v in positive_weights.items()}
+
     def lightgbm_score(self, factor_scores: pd.DataFrame,
                        returns: pd.Series = None,
                        model_params: Dict = None,
@@ -226,8 +304,10 @@ class MultiFactorScorer:
                        base_models: List[str] = None,
                        n_folds: int = 5) -> pd.Series:
         """
-        Stacking集成评分
-        多个基模型预测 → 元学习器组合
+        Stacking集成评分 (机构级: K折交叉验证+元学习器)
+        1. K折生成out-of-fold预测
+        2. 训练元学习器(Ridge回归)组合基模型
+        3. 预测时各基模型预测→元学习器组合
 
         Args:
             factor_scores: 因子得分矩阵
@@ -238,29 +318,90 @@ class MultiFactorScorer:
         if base_models is None:
             base_models = ['linear', 'icir']
 
-        if returns is None:
-            returns = pd.Series(np.nan, index=factor_scores.index)
+        if returns is None or returns.isna().all():
+            # 无标签时退化为简单平均
+            base_predictions = {}
+            for model_name in base_models:
+                if model_name == 'linear':
+                    base_predictions['linear'] = self.equal_weight(factor_scores)
+                elif model_name == 'icir':
+                    base_predictions['icir'] = self.icir_weight(
+                        factor_scores, {col: 1.0 for col in factor_scores.columns}
+                    )
+            if not base_predictions:
+                return self.equal_weight(factor_scores)
+            meta_df = pd.DataFrame(base_predictions)
+            return meta_df.mean(axis=1)
 
-        # 基模型预测
-        base_predictions = {}
-        for model_name in base_models:
-            if model_name == 'linear':
-                base_predictions['linear'] = self.equal_weight(factor_scores)
-            elif model_name == 'icir':
-                base_predictions['icir'] = self.icir_weight(
-                    factor_scores, {col: 1.0 for col in factor_scores.columns}
-                )
-            elif model_name == 'lightgbm':
-                base_predictions['lightgbm'] = self.lightgbm_score(factor_scores, returns)
+        # K折交叉验证生成out-of-fold预测
+        n_samples = len(factor_scores)
+        indices = np.arange(n_samples)
+        np.random.shuffle(indices)
+        fold_size = n_samples // n_folds
 
-        if not base_predictions:
-            return self.equal_weight(factor_scores)
+        oof_predictions = {name: np.full(n_samples, np.nan) for name in base_models}
 
-        # 元学习器: 简单平均(可替换为更复杂的元学习器)
-        meta_df = pd.DataFrame(base_predictions)
-        combined = meta_df.mean(axis=1)
+        for fold in range(n_folds):
+            val_idx = indices[fold * fold_size:(fold + 1) * fold_size]
+            train_idx = np.setdiff1d(indices, val_idx)
 
-        return combined
+            train_scores = factor_scores.iloc[train_idx]
+            train_returns = returns.iloc[train_idx]
+            val_scores = factor_scores.iloc[val_idx]
+
+            # 各基模型在训练集训练，验证集预测
+            for model_name in base_models:
+                if model_name == 'linear':
+                    pred = self.equal_weight(val_scores)
+                elif model_name == 'icir':
+                    # 在训练集上计算ICIR权重
+                    icir_vals = {}
+                    for col in train_scores.columns:
+                        corr = train_scores[col].corr(train_returns)
+                        if not np.isnan(corr):
+                            icir_vals[col] = corr
+                    pred = self.icir_weight(val_scores, icir_vals) if icir_vals else self.equal_weight(val_scores)
+                elif model_name == 'lightgbm':
+                    pred = self.lightgbm_score(val_scores, train_returns)
+                else:
+                    pred = self.equal_weight(val_scores)
+
+                oof_predictions[model_name][val_idx] = pred.values
+
+        # 训练元学习器 (Ridge回归)
+        oof_df = pd.DataFrame(oof_predictions, index=factor_scores.index)
+        valid_mask = oof_df.notna().all(axis=1) & returns.notna()
+
+        if valid_mask.sum() < 20:
+            # 样本不足，退化为简单平均
+            return oof_df.mean(axis=1)
+
+        try:
+            from sklearn.linear_model import Ridge
+            meta_X = oof_df.loc[valid_mask].values
+            meta_y = returns.loc[valid_mask].values
+            meta_learner = Ridge(alpha=1.0)
+            meta_learner.fit(meta_X, meta_y)
+
+            # 用元学习器组合基模型的完整预测
+            full_predictions = {}
+            for model_name in base_models:
+                if model_name == 'linear':
+                    full_predictions[model_name] = self.equal_weight(factor_scores)
+                elif model_name == 'icir':
+                    full_predictions[model_name] = self.icir_weight(
+                        factor_scores, {col: 1.0 for col in factor_scores.columns}
+                    )
+                elif model_name == 'lightgbm':
+                    full_predictions[model_name] = self.lightgbm_score(factor_scores, returns)
+
+            full_df = pd.DataFrame(full_predictions, index=factor_scores.index)
+            combined = meta_learner.predict(full_df.values)
+            return pd.Series(combined, index=factor_scores.index)
+
+        except ImportError:
+            # sklearn不可用，退化为加权平均
+            return oof_df.mean(axis=1)
 
     def adversarial_validation(self, train_data: pd.DataFrame,
                                test_data: pd.DataFrame,
@@ -390,25 +531,36 @@ class MultiFactorScorer:
         if not factor_weights:
             raise ValueError(f"No factor weights for model {model_id}")
 
+        # 批量查询所有因子定义 (避免N+1)
+        factor_ids = [fw.factor_id for fw in factor_weights]
+        factors = self.db.query(Factor).filter(Factor.id.in_(factor_ids)).all()
+        factor_map = {f.id: f for f in factors}
+
+        # 批量查询所有因子值 (避免N+1)
+        fv_query = self.db.query(FactorValue).filter(
+            FactorValue.factor_id.in_(factor_ids),
+            FactorValue.trade_date == trade_date,
+        )
+        if ts_codes:
+            fv_query = fv_query.filter(FactorValue.security_id.in_(ts_codes))
+        all_values = fv_query.all()
+
+        # 按factor_id分组
+        values_by_factor = {}
+        for v in all_values:
+            values_by_factor.setdefault(v.factor_id, []).append(v)
+
         # 获取因子值并构建得分矩阵
         factor_scores = {}
         factor_codes = {}
         factor_directions = {}
 
         for fw in factor_weights:
-            factor = self.db.query(Factor).filter(Factor.id == fw.factor_id).first()
+            factor = factor_map.get(fw.factor_id)
             if not factor:
                 continue
 
-            # 查询因子值
-            query = self.db.query(FactorValue).filter(
-                FactorValue.factor_id == fw.factor_id,
-                FactorValue.trade_date == trade_date,
-            )
-            if ts_codes:
-                query = query.filter(FactorValue.security_id.in_(ts_codes))
-
-            values = query.all()
+            values = values_by_factor.get(fw.factor_id, [])
             if not values:
                 continue
 
@@ -435,10 +587,27 @@ class MultiFactorScorer:
             weights = {factor_codes[fw.factor_id]: fw.weight for fw in factor_weights}
             scores_df['total_score'] = self.manual_weight(scores_df, weights)
         elif weighting_method == 'ic':
-            # 需要IC值，回退到等权
-            scores_df['total_score'] = self.equal_weight(scores_df)
+            # IC动态加权 (机构级: 从实际IC计算权重)
+            ic_weights = self.compute_ic_weights(
+                self._build_factor_ic_data(factor_weights, trade_date, ts_codes),
+                self._get_forward_return_data(trade_date),
+                method='ic',
+            )
+            if ic_weights:
+                scores_df['total_score'] = self.ic_weight(scores_df, ic_weights)
+            else:
+                scores_df['total_score'] = self.equal_weight(scores_df)
         elif weighting_method == 'icir':
-            scores_df['total_score'] = self.equal_weight(scores_df)
+            # ICIR动态加权
+            icir_weights = self.compute_ic_weights(
+                self._build_factor_ic_data(factor_weights, trade_date, ts_codes),
+                self._get_forward_return_data(trade_date),
+                method='icir',
+            )
+            if icir_weights:
+                scores_df['total_score'] = self.icir_weight(scores_df, icir_weights)
+            else:
+                scores_df['total_score'] = self.equal_weight(scores_df)
         elif weighting_method == 'lightgbm':
             scores_df['total_score'] = self.lightgbm_score(scores_df)
         elif weighting_method == 'stacking':
@@ -665,3 +834,63 @@ class MultiFactorScorer:
     def close(self):
         if self.db:
             self.db.close()
+
+    # ==================== IC权重计算辅助方法 ====================
+
+    def _build_factor_ic_data(self, factor_weights, trade_date: date,
+                               ts_codes: List[str] = None) -> pd.DataFrame:
+        """构建IC计算所需的因子数据 (批量查询，避免N+1)"""
+        factor_ids = [fw.factor_id for fw in factor_weights]
+
+        # 批量查询因子定义
+        factors = self.db.query(Factor).filter(Factor.id.in_(factor_ids)).all()
+        factor_map = {f.id: f for f in factors}
+
+        # 批量查询因子值
+        fv_query = self.db.query(FactorValue).filter(
+            FactorValue.factor_id.in_(factor_ids),
+            FactorValue.trade_date == trade_date,
+        )
+        if ts_codes:
+            fv_query = fv_query.filter(FactorValue.security_id.in_(ts_codes))
+        all_values = fv_query.all()
+
+        records = []
+        for v in all_values:
+            factor = factor_map.get(v.factor_id)
+            if not factor:
+                continue
+            records.append({
+                'trade_date': trade_date,
+                'security_id': v.security_id,
+                'factor_code': factor.factor_code,
+                'value': v.value,
+            })
+        return pd.DataFrame(records) if records else pd.DataFrame()
+
+    def _get_forward_return_data(self, trade_date: date,
+                                  forward_period: int = 20) -> pd.DataFrame:
+        """获取前瞻收益数据 (向量化计算，避免逐股票循环)"""
+        try:
+            from app.models.market import StockDaily
+            from datetime import timedelta
+            end_date = trade_date + timedelta(days=forward_period + 30)
+            stocks = self.db.query(StockDaily).filter(
+                StockDaily.trade_date >= trade_date,
+                StockDaily.trade_date <= end_date,
+            ).all()
+            if not stocks:
+                return pd.DataFrame()
+            price_df = pd.DataFrame([{
+                'trade_date': s.trade_date,
+                'security_id': s.ts_code,
+                'close': float(s.close) if s.close else np.nan,
+            } for s in stocks])
+            # 向量化计算前瞻收益
+            price_df = price_df.dropna(subset=['close']).sort_values(['security_id', 'trade_date'])
+            price_df['fwd_close'] = price_df.groupby('security_id')['close'].shift(-forward_period)
+            price_df['forward_return'] = price_df['fwd_close'] / price_df['close'] - 1
+            result = price_df[['trade_date', 'security_id', 'forward_return']].dropna(subset=['forward_return'])
+            return result if not result.empty else pd.DataFrame()
+        except Exception:
+            return pd.DataFrame()

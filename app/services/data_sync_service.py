@@ -269,7 +269,23 @@ class DataSyncService:
 
         db = SessionLocal()
         try:
-            count = 0
+            # 批量获取已存在的日期 (替代逐行SELECT)
+            dates_in_df = []
+            for _, row in df.iterrows():
+                trade_date = row['trade_date']
+                if isinstance(trade_date, str):
+                    trade_date = datetime.strptime(trade_date, '%Y-%m-%d').date()
+                elif hasattr(trade_date, 'date'):
+                    trade_date = trade_date.date()
+                dates_in_df.append(trade_date)
+
+            existing_dates = set(r[0] for r in db.query(StockDaily.trade_date).filter(
+                StockDaily.ts_code == ts_code,
+                StockDaily.trade_date.in_(dates_in_df),
+            ).all()) if dates_in_df else set()
+
+            # 批量插入不存在的记录
+            new_records = []
             for _, row in df.iterrows():
                 # 处理日期格式
                 trade_date = row['trade_date']
@@ -278,13 +294,8 @@ class DataSyncService:
                 elif hasattr(trade_date, 'date'):
                     trade_date = trade_date.date()
 
-                existing = db.query(StockDaily).filter(
-                    StockDaily.ts_code == ts_code,
-                    StockDaily.trade_date == trade_date
-                ).first()
-
-                if not existing:
-                    daily = StockDaily(
+                if trade_date not in existing_dates:
+                    new_records.append(StockDaily(
                         ts_code=ts_code,
                         trade_date=trade_date,
                         open=row.get('open'),
@@ -298,11 +309,13 @@ class DataSyncService:
                         amount=row.get('amount'),
                         data_source=row.get('data_source', source_name),
                         amount_is_estimated=row.get('amount_is_estimated', False),
-                    )
-                    db.add(daily)
-                    count += 1
+                    ))
 
-            db.commit()
+            if new_records:
+                db.bulk_save_objects(new_records)
+                db.commit()
+
+            count = len(new_records)
             logger.info(f"Synced {count} daily records for {ts_code}")
             return count
 

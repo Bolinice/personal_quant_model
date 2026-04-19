@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Box, Typography, Paper, Grid, Button, Table, TableBody,
-  TableCell, TableContainer, TableHead, TableRow, Chip, Snackbar, Alert,
+  Box, Typography, Button, Table, TableBody, TableCell,
+  TableContainer, TableHead, TableRow, Snackbar, Alert,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { portfolioApi, PortfolioPosition, RebalanceRecord } from '../../api/portfolios';
+import { portfolioApi } from '@/api';
+import type { PortfolioPosition, RebalanceRecord } from '@/api';
+import { PageHeader, GlassPanel, NeonChip } from '@/components/ui';
 
 export default function PortfolioDetail() {
   const { id } = useParams<{ id: string }>();
@@ -16,20 +18,28 @@ export default function PortfolioDetail() {
 
   useEffect(() => {
     if (id) {
-      portfolioApi.getPositions(Number(id)).then((res) => setPositions(res.data)).catch(() => {});
+      portfolioApi.getPositions(Number(id)).then((res) => setPositions(res.data)).catch((e) => {
+        setSnackbar({ open: true, message: `持仓加载失败: ${e.message}`, severity: 'error' });
+      });
+      const endDate = new Date().toISOString().slice(0, 10);
+      const startDate = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
+      portfolioApi.getRebalances(Number(id), startDate, endDate).then((res) => setRebalances(res.data)).catch((e) => {
+        console.error('调仓记录加载失败:', e.message);
+      });
     }
   }, [id]);
 
+  const rebalanceNeonColor: Record<string, 'cyan' | 'purple' | 'amber'> = { scheduled: 'cyan', signal: 'purple', risk: 'amber' };
   const rebalanceTypeLabel: Record<string, string> = { scheduled: '定期', signal: '信号', risk: '风控' };
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/portfolios')}>返回</Button>
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>组合详情 #{id}</Typography>
-      </Box>
+      <PageHeader
+        title={`组合详情 #${id}`}
+        actions={<Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/portfolios')}>返回</Button>}
+      />
 
-      <Paper sx={{ p: 2, mb: 3 }}>
+      <GlassPanel sx={{ mb: 3 }}>
         <Typography variant="h6" gutterBottom>持仓明细</Typography>
         <TableContainer>
           <Table size="small">
@@ -52,9 +62,9 @@ export default function PortfolioDetail() {
             </TableBody>
           </Table>
         </TableContainer>
-      </Paper>
+      </GlassPanel>
 
-      <Paper sx={{ p: 2 }}>
+      <GlassPanel>
         <Typography variant="h6" gutterBottom>调仓记录</Typography>
         <TableContainer>
           <Table size="small">
@@ -71,7 +81,7 @@ export default function PortfolioDetail() {
               {rebalances.map((r) => (
                 <TableRow key={r.id}>
                   <TableCell>{r.trade_date?.slice(0, 10)}</TableCell>
-                  <TableCell><Chip label={rebalanceTypeLabel[r.rebalance_type] || r.rebalance_type} size="small" /></TableCell>
+                  <TableCell><NeonChip label={rebalanceTypeLabel[r.rebalance_type] || r.rebalance_type} size="small" neonColor={rebalanceNeonColor[r.rebalance_type] || 'default'} /></TableCell>
                   <TableCell>{Array.isArray(r.buy_list) ? r.buy_list.length : 0}只</TableCell>
                   <TableCell>{Array.isArray(r.sell_list) ? r.sell_list.length : 0}只</TableCell>
                   <TableCell>{(r.total_turnover * 100).toFixed(2)}%</TableCell>
@@ -81,7 +91,7 @@ export default function PortfolioDetail() {
             </TableBody>
           </Table>
         </TableContainer>
-      </Paper>
+      </GlassPanel>
 
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
         <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>{snackbar.message}</Alert>

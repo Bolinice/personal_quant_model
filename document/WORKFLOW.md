@@ -7,8 +7,8 @@
 | 项 | 内容 |
 |---|---|
 | 文档名称 | 工作流文档 |
-| 文档版本 | V1.0 |
-| 关联文档 | PRD V2.1、TDD V2.1、ADD V1.0 |
+| 文档版本 | V1.1 |
+| 关联文档 | PRD V2.1、TDD V2.0、ADD V1.1 |
 | 文档状态 | 评审版 |
 | 适用对象 | 全体研发、量化研究员、运维 |
 
@@ -119,10 +119,14 @@
 
 ---
 
-### 2.3 步骤 7-8：模型打分（16:30）
+### 2.3 步骤 7-8：模型打分（16:30）— V1.1 优化
 
 **触发任务**: `app.tasks.model_score.run_daily_model_score`
 **核心引擎**: `app.core.model_scorer.MultiFactorScorer`
+
+**优化点**：
+- **批量查询消除N+1**：`calculate_scores()` 和 `_build_factor_ic_data()` 原每因子单独查询（26+次），优化为 `IN` 批量查询（2次）
+- **前瞻收益向量化**：`_get_forward_return_data()` 原逐股票循环，优化为 `groupby().shift()` 向量化
 
 #### 加权方法
 
@@ -360,6 +364,37 @@
 | 17:00 | `daily-risk-check` | 风控检查 |
 | 17:30 | `daily-report-generate` | 报告生成 |
 | 02:00 | `cleanup-old-tasks` | 清理30天前任务日志 |
+
+**V1.1 配置更新**：
+- `worker_concurrency`: 4 → 8
+- `pool_size`: 10 → 20, `max_overflow`: 20 → 40
+
+---
+
+## 7. 性能优化体系（V1.1 新增）
+
+### 7.1 数据库层
+- **复合索引**：`stock_daily(ts_code, trade_date)` 等六个复合索引，覆盖90%+查询模式
+- **迁移脚本**：`scripts/add_indexes.py`（支持 SQLite 和 PostgreSQL）
+
+### 7.2 查询层
+- **N+1消除**：批量 `IN` 查询替代逐条查询
+- **向量化计算**：`groupby().shift()` 替代逐股票循环
+- **批量写入**：`bulk_save_objects` 替代逐行 `db.add()`
+
+### 7.3 计算层
+- **并行化**：`ProcessPoolExecutor`(CPU密集) + `ThreadPoolExecutor`(IO密集)
+- **缓存**：`CacheService`(LRU+TTL) + `factor_cache` + 回测预计算缓存
+
+### 7.4 预期提升
+
+| 场景 | 提升倍数 |
+|------|---------|
+| 因子值查询(5000股) | ~50x |
+| IC衰减计算(20lag) | ~20x |
+| 数据同步(5000股) | ~10x |
+| 回测信号生成 | ~20x |
+| stock_daily查询 | ~10-100x |
 
 ---
 

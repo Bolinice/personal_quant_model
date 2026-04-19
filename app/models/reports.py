@@ -43,3 +43,18 @@ class ReportTemplate(Base):
     is_default: bool = Column(Boolean, default=False)
     created_at: DateTime = Column(DateTime, server_default=func.now())
     updated_at: DateTime = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class ReportSchedule(Base):
+    """报告调度表"""
+    __tablename__ = "report_schedules"
+
+    id: int = Column(Integer, primary_key=True, index=True)
+    schedule_name: str = Column(String(100), nullable=False)
+    report_template_id: int = Column(Integer, nullable=False)
+    cron_expression: str = Column(String(100), nullable=False)
+    is_active: bool = Column(Boolean, default=True)
+    next_run_time: DateTime = Column(DateTime)
+    meta_json: JSON = Column(JSON)
+    created_at: DateTime = Column(DateTime, server_default=func.now())
+    updated_at: DateTime = Column(DateTime, server_default=func.now(), onupdate=func.now())

@@ -2,12 +2,15 @@ import os
 from pydantic_settings import BaseSettings
 from typing import List
 
+# 项目根目录 - 用于构建绝对路径
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 class Settings(BaseSettings):
     """应用配置 - 所有敏感值必须从环境变量读取"""
 
-    # 数据库
-    DATABASE_URL: str = "sqlite:///./quant_platform.db"
+    # 数据库 - 使用绝对路径避免从不同目录运行时指向错误文件
+    DATABASE_URL: str = f"sqlite:///{os.path.join(_PROJECT_ROOT, 'quant_platform.db')}"
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"

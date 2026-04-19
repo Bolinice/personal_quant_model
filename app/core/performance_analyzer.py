@@ -396,6 +396,192 @@ class PerformanceAnalyzer:
         if self.db:
             self.db.close()
 
+    # ==================== Brinson归因分析 ====================
+
+    def brinson_attribution(self, portfolio_weights_t: pd.Series,
+                             portfolio_returns_t: pd.Series,
+                             benchmark_weights_t: pd.Series,
+                             benchmark_returns_t: pd.Series) -> Dict:
+        """
+        Brinson归因分解
+        超额收益 = 分配效应 + 选择效应 + 交互效应
+
+        Args:
+            portfolio_weights_t: 组合权重 (行业/因子)
+            portfolio_returns_t: 组合收益
+            benchmark_weights_t: 基准权重
+            benchmark_returns_t: 基准收益
+        """
+        common = (portfolio_weights_t.index
+                  .intersection(portfolio_returns_t.index)
+                  .intersection(benchmark_weights_t.index)
+                  .intersection(benchmark_returns_t.index))
+        if len(common) == 0:
+            return {}
+
+        wp = portfolio_weights_t.reindex(common).fillna(0)
+        rp = portfolio_returns_t.reindex(common).fillna(0)
+        wb = benchmark_weights_t.reindex(common).fillna(0)
+        rb = benchmark_returns_t.reindex(common).fillna(0)
+
+        allocation = ((wp - wb) * rb).sum()
+        selection = (wb * (rp - rb)).sum()
+        interaction = ((wp - wb) * (rp - rb)).sum()
+
+        return {
+            'allocation_effect': round(allocation, 6),
+            'selection_effect': round(selection, 6),
+            'interaction_effect': round(interaction, 6),
+            'total_excess': round(allocation + selection + interaction, 6),
+            'portfolio_return': round((wp * rp).sum(), 6),
+            'benchmark_return': round((wb * rb).sum(), 6),
+        }
+
+    def factor_return_attribution(self, portfolio_weights: pd.Series,
+                                   factor_exposures: pd.DataFrame,
+                                   factor_returns: pd.Series,
+                                   specific_returns: pd.Series = None) -> Dict:
+        """
+        因子收益归因
+        R_portfolio = w'*X*f + w'*u
+        各因子贡献 = Σ_i w_i * X_i_k * f_k
+        """
+        common = portfolio_weights.index.intersection(factor_exposures.index)
+        if len(common) == 0:
+            return {}
+
+        w = portfolio_weights.reindex(common).fillna(0).values
+        X = factor_exposures.reindex(common).fillna(0).values
+        f = factor_returns.reindex(factor_exposures.columns).fillna(0).values
+
+        factor_contributions = {}
+        for k, factor_name in enumerate(factor_exposures.columns):
+            if k < len(f):
+                factor_contributions[factor_name] = round(np.sum(w * X[:, k] * f[k]), 6)
+
+        specific_contribution = 0.0
+        if specific_returns is not None:
+            specific_common = common.intersection(specific_returns.index)
+            if len(specific_common) > 0:
+                specific_contribution = (portfolio_weights.reindex(specific_common).fillna(0) *
+                                         specific_returns.reindex(specific_common).fillna(0)).sum()
+
+        return {
+            'factor_contributions': factor_contributions,
+            'specific_contribution': round(specific_contribution, 6),
+            'total': round(sum(factor_contributions.values()) + specific_contribution, 6),
+        }
+
+    def rolling_performance(self, returns: pd.Series, window: int = 60,
+                             risk_free_rate: float = 0.03) -> pd.DataFrame:
+        """
+        滚动绩效指标 (向量化: pandas rolling替代逐窗口循环)
+        """
+        if len(returns) < window:
+            return pd.DataFrame()
+
+        # 向量化计算rolling指标
+        excess = returns - risk_free_rate / 252
+        rolling_mean = returns.rolling(window).mean()
+        rolling_std = returns.rolling(window).std()
+        rolling_vol = rolling_std * np.sqrt(252)
+        rolling_sharpe = (excess.rolling(window).mean() / rolling_std * np.sqrt(252)).where(rolling_std > 0, 0)
+
+        # 滚动累计收益
+        rolling_cum_return = returns.rolling(window).apply(
+            lambda x: (1 + x).prod() - 1, raw=True
+        )
+
+        # 滚动max_drawdown (仍需循环，但只计算此指标)
+        rolling_max_dd = pd.Series(np.nan, index=returns.index)
+        for i in range(window, len(returns) + 1):
+            wr = returns.iloc[i - window:i]
+            cum = (1 + wr).cumprod()
+            max_dd = ((cum - cum.cummax()) / cum.cummax()).min()
+            rolling_max_dd.iloc[i - 1] = max_dd
+
+        result = pd.DataFrame({
+            'date': returns.index,
+            'rolling_sharpe': rolling_sharpe.round(2).values,
+            'rolling_volatility': rolling_vol.round(4).values,
+            'rolling_max_drawdown': rolling_max_dd.round(4).values,
+            'rolling_return': rolling_cum_return.round(4).values,
+        })
+        return result.iloc[window - 1:].reset_index(drop=True)
+
+    # ==================== 市场状态条件绩效 ====================
+
+    def regime_conditional_performance(self, returns: pd.Series,
+                                        regime_series: pd.Series) -> Dict:
+        """
+        市场状态条件绩效分析
+        分别计算各市场状态(牛/熊/震荡)下的绩效指标
+        """
+        common = returns.index.intersection(regime_series.index)
+        if len(common) == 0:
+            return {}
+
+        aligned_returns = returns.loc[common]
+        aligned_regime = regime_series.loc[common]
+
+        result = {}
+        for regime in aligned_regime.unique():
+            regime_returns = aligned_returns[aligned_regime == regime]
+            if len(regime_returns) < 5:
+                continue
+            sharpe = regime_returns.mean() / regime_returns.std() * np.sqrt(252) if regime_returns.std() > 0 else 0
+            cum = (1 + regime_returns).cumprod()
+            max_dd = ((cum - cum.cummax()) / cum.cummax()).min()
+            result[regime] = {
+                'sharpe': round(sharpe, 2),
+                'max_drawdown': round(max_dd, 4),
+                'avg_daily_return': round(regime_returns.mean(), 6),
+                'volatility': round(regime_returns.std() * np.sqrt(252), 4),
+                'cum_return': round(cum.iloc[-1] - 1, 4),
+                'n_days': len(regime_returns),
+                'pct_of_total': round(len(regime_returns) / len(common), 4),
+            }
+        return result
+
+    def stress_test_performance(self, returns: pd.Series,
+                                  stress_periods: List[Dict] = None) -> Dict:
+        """
+        压力测试绩效分析
+        评估策略在A股极端市场环境下的表现
+        """
+        if stress_periods is None:
+            stress_periods = [
+                {'name': '2015股灾', 'start': '2015-06-15', 'end': '2015-08-26'},
+                {'name': '2016熔断', 'start': '2016-01-04', 'end': '2016-01-28'},
+                {'name': '2018熊市', 'start': '2018-01-29', 'end': '2018-12-28'},
+                {'name': '2020疫情', 'start': '2020-01-20', 'end': '2020-03-23'},
+                {'name': '2021教育双减', 'start': '2021-07-23', 'end': '2021-09-30'},
+                {'name': '2022俄乌冲突', 'start': '2022-02-24', 'end': '2022-04-27'},
+                {'name': '2022地产危机', 'start': '2022-07-05', 'end': '2022-10-31'},
+            ]
+
+        result = {}
+        for period in stress_periods:
+            name = period['name']
+            start = pd.Timestamp(period['start'])
+            end = pd.Timestamp(period['end'])
+            mask = (returns.index >= start) & (returns.index <= end)
+            period_returns = returns[mask]
+            if len(period_returns) < 3:
+                continue
+            cum = (1 + period_returns).cumprod()
+            max_dd = ((cum - cum.cummax()) / cum.cummax()).min()
+            sharpe = period_returns.mean() / period_returns.std() * np.sqrt(252) if period_returns.std() > 0 else 0
+            result[name] = {
+                'cum_return': round(cum.iloc[-1] - 1, 4),
+                'max_drawdown': round(max_dd, 4),
+                'sharpe': round(sharpe, 2),
+                'n_days': len(period_returns),
+                'start': period['start'],
+                'end': period['end'],
+            }
+        return result
+
 
 @with_db
 def analyze_backtest_performance(backtest_id: int, db: Session = None) -> Optional[Dict]:

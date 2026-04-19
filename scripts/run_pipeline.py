@@ -24,36 +24,65 @@ def run_pipeline(stocks: list, index_code: str, start_date: str, end_date: str,
     print("1. 数据获取")
     print("=" * 60)
 
-    from app.data_sources.crawler_source import CrawlerDataSource
-    from app.data_sources.normalizer import DataNormalizer
-    from app.data_sources.cleaner import DataCleaner
-
-    source = CrawlerDataSource()
-    connected = source.connect()
-    if not connected:
-        print("ERROR: 数据源连接失败")
-        return
-
-    normalizer = DataNormalizer()
-    cleaner = DataCleaner()
-
-    # 获取股票日线
     stock_data = {}
-    for code in stocks:
-        df_raw = source.get_stock_daily(code, start_date, end_date)
-        if df_raw.empty:
-            print(f"  {code}: 无数据")
-            continue
-        df_norm = normalizer.normalize_stock_daily(df_raw, 'crawler')
-        df_clean, report = cleaner.clean_stock_daily(df_norm)
-        stock_data[code] = df_clean
-        print(f"  {code}: {len(df_clean)} 天 | {df_clean['trade_date'].min()} ~ {df_clean['trade_date'].max()}")
+    df_idx_clean = pd.DataFrame()
 
-    # 获取指数日线（基准）
-    df_idx_raw = source.get_index_daily(index_code, start_date, end_date)
-    df_idx_norm = normalizer.normalize_index_daily(df_idx_raw, 'crawler')
-    df_idx_clean, _ = cleaner.clean_index_daily(df_idx_norm)
-    print(f"  {index_code}(基准): {len(df_idx_clean)} 天")
+    # 优先从数据库读取
+    try:
+        from sqlalchemy import create_engine, text
+        from app.core.config import settings
+
+        db_engine = create_engine(settings.DATABASE_URL)
+
+        with db_engine.connect() as conn:
+            # 读取股票日线
+            stock_df = pd.read_sql('SELECT * FROM stock_daily ORDER BY ts_code, trade_date', conn)
+            # 读取指数日线
+            idx_col = 'index_code' if 'index_code' in [c['name'] for c in __import__('sqlalchemy').inspect(db_engine).get_columns('index_daily')] else 'ts_code'
+            idx_df = pd.read_sql(f"SELECT * FROM index_daily WHERE {idx_col}='{index_code}' ORDER BY trade_date", conn)
+
+        if not stock_df.empty:
+            for code in stock_df['ts_code'].unique():
+                code_data = stock_df[stock_df['ts_code'] == code].sort_values('trade_date')
+                stock_data[code] = code_data
+            print(f"  从数据库加载: {len(stock_data)} 只股票, {len(stock_df)} 条日线")
+
+        if not idx_df.empty:
+            df_idx_clean = idx_df
+            print(f"  基准指数 {index_code}: {len(idx_df)} 天")
+
+    except Exception as e:
+        print(f"  数据库读取失败: {e}, 尝试在线获取...")
+
+    # 数据库无数据时回退到在线获取
+    if not stock_data:
+        from app.data_sources.crawler_source import CrawlerDataSource
+        from app.data_sources.normalizer import DataNormalizer
+        from app.data_sources.cleaner import DataCleaner
+
+        source = CrawlerDataSource()
+        connected = source.connect()
+        if not connected:
+            print("ERROR: 数据源连接失败")
+            return
+
+        normalizer = DataNormalizer()
+        cleaner = DataCleaner()
+
+        for code in stocks:
+            df_raw = source.get_stock_daily(code, start_date, end_date)
+            if df_raw.empty:
+                print(f"  {code}: 无数据")
+                continue
+            df_norm = normalizer.normalize_stock_daily(df_raw, 'crawler')
+            df_clean, report = cleaner.clean_stock_daily(df_norm)
+            stock_data[code] = df_clean
+            print(f"  {code}: {len(df_clean)} 天 | {df_clean['trade_date'].min()} ~ {df_clean['trade_date'].max()}")
+
+        df_idx_raw = source.get_index_daily(index_code, start_date, end_date)
+        df_idx_norm = normalizer.normalize_index_daily(df_idx_raw, 'crawler')
+        df_idx_clean, _ = cleaner.clean_index_daily(df_idx_norm)
+        print(f"  {index_code}(基准): {len(df_idx_clean)} 天")
 
     if not stock_data:
         print("ERROR: 无股票数据")

@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Box, Typography, Button, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Paper, Chip, TextField, MenuItem, Snackbar, Alert,
+  Box, Typography, Button, Table, TableBody, TableCell,
+  TableHead, TableRow, TextField, MenuItem, Snackbar, Alert,
   Dialog, DialogTitle, DialogContent, DialogActions,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import { portfolioApi, Portfolio } from '../../api/portfolios';
-import { modelApi, Model } from '../../api/models';
+import { portfolioApi } from '@/api';
+import type { Portfolio } from '@/api';
+import { modelApi } from '@/api';
+import type { Model } from '@/api';
+import { PageHeader, GlassPanel, GlassTable, NeonChip } from '@/components/ui';
 
 export default function PortfolioList() {
   const navigate = useNavigate();
@@ -47,12 +50,12 @@ export default function PortfolioList() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>组合管理</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setGenDialog(true)}>生成组合</Button>
-      </Box>
+      <PageHeader
+        title="组合管理"
+        actions={<Button variant="contained" startIcon={<AddIcon />} onClick={() => setGenDialog(true)}>生成组合</Button>}
+      />
 
-      <Paper sx={{ p: 2, mb: 3 }}>
+      <GlassPanel sx={{ mb: 3 }}>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
           <TextField label="模型" select size="small" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} sx={{ minWidth: 200 }}>
             {models.map((m) => <MenuItem key={m.id} value={m.id}>{m.model_name}</MenuItem>)}
@@ -60,10 +63,10 @@ export default function PortfolioList() {
           <TextField label="交易日期" type="date" size="small" value={tradeDate} onChange={(e) => setTradeDate(e.target.value)} />
           <Button variant="outlined" onClick={loadPortfolios}>查询</Button>
         </Box>
-      </Paper>
+      </GlassPanel>
 
       {loading ? <Typography>请选择模型查询组合</Typography> : (
-        <TableContainer component={Paper}>
+        <GlassTable>
           <Table>
             <TableHead>
               <TableRow>
@@ -85,7 +88,7 @@ export default function PortfolioList() {
                   <TableCell>{p.portfolio_name}</TableCell>
                   <TableCell>{p.initial_capital?.toLocaleString()}</TableCell>
                   <TableCell>{p.current_value?.toLocaleString()}</TableCell>
-                  <TableCell><Chip label={p.is_active ? '活跃' : '停用'} size="small" color={p.is_active ? 'success' : 'default'} /></TableCell>
+                  <TableCell><NeonChip label={p.is_active ? '活跃' : '停用'} size="small" neonColor={p.is_active ? 'green' : 'default'} /></TableCell>
                   <TableCell>{p.created_at?.slice(0, 10)}</TableCell>
                   <TableCell><Button size="small" onClick={() => navigate(`/portfolios/${p.id}`)}>详情</Button></TableCell>
                 </TableRow>
@@ -93,7 +96,7 @@ export default function PortfolioList() {
               {portfolios.length === 0 && <TableRow><TableCell colSpan={8} align="center">暂无组合数据</TableCell></TableRow>}
             </TableBody>
           </Table>
-        </TableContainer>
+        </GlassTable>
       )}
 
       <Dialog open={genDialog} onClose={() => setGenDialog(false)} maxWidth="sm" fullWidth>

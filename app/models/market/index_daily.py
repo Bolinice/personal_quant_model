@@ -1,9 +1,12 @@
-from sqlalchemy import Column, Integer, String, DateTime, Date, Float, Numeric, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Date, Float, Numeric, Boolean, Index
 from sqlalchemy.sql import func
 from app.db.base import Base
 
 class IndexDaily(Base):
     __tablename__ = "index_daily"
+    __table_args__ = (
+        Index("ix_id_code_date", "index_code", "trade_date"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     index_code = Column(String(16), index=True)

@@ -14,7 +14,7 @@ from app.core.logging import logger
 class CacheService:
     """内存缓存服务 - TTL + LRU驱逐"""
 
-    def __init__(self, max_size: int = 2000, default_ttl: int = 300):
+    def __init__(self, max_size: int = 6000, default_ttl: int = 300):
         self._cache: OrderedDict = OrderedDict()
         self._max_size = max_size
         self._default_ttl = default_ttl

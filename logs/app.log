@@ -22582,3 +22582,765 @@ WHERE stock_daily.ts_code = ? AND stock_daily.trade_date = ?
 2026-04-19 23:53:46 - app.middleware.middleware - INFO - Response: GET /api/v1/factors/ Status: 200 Time: 0.002s
 2026-04-19 23:53:47 - app.middleware.middleware - INFO - Request: GET /api/v1/factors/
 2026-04-19 23:53:47 - app.middleware.middleware - INFO - Response: GET /api/v1/factors/ Status: 200 Time: 0.001s
+2026-04-20 01:04:41 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:04:42 - quant_platform - INFO - Application starting...
+2026-04-20 01:04:42 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:14:50 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:14:51 - quant_platform - INFO - Application starting...
+2026-04-20 01:14:51 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:17:02 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:17:03 - quant_platform - INFO - Application starting...
+2026-04-20 01:17:03 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:40:43 - quant_platform - INFO - SQLite 表数: 52, PostgreSQL 表数: 53
+2026-04-20 01:40:43 - quant_platform - INFO -   SKIP roles (0 rows)
+2026-04-20 01:40:43 - quant_platform - INFO -   MIGRATING users (1 rows)...
+2026-04-20 01:42:55 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:42:56 - quant_platform - INFO - Application starting...
+2026-04-20 01:42:56 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:43:39 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:43:40 - quant_platform - INFO - Application starting...
+2026-04-20 01:43:40 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:44:35 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:44:36 - quant_platform - INFO - Application starting...
+2026-04-20 01:44:36 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:45:22 - quant_platform - INFO - SQLite 表数: 52, PostgreSQL 表数: 53
+2026-04-20 01:45:22 - quant_platform - INFO -   SKIP roles (0 rows)
+2026-04-20 01:45:22 - quant_platform - INFO -   MIGRATING users (1 rows)...
+2026-04-20 01:45:22 - quant_platform - INFO -   DONE users (1 rows)
+2026-04-20 01:45:22 - quant_platform - INFO -   SKIP user_roles (0 rows)
+2026-04-20 01:45:22 - quant_platform - INFO -   SKIP api_keys (0 rows)
+2026-04-20 01:45:22 - quant_platform - INFO -   SKIP securities (0 rows)
+2026-04-20 01:45:22 - quant_platform - INFO -   MIGRATING stock_basic (5199 rows)...
+2026-04-20 01:45:22 - quant_platform - INFO -   DONE stock_basic (5199 rows)
+2026-04-20 01:45:22 - quant_platform - INFO -   MIGRATING stock_industry (5517 rows)...
+2026-04-20 01:45:22 - quant_platform - INFO -   DONE stock_industry (5517 rows)
+2026-04-20 01:45:22 - quant_platform - INFO -   SKIP industry_classification (0 rows)
+2026-04-20 01:45:22 - quant_platform - INFO -   MIGRATING index_basic (8 rows)...
+2026-04-20 01:45:22 - quant_platform - INFO -   DONE index_basic (8 rows)
+2026-04-20 01:45:22 - quant_platform - INFO -   MIGRATING index_components (1800 rows)...
+2026-04-20 01:45:22 - quant_platform - INFO -   DONE index_components (1800 rows)
+2026-04-20 01:45:22 - quant_platform - INFO -   MIGRATING trading_calendar (656 rows)...
+2026-04-20 01:45:22 - quant_platform - INFO -   DONE trading_calendar (656 rows)
+2026-04-20 01:45:22 - quant_platform - INFO -   SKIP stock_status_daily (0 rows)
+2026-04-20 01:45:22 - quant_platform - INFO -   MIGRATING factors (16 rows)...
+2026-04-20 01:48:27 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:48:28 - quant_platform - INFO - Application starting...
+2026-04-20 01:48:28 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:49:07 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:49:08 - quant_platform - INFO - Application starting...
+2026-04-20 01:49:08 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:49:39 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:49:40 - quant_platform - INFO - Application starting...
+2026-04-20 01:49:40 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:50:36 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:50:37 - quant_platform - INFO - Application starting...
+2026-04-20 01:50:37 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:50:57 - quant_platform - INFO - SQLite 表数: 52, PostgreSQL 表数: 53
+2026-04-20 01:50:57 - quant_platform - INFO -   SKIP roles (0 rows)
+2026-04-20 01:50:57 - quant_platform - INFO -   MIGRATING users (1 rows)...
+2026-04-20 01:50:57 - quant_platform - INFO -   DONE users (1 rows)
+2026-04-20 01:50:57 - quant_platform - INFO -   SKIP user_roles (0 rows)
+2026-04-20 01:50:57 - quant_platform - INFO -   SKIP api_keys (0 rows)
+2026-04-20 01:50:57 - quant_platform - INFO -   SKIP securities (0 rows)
+2026-04-20 01:50:57 - quant_platform - INFO -   MIGRATING stock_basic (5199 rows)...
+2026-04-20 01:50:57 - quant_platform - INFO -   DONE stock_basic (5199 rows)
+2026-04-20 01:50:57 - quant_platform - INFO -   MIGRATING stock_industry (5517 rows)...
+2026-04-20 01:50:58 - quant_platform - INFO -   DONE stock_industry (5517 rows)
+2026-04-20 01:50:58 - quant_platform - INFO -   SKIP industry_classification (0 rows)
+2026-04-20 01:50:58 - quant_platform - INFO -   MIGRATING index_basic (8 rows)...
+2026-04-20 01:50:58 - quant_platform - INFO -   DONE index_basic (8 rows)
+2026-04-20 01:50:58 - quant_platform - INFO -   MIGRATING index_components (1800 rows)...
+2026-04-20 01:50:58 - quant_platform - INFO -   DONE index_components (1800 rows)
+2026-04-20 01:50:58 - quant_platform - INFO -   MIGRATING trading_calendar (656 rows)...
+2026-04-20 01:50:58 - quant_platform - INFO -   DONE trading_calendar (656 rows)
+2026-04-20 01:50:58 - quant_platform - INFO -   SKIP stock_status_daily (0 rows)
+2026-04-20 01:50:58 - quant_platform - INFO -   MIGRATING factors (16 rows)...
+2026-04-20 01:51:24 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:51:24 - quant_platform - INFO - Application starting...
+2026-04-20 01:51:24 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:51:36 - quant_platform - INFO - SQLite 表数: 52, PostgreSQL 表数: 53
+2026-04-20 01:51:36 - quant_platform - INFO -   SKIP roles (0 rows)
+2026-04-20 01:51:36 - quant_platform - INFO -   MIGRATING users (1 rows)...
+2026-04-20 01:51:36 - quant_platform - INFO -   DONE users (1 rows)
+2026-04-20 01:51:36 - quant_platform - INFO -   SKIP user_roles (0 rows)
+2026-04-20 01:51:36 - quant_platform - INFO -   SKIP api_keys (0 rows)
+2026-04-20 01:51:36 - quant_platform - INFO -   SKIP securities (0 rows)
+2026-04-20 01:51:36 - quant_platform - INFO -   MIGRATING stock_basic (5199 rows)...
+2026-04-20 01:51:37 - quant_platform - INFO -   DONE stock_basic (5199 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   MIGRATING stock_industry (5517 rows)...
+2026-04-20 01:51:37 - quant_platform - INFO -   DONE stock_industry (5517 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP industry_classification (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   MIGRATING index_basic (8 rows)...
+2026-04-20 01:51:37 - quant_platform - INFO -   DONE index_basic (8 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   MIGRATING index_components (1800 rows)...
+2026-04-20 01:51:37 - quant_platform - INFO -   DONE index_components (1800 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   MIGRATING trading_calendar (656 rows)...
+2026-04-20 01:51:37 - quant_platform - INFO -   DONE trading_calendar (656 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP stock_status_daily (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   MIGRATING factors (16 rows)...
+2026-04-20 01:51:37 - quant_platform - INFO -   DONE factors (16 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP factor_values (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP factor_analysis (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP factor_results (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   MIGRATING models (4 rows)...
+2026-04-20 01:51:37 - quant_platform - INFO -   DONE models (4 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP model_factor_weights (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   MIGRATING model_scores (6775 rows)...
+2026-04-20 01:51:37 - quant_platform - INFO -   DONE model_scores (6775 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   MIGRATING model_performance (4 rows)...
+2026-04-20 01:51:37 - quant_platform - INFO -   DONE model_performance (4 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   MIGRATING stock_pools (4 rows)...
+2026-04-20 01:51:37 - quant_platform - INFO -   DONE stock_pools (4 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP stock_pool_snapshots (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP portfolios (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP portfolio_positions (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP rebalance_records (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP timing_configs (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP timing_signals (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP backtests (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP backtest_navs (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP backtest_positions (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP backtest_trades (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP backtest_results (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP simulated_portfolios (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP simulated_portfolio_positions (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP simulated_portfolio_navs (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   MIGRATING products (2 rows)...
+2026-04-20 01:51:37 - quant_platform - INFO -   DONE products (2 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP product_reports (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   MIGRATING subscription_plans (1 rows)...
+2026-04-20 01:51:37 - quant_platform - INFO -   DONE subscription_plans (1 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   MIGRATING subscriptions (2 rows)...
+2026-04-20 01:51:37 - quant_platform - INFO -   DONE subscriptions (2 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP subscription_histories (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   MIGRATING subscription_permissions (2 rows)...
+2026-04-20 01:51:37 - quant_platform - INFO -   DONE subscription_permissions (2 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP reports (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP report_templates (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP report_schedules (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP task_logs (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP audit_logs (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP alert_logs (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP alert_rules (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   SKIP notifications (0 rows)
+2026-04-20 01:51:37 - quant_platform - INFO -   MIGRATING stock_financial (34122 rows)...
+2026-04-20 01:51:37 - quant_platform - INFO -     stock_financial: 5000/34122
+2026-04-20 01:51:38 - quant_platform - INFO -     stock_financial: 10000/34122
+2026-04-20 01:51:38 - quant_platform - INFO -     stock_financial: 15000/34122
+2026-04-20 01:51:38 - quant_platform - INFO -     stock_financial: 20000/34122
+2026-04-20 01:51:39 - quant_platform - INFO -     stock_financial: 25000/34122
+2026-04-20 01:51:39 - quant_platform - INFO -     stock_financial: 30000/34122
+2026-04-20 01:51:39 - quant_platform - INFO -     stock_financial: 34122/34122
+2026-04-20 01:51:39 - quant_platform - INFO -   DONE stock_financial (34122 rows)
+2026-04-20 01:51:39 - quant_platform - INFO -   MIGRATING stock_daily (2446613 rows)...
+2026-04-20 01:51:39 - quant_platform - INFO -     stock_daily: 5000/2446613
+2026-04-20 01:51:40 - quant_platform - INFO -     stock_daily: 10000/2446613
+2026-04-20 01:51:40 - quant_platform - INFO -     stock_daily: 15000/2446613
+2026-04-20 01:51:40 - quant_platform - INFO -     stock_daily: 20000/2446613
+2026-04-20 01:51:40 - quant_platform - INFO -     stock_daily: 25000/2446613
+2026-04-20 01:51:40 - quant_platform - INFO -     stock_daily: 30000/2446613
+2026-04-20 01:51:41 - quant_platform - INFO -     stock_daily: 35000/2446613
+2026-04-20 01:51:41 - quant_platform - INFO -     stock_daily: 40000/2446613
+2026-04-20 01:51:41 - quant_platform - INFO -     stock_daily: 45000/2446613
+2026-04-20 01:51:41 - quant_platform - INFO -     stock_daily: 50000/2446613
+2026-04-20 01:51:42 - quant_platform - INFO -     stock_daily: 55000/2446613
+2026-04-20 01:51:42 - quant_platform - INFO -     stock_daily: 60000/2446613
+2026-04-20 01:51:42 - quant_platform - INFO -     stock_daily: 65000/2446613
+2026-04-20 01:51:42 - quant_platform - INFO -     stock_daily: 70000/2446613
+2026-04-20 01:51:43 - quant_platform - INFO -     stock_daily: 75000/2446613
+2026-04-20 01:51:43 - quant_platform - INFO -     stock_daily: 80000/2446613
+2026-04-20 01:51:43 - quant_platform - INFO -     stock_daily: 85000/2446613
+2026-04-20 01:51:43 - quant_platform - INFO -     stock_daily: 90000/2446613
+2026-04-20 01:51:43 - quant_platform - INFO -     stock_daily: 95000/2446613
+2026-04-20 01:51:44 - quant_platform - INFO -     stock_daily: 100000/2446613
+2026-04-20 01:51:44 - quant_platform - INFO -     stock_daily: 105000/2446613
+2026-04-20 01:51:44 - quant_platform - INFO -     stock_daily: 110000/2446613
+2026-04-20 01:51:44 - quant_platform - INFO -     stock_daily: 115000/2446613
+2026-04-20 01:51:45 - quant_platform - INFO -     stock_daily: 120000/2446613
+2026-04-20 01:51:45 - quant_platform - INFO -     stock_daily: 125000/2446613
+2026-04-20 01:51:45 - quant_platform - INFO -     stock_daily: 130000/2446613
+2026-04-20 01:51:45 - quant_platform - INFO -     stock_daily: 135000/2446613
+2026-04-20 01:51:46 - quant_platform - INFO -     stock_daily: 140000/2446613
+2026-04-20 01:51:46 - quant_platform - INFO -     stock_daily: 145000/2446613
+2026-04-20 01:51:46 - quant_platform - INFO -     stock_daily: 150000/2446613
+2026-04-20 01:51:46 - quant_platform - INFO -     stock_daily: 155000/2446613
+2026-04-20 01:51:46 - quant_platform - INFO -     stock_daily: 160000/2446613
+2026-04-20 01:51:47 - quant_platform - INFO -     stock_daily: 165000/2446613
+2026-04-20 01:51:47 - quant_platform - INFO -     stock_daily: 170000/2446613
+2026-04-20 01:51:47 - quant_platform - INFO -     stock_daily: 175000/2446613
+2026-04-20 01:51:47 - quant_platform - INFO -     stock_daily: 180000/2446613
+2026-04-20 01:51:48 - quant_platform - INFO -     stock_daily: 185000/2446613
+2026-04-20 01:51:48 - quant_platform - INFO -     stock_daily: 190000/2446613
+2026-04-20 01:51:48 - quant_platform - INFO -     stock_daily: 195000/2446613
+2026-04-20 01:51:48 - quant_platform - INFO -     stock_daily: 200000/2446613
+2026-04-20 01:51:48 - quant_platform - INFO -     stock_daily: 205000/2446613
+2026-04-20 01:51:49 - quant_platform - INFO -     stock_daily: 210000/2446613
+2026-04-20 01:51:49 - quant_platform - INFO -     stock_daily: 215000/2446613
+2026-04-20 01:51:49 - quant_platform - INFO -     stock_daily: 220000/2446613
+2026-04-20 01:51:49 - quant_platform - INFO -     stock_daily: 225000/2446613
+2026-04-20 01:51:50 - quant_platform - INFO -     stock_daily: 230000/2446613
+2026-04-20 01:51:50 - quant_platform - INFO -     stock_daily: 235000/2446613
+2026-04-20 01:51:50 - quant_platform - INFO -     stock_daily: 240000/2446613
+2026-04-20 01:51:50 - quant_platform - INFO -     stock_daily: 245000/2446613
+2026-04-20 01:51:51 - quant_platform - INFO -     stock_daily: 250000/2446613
+2026-04-20 01:51:51 - quant_platform - INFO -     stock_daily: 255000/2446613
+2026-04-20 01:51:51 - quant_platform - INFO -     stock_daily: 260000/2446613
+2026-04-20 01:51:51 - quant_platform - INFO -     stock_daily: 265000/2446613
+2026-04-20 01:51:52 - quant_platform - INFO -     stock_daily: 270000/2446613
+2026-04-20 01:51:52 - quant_platform - INFO -     stock_daily: 275000/2446613
+2026-04-20 01:51:52 - quant_platform - INFO -     stock_daily: 280000/2446613
+2026-04-20 01:51:52 - quant_platform - INFO -     stock_daily: 285000/2446613
+2026-04-20 01:51:53 - quant_platform - INFO -     stock_daily: 290000/2446613
+2026-04-20 01:51:53 - quant_platform - INFO -     stock_daily: 295000/2446613
+2026-04-20 01:51:53 - quant_platform - INFO -     stock_daily: 300000/2446613
+2026-04-20 01:51:53 - quant_platform - INFO -     stock_daily: 305000/2446613
+2026-04-20 01:51:53 - quant_platform - INFO -     stock_daily: 310000/2446613
+2026-04-20 01:51:54 - quant_platform - INFO -     stock_daily: 315000/2446613
+2026-04-20 01:51:54 - quant_platform - INFO -     stock_daily: 320000/2446613
+2026-04-20 01:51:54 - quant_platform - INFO -     stock_daily: 325000/2446613
+2026-04-20 01:51:54 - quant_platform - INFO -     stock_daily: 330000/2446613
+2026-04-20 01:51:55 - quant_platform - INFO -     stock_daily: 335000/2446613
+2026-04-20 01:51:55 - quant_platform - INFO -     stock_daily: 340000/2446613
+2026-04-20 01:51:55 - quant_platform - INFO -     stock_daily: 345000/2446613
+2026-04-20 01:51:56 - quant_platform - INFO -     stock_daily: 350000/2446613
+2026-04-20 01:51:56 - quant_platform - INFO -     stock_daily: 355000/2446613
+2026-04-20 01:51:56 - quant_platform - INFO -     stock_daily: 360000/2446613
+2026-04-20 01:51:57 - quant_platform - INFO -     stock_daily: 365000/2446613
+2026-04-20 01:51:57 - quant_platform - INFO -     stock_daily: 370000/2446613
+2026-04-20 01:51:57 - quant_platform - INFO -     stock_daily: 375000/2446613
+2026-04-20 01:51:57 - quant_platform - INFO -     stock_daily: 380000/2446613
+2026-04-20 01:51:58 - quant_platform - INFO -     stock_daily: 385000/2446613
+2026-04-20 01:51:58 - quant_platform - INFO -     stock_daily: 390000/2446613
+2026-04-20 01:51:58 - quant_platform - INFO -     stock_daily: 395000/2446613
+2026-04-20 01:51:59 - quant_platform - INFO -     stock_daily: 400000/2446613
+2026-04-20 01:51:59 - quant_platform - INFO -     stock_daily: 405000/2446613
+2026-04-20 01:51:59 - quant_platform - INFO -     stock_daily: 410000/2446613
+2026-04-20 01:51:59 - quant_platform - INFO -     stock_daily: 415000/2446613
+2026-04-20 01:51:59 - quant_platform - INFO -     stock_daily: 420000/2446613
+2026-04-20 01:52:00 - quant_platform - INFO -     stock_daily: 425000/2446613
+2026-04-20 01:52:00 - quant_platform - INFO -     stock_daily: 430000/2446613
+2026-04-20 01:52:00 - quant_platform - INFO -     stock_daily: 435000/2446613
+2026-04-20 01:52:00 - quant_platform - INFO -     stock_daily: 440000/2446613
+2026-04-20 01:52:01 - quant_platform - INFO -     stock_daily: 445000/2446613
+2026-04-20 01:52:01 - quant_platform - INFO -     stock_daily: 450000/2446613
+2026-04-20 01:52:01 - quant_platform - INFO -     stock_daily: 455000/2446613
+2026-04-20 01:52:01 - quant_platform - INFO -     stock_daily: 460000/2446613
+2026-04-20 01:52:02 - quant_platform - INFO -     stock_daily: 465000/2446613
+2026-04-20 01:52:02 - quant_platform - INFO -     stock_daily: 470000/2446613
+2026-04-20 01:52:02 - quant_platform - INFO -     stock_daily: 475000/2446613
+2026-04-20 01:52:02 - quant_platform - INFO -     stock_daily: 480000/2446613
+2026-04-20 01:52:03 - quant_platform - INFO -     stock_daily: 485000/2446613
+2026-04-20 01:52:03 - quant_platform - INFO -     stock_daily: 490000/2446613
+2026-04-20 01:52:03 - quant_platform - INFO -     stock_daily: 495000/2446613
+2026-04-20 01:52:03 - quant_platform - INFO -     stock_daily: 500000/2446613
+2026-04-20 01:52:04 - quant_platform - INFO -     stock_daily: 505000/2446613
+2026-04-20 01:52:04 - quant_platform - INFO -     stock_daily: 510000/2446613
+2026-04-20 01:52:04 - quant_platform - INFO -     stock_daily: 515000/2446613
+2026-04-20 01:52:04 - quant_platform - INFO -     stock_daily: 520000/2446613
+2026-04-20 01:52:05 - quant_platform - INFO -     stock_daily: 525000/2446613
+2026-04-20 01:52:05 - quant_platform - INFO -     stock_daily: 530000/2446613
+2026-04-20 01:52:05 - quant_platform - INFO -     stock_daily: 535000/2446613
+2026-04-20 01:52:05 - quant_platform - INFO -     stock_daily: 540000/2446613
+2026-04-20 01:52:06 - quant_platform - INFO -     stock_daily: 545000/2446613
+2026-04-20 01:52:06 - quant_platform - INFO -     stock_daily: 550000/2446613
+2026-04-20 01:52:06 - quant_platform - INFO -     stock_daily: 555000/2446613
+2026-04-20 01:52:06 - quant_platform - INFO -     stock_daily: 560000/2446613
+2026-04-20 01:52:07 - quant_platform - INFO -     stock_daily: 565000/2446613
+2026-04-20 01:52:07 - quant_platform - INFO -     stock_daily: 570000/2446613
+2026-04-20 01:52:07 - quant_platform - INFO -     stock_daily: 575000/2446613
+2026-04-20 01:52:07 - quant_platform - INFO -     stock_daily: 580000/2446613
+2026-04-20 01:52:08 - quant_platform - INFO -     stock_daily: 585000/2446613
+2026-04-20 01:52:08 - quant_platform - INFO -     stock_daily: 590000/2446613
+2026-04-20 01:52:08 - quant_platform - INFO -     stock_daily: 595000/2446613
+2026-04-20 01:52:09 - quant_platform - INFO -     stock_daily: 600000/2446613
+2026-04-20 01:52:09 - quant_platform - INFO -     stock_daily: 605000/2446613
+2026-04-20 01:52:09 - quant_platform - INFO -     stock_daily: 610000/2446613
+2026-04-20 01:52:10 - quant_platform - INFO -     stock_daily: 615000/2446613
+2026-04-20 01:52:10 - quant_platform - INFO -     stock_daily: 620000/2446613
+2026-04-20 01:52:10 - quant_platform - INFO -     stock_daily: 625000/2446613
+2026-04-20 01:52:10 - quant_platform - INFO -     stock_daily: 630000/2446613
+2026-04-20 01:52:11 - quant_platform - INFO -     stock_daily: 635000/2446613
+2026-04-20 01:52:11 - quant_platform - INFO -     stock_daily: 640000/2446613
+2026-04-20 01:52:11 - quant_platform - INFO -     stock_daily: 645000/2446613
+2026-04-20 01:52:11 - quant_platform - INFO -     stock_daily: 650000/2446613
+2026-04-20 01:52:12 - quant_platform - INFO -     stock_daily: 655000/2446613
+2026-04-20 01:52:12 - quant_platform - INFO -     stock_daily: 660000/2446613
+2026-04-20 01:52:12 - quant_platform - INFO -     stock_daily: 665000/2446613
+2026-04-20 01:52:12 - quant_platform - INFO -     stock_daily: 670000/2446613
+2026-04-20 01:52:13 - quant_platform - INFO -     stock_daily: 675000/2446613
+2026-04-20 01:52:13 - quant_platform - INFO -     stock_daily: 680000/2446613
+2026-04-20 01:52:13 - quant_platform - INFO -     stock_daily: 685000/2446613
+2026-04-20 01:52:13 - quant_platform - INFO -     stock_daily: 690000/2446613
+2026-04-20 01:52:14 - quant_platform - INFO -     stock_daily: 695000/2446613
+2026-04-20 01:52:14 - quant_platform - INFO -     stock_daily: 700000/2446613
+2026-04-20 01:52:14 - quant_platform - INFO -     stock_daily: 705000/2446613
+2026-04-20 01:52:14 - quant_platform - INFO -     stock_daily: 710000/2446613
+2026-04-20 01:52:15 - quant_platform - INFO -     stock_daily: 715000/2446613
+2026-04-20 01:52:15 - quant_platform - INFO -     stock_daily: 720000/2446613
+2026-04-20 01:52:15 - quant_platform - INFO -     stock_daily: 725000/2446613
+2026-04-20 01:52:15 - quant_platform - INFO -     stock_daily: 730000/2446613
+2026-04-20 01:52:15 - quant_platform - INFO -     stock_daily: 735000/2446613
+2026-04-20 01:52:16 - quant_platform - INFO -     stock_daily: 740000/2446613
+2026-04-20 01:52:16 - quant_platform - INFO -     stock_daily: 745000/2446613
+2026-04-20 01:52:16 - quant_platform - INFO -     stock_daily: 750000/2446613
+2026-04-20 01:52:16 - quant_platform - INFO -     stock_daily: 755000/2446613
+2026-04-20 01:52:17 - quant_platform - INFO -     stock_daily: 760000/2446613
+2026-04-20 01:52:17 - quant_platform - INFO -     stock_daily: 765000/2446613
+2026-04-20 01:52:17 - quant_platform - INFO -     stock_daily: 770000/2446613
+2026-04-20 01:52:17 - quant_platform - INFO -     stock_daily: 775000/2446613
+2026-04-20 01:52:18 - quant_platform - INFO -     stock_daily: 780000/2446613
+2026-04-20 01:52:18 - quant_platform - INFO -     stock_daily: 785000/2446613
+2026-04-20 01:52:18 - quant_platform - INFO -     stock_daily: 790000/2446613
+2026-04-20 01:52:18 - quant_platform - INFO -     stock_daily: 795000/2446613
+2026-04-20 01:52:19 - quant_platform - INFO -     stock_daily: 800000/2446613
+2026-04-20 01:52:19 - quant_platform - INFO -     stock_daily: 805000/2446613
+2026-04-20 01:52:19 - quant_platform - INFO -     stock_daily: 810000/2446613
+2026-04-20 01:52:19 - quant_platform - INFO -     stock_daily: 815000/2446613
+2026-04-20 01:52:20 - quant_platform - INFO -     stock_daily: 820000/2446613
+2026-04-20 01:52:20 - quant_platform - INFO -     stock_daily: 825000/2446613
+2026-04-20 01:52:20 - quant_platform - INFO -     stock_daily: 830000/2446613
+2026-04-20 01:52:20 - quant_platform - INFO -     stock_daily: 835000/2446613
+2026-04-20 01:52:21 - quant_platform - INFO -     stock_daily: 840000/2446613
+2026-04-20 01:52:21 - quant_platform - INFO -     stock_daily: 845000/2446613
+2026-04-20 01:52:21 - quant_platform - INFO -     stock_daily: 850000/2446613
+2026-04-20 01:52:21 - quant_platform - INFO -     stock_daily: 855000/2446613
+2026-04-20 01:52:22 - quant_platform - INFO -     stock_daily: 860000/2446613
+2026-04-20 01:52:22 - quant_platform - INFO -     stock_daily: 865000/2446613
+2026-04-20 01:52:22 - quant_platform - INFO -     stock_daily: 870000/2446613
+2026-04-20 01:52:22 - quant_platform - INFO -     stock_daily: 875000/2446613
+2026-04-20 01:52:23 - quant_platform - INFO -     stock_daily: 880000/2446613
+2026-04-20 01:52:23 - quant_platform - INFO -     stock_daily: 885000/2446613
+2026-04-20 01:52:23 - quant_platform - INFO -     stock_daily: 890000/2446613
+2026-04-20 01:52:23 - quant_platform - INFO -     stock_daily: 895000/2446613
+2026-04-20 01:52:24 - quant_platform - INFO -     stock_daily: 900000/2446613
+2026-04-20 01:52:24 - quant_platform - INFO -     stock_daily: 905000/2446613
+2026-04-20 01:52:24 - quant_platform - INFO -     stock_daily: 910000/2446613
+2026-04-20 01:52:24 - quant_platform - INFO -     stock_daily: 915000/2446613
+2026-04-20 01:52:25 - quant_platform - INFO -     stock_daily: 920000/2446613
+2026-04-20 01:52:25 - quant_platform - INFO -     stock_daily: 925000/2446613
+2026-04-20 01:52:25 - quant_platform - INFO -     stock_daily: 930000/2446613
+2026-04-20 01:52:25 - quant_platform - INFO -     stock_daily: 935000/2446613
+2026-04-20 01:52:26 - quant_platform - INFO -     stock_daily: 940000/2446613
+2026-04-20 01:52:26 - quant_platform - INFO -     stock_daily: 945000/2446613
+2026-04-20 01:52:26 - quant_platform - INFO -     stock_daily: 950000/2446613
+2026-04-20 01:52:26 - quant_platform - INFO -     stock_daily: 955000/2446613
+2026-04-20 01:52:27 - quant_platform - INFO -     stock_daily: 960000/2446613
+2026-04-20 01:52:27 - quant_platform - INFO -     stock_daily: 965000/2446613
+2026-04-20 01:52:27 - quant_platform - INFO -     stock_daily: 970000/2446613
+2026-04-20 01:52:27 - quant_platform - INFO -     stock_daily: 975000/2446613
+2026-04-20 01:52:28 - quant_platform - INFO -     stock_daily: 980000/2446613
+2026-04-20 01:52:28 - quant_platform - INFO -     stock_daily: 985000/2446613
+2026-04-20 01:52:28 - quant_platform - INFO -     stock_daily: 990000/2446613
+2026-04-20 01:52:28 - quant_platform - INFO -     stock_daily: 995000/2446613
+2026-04-20 01:52:29 - quant_platform - INFO -     stock_daily: 1000000/2446613
+2026-04-20 01:52:29 - quant_platform - INFO -     stock_daily: 1005000/2446613
+2026-04-20 01:52:29 - quant_platform - INFO -     stock_daily: 1010000/2446613
+2026-04-20 01:52:29 - quant_platform - INFO -     stock_daily: 1015000/2446613
+2026-04-20 01:52:30 - quant_platform - INFO -     stock_daily: 1020000/2446613
+2026-04-20 01:52:30 - quant_platform - INFO -     stock_daily: 1025000/2446613
+2026-04-20 01:52:30 - quant_platform - INFO -     stock_daily: 1030000/2446613
+2026-04-20 01:52:30 - quant_platform - INFO -     stock_daily: 1035000/2446613
+2026-04-20 01:52:31 - quant_platform - INFO -     stock_daily: 1040000/2446613
+2026-04-20 01:52:31 - quant_platform - INFO -     stock_daily: 1045000/2446613
+2026-04-20 01:52:31 - quant_platform - INFO -     stock_daily: 1050000/2446613
+2026-04-20 01:52:31 - quant_platform - INFO -     stock_daily: 1055000/2446613
+2026-04-20 01:52:32 - quant_platform - INFO -     stock_daily: 1060000/2446613
+2026-04-20 01:52:32 - quant_platform - INFO -     stock_daily: 1065000/2446613
+2026-04-20 01:52:32 - quant_platform - INFO -     stock_daily: 1070000/2446613
+2026-04-20 01:52:32 - quant_platform - INFO -     stock_daily: 1075000/2446613
+2026-04-20 01:52:33 - quant_platform - INFO -     stock_daily: 1080000/2446613
+2026-04-20 01:52:33 - quant_platform - INFO -     stock_daily: 1085000/2446613
+2026-04-20 01:52:33 - quant_platform - INFO -     stock_daily: 1090000/2446613
+2026-04-20 01:52:33 - quant_platform - INFO -     stock_daily: 1095000/2446613
+2026-04-20 01:52:34 - quant_platform - INFO -     stock_daily: 1100000/2446613
+2026-04-20 01:52:34 - quant_platform - INFO -     stock_daily: 1105000/2446613
+2026-04-20 01:52:34 - quant_platform - INFO -     stock_daily: 1110000/2446613
+2026-04-20 01:52:34 - quant_platform - INFO -     stock_daily: 1115000/2446613
+2026-04-20 01:52:35 - quant_platform - INFO -     stock_daily: 1120000/2446613
+2026-04-20 01:52:35 - quant_platform - INFO -     stock_daily: 1125000/2446613
+2026-04-20 01:52:35 - quant_platform - INFO -     stock_daily: 1130000/2446613
+2026-04-20 01:52:35 - quant_platform - INFO -     stock_daily: 1135000/2446613
+2026-04-20 01:52:36 - quant_platform - INFO -     stock_daily: 1140000/2446613
+2026-04-20 01:52:36 - quant_platform - INFO -     stock_daily: 1145000/2446613
+2026-04-20 01:52:36 - quant_platform - INFO -     stock_daily: 1150000/2446613
+2026-04-20 01:52:36 - quant_platform - INFO -     stock_daily: 1155000/2446613
+2026-04-20 01:52:37 - quant_platform - INFO -     stock_daily: 1160000/2446613
+2026-04-20 01:52:37 - quant_platform - INFO -     stock_daily: 1165000/2446613
+2026-04-20 01:52:37 - quant_platform - INFO -     stock_daily: 1170000/2446613
+2026-04-20 01:52:37 - quant_platform - INFO -     stock_daily: 1175000/2446613
+2026-04-20 01:52:38 - quant_platform - INFO -     stock_daily: 1180000/2446613
+2026-04-20 01:52:38 - quant_platform - INFO -     stock_daily: 1185000/2446613
+2026-04-20 01:52:38 - quant_platform - INFO -     stock_daily: 1190000/2446613
+2026-04-20 01:52:39 - quant_platform - INFO -     stock_daily: 1195000/2446613
+2026-04-20 01:52:39 - quant_platform - INFO -     stock_daily: 1200000/2446613
+2026-04-20 01:52:39 - quant_platform - INFO -     stock_daily: 1205000/2446613
+2026-04-20 01:52:39 - quant_platform - INFO -     stock_daily: 1210000/2446613
+2026-04-20 01:52:40 - quant_platform - INFO -     stock_daily: 1215000/2446613
+2026-04-20 01:52:40 - quant_platform - INFO -     stock_daily: 1220000/2446613
+2026-04-20 01:52:40 - quant_platform - INFO -     stock_daily: 1225000/2446613
+2026-04-20 01:52:40 - quant_platform - INFO -     stock_daily: 1230000/2446613
+2026-04-20 01:52:41 - quant_platform - INFO -     stock_daily: 1235000/2446613
+2026-04-20 01:52:41 - quant_platform - INFO -     stock_daily: 1240000/2446613
+2026-04-20 01:52:41 - quant_platform - INFO -     stock_daily: 1245000/2446613
+2026-04-20 01:52:41 - quant_platform - INFO -     stock_daily: 1250000/2446613
+2026-04-20 01:52:42 - quant_platform - INFO -     stock_daily: 1255000/2446613
+2026-04-20 01:52:42 - quant_platform - INFO -     stock_daily: 1260000/2446613
+2026-04-20 01:52:42 - quant_platform - INFO -     stock_daily: 1265000/2446613
+2026-04-20 01:52:42 - quant_platform - INFO -     stock_daily: 1270000/2446613
+2026-04-20 01:52:43 - quant_platform - INFO -     stock_daily: 1275000/2446613
+2026-04-20 01:52:43 - quant_platform - INFO -     stock_daily: 1280000/2446613
+2026-04-20 01:52:43 - quant_platform - INFO -     stock_daily: 1285000/2446613
+2026-04-20 01:52:43 - quant_platform - INFO -     stock_daily: 1290000/2446613
+2026-04-20 01:52:44 - quant_platform - INFO -     stock_daily: 1295000/2446613
+2026-04-20 01:52:44 - quant_platform - INFO -     stock_daily: 1300000/2446613
+2026-04-20 01:52:44 - quant_platform - INFO -     stock_daily: 1305000/2446613
+2026-04-20 01:52:44 - quant_platform - INFO -     stock_daily: 1310000/2446613
+2026-04-20 01:52:45 - quant_platform - INFO -     stock_daily: 1315000/2446613
+2026-04-20 01:52:45 - quant_platform - INFO -     stock_daily: 1320000/2446613
+2026-04-20 01:52:45 - quant_platform - INFO -     stock_daily: 1325000/2446613
+2026-04-20 01:52:45 - quant_platform - INFO -     stock_daily: 1330000/2446613
+2026-04-20 01:52:46 - quant_platform - INFO -     stock_daily: 1335000/2446613
+2026-04-20 01:52:46 - quant_platform - INFO -     stock_daily: 1340000/2446613
+2026-04-20 01:52:46 - quant_platform - INFO -     stock_daily: 1345000/2446613
+2026-04-20 01:52:46 - quant_platform - INFO -     stock_daily: 1350000/2446613
+2026-04-20 01:52:47 - quant_platform - INFO -     stock_daily: 1355000/2446613
+2026-04-20 01:52:47 - quant_platform - INFO -     stock_daily: 1360000/2446613
+2026-04-20 01:52:47 - quant_platform - INFO -     stock_daily: 1365000/2446613
+2026-04-20 01:52:47 - quant_platform - INFO -     stock_daily: 1370000/2446613
+2026-04-20 01:52:48 - quant_platform - INFO -     stock_daily: 1375000/2446613
+2026-04-20 01:52:48 - quant_platform - INFO -     stock_daily: 1380000/2446613
+2026-04-20 01:52:48 - quant_platform - INFO -     stock_daily: 1385000/2446613
+2026-04-20 01:52:49 - quant_platform - INFO -     stock_daily: 1390000/2446613
+2026-04-20 01:52:49 - quant_platform - INFO -     stock_daily: 1395000/2446613
+2026-04-20 01:52:49 - quant_platform - INFO -     stock_daily: 1400000/2446613
+2026-04-20 01:52:50 - quant_platform - INFO -     stock_daily: 1405000/2446613
+2026-04-20 01:52:50 - quant_platform - INFO -     stock_daily: 1410000/2446613
+2026-04-20 01:52:50 - quant_platform - INFO -     stock_daily: 1415000/2446613
+2026-04-20 01:52:50 - quant_platform - INFO -     stock_daily: 1420000/2446613
+2026-04-20 01:52:51 - quant_platform - INFO -     stock_daily: 1425000/2446613
+2026-04-20 01:52:51 - quant_platform - INFO -     stock_daily: 1430000/2446613
+2026-04-20 01:52:51 - quant_platform - INFO -     stock_daily: 1435000/2446613
+2026-04-20 01:52:51 - quant_platform - INFO -     stock_daily: 1440000/2446613
+2026-04-20 01:52:52 - quant_platform - INFO -     stock_daily: 1445000/2446613
+2026-04-20 01:52:52 - quant_platform - INFO -     stock_daily: 1450000/2446613
+2026-04-20 01:52:52 - quant_platform - INFO -     stock_daily: 1455000/2446613
+2026-04-20 01:52:52 - quant_platform - INFO -     stock_daily: 1460000/2446613
+2026-04-20 01:52:53 - quant_platform - INFO -     stock_daily: 1465000/2446613
+2026-04-20 01:52:53 - quant_platform - INFO -     stock_daily: 1470000/2446613
+2026-04-20 01:52:53 - quant_platform - INFO -     stock_daily: 1475000/2446613
+2026-04-20 01:52:53 - quant_platform - INFO -     stock_daily: 1480000/2446613
+2026-04-20 01:52:54 - quant_platform - INFO -     stock_daily: 1485000/2446613
+2026-04-20 01:52:54 - quant_platform - INFO -     stock_daily: 1490000/2446613
+2026-04-20 01:52:54 - quant_platform - INFO -     stock_daily: 1495000/2446613
+2026-04-20 01:52:54 - quant_platform - INFO -     stock_daily: 1500000/2446613
+2026-04-20 01:52:55 - quant_platform - INFO -     stock_daily: 1505000/2446613
+2026-04-20 01:52:55 - quant_platform - INFO -     stock_daily: 1510000/2446613
+2026-04-20 01:52:55 - quant_platform - INFO -     stock_daily: 1515000/2446613
+2026-04-20 01:52:55 - quant_platform - INFO -     stock_daily: 1520000/2446613
+2026-04-20 01:52:56 - quant_platform - INFO -     stock_daily: 1525000/2446613
+2026-04-20 01:52:56 - quant_platform - INFO -     stock_daily: 1530000/2446613
+2026-04-20 01:52:56 - quant_platform - INFO -     stock_daily: 1535000/2446613
+2026-04-20 01:52:56 - quant_platform - INFO -     stock_daily: 1540000/2446613
+2026-04-20 01:52:57 - quant_platform - INFO -     stock_daily: 1545000/2446613
+2026-04-20 01:52:57 - quant_platform - INFO -     stock_daily: 1550000/2446613
+2026-04-20 01:52:57 - quant_platform - INFO -     stock_daily: 1555000/2446613
+2026-04-20 01:52:58 - quant_platform - INFO -     stock_daily: 1560000/2446613
+2026-04-20 01:52:58 - quant_platform - INFO -     stock_daily: 1565000/2446613
+2026-04-20 01:52:58 - quant_platform - INFO -     stock_daily: 1570000/2446613
+2026-04-20 01:52:58 - quant_platform - INFO -     stock_daily: 1575000/2446613
+2026-04-20 01:52:59 - quant_platform - INFO -     stock_daily: 1580000/2446613
+2026-04-20 01:52:59 - quant_platform - INFO -     stock_daily: 1585000/2446613
+2026-04-20 01:52:59 - quant_platform - INFO -     stock_daily: 1590000/2446613
+2026-04-20 01:52:59 - quant_platform - INFO -     stock_daily: 1595000/2446613
+2026-04-20 01:53:00 - quant_platform - INFO -     stock_daily: 1600000/2446613
+2026-04-20 01:53:00 - quant_platform - INFO -     stock_daily: 1605000/2446613
+2026-04-20 01:53:00 - quant_platform - INFO -     stock_daily: 1610000/2446613
+2026-04-20 01:53:00 - quant_platform - INFO -     stock_daily: 1615000/2446613
+2026-04-20 01:53:01 - quant_platform - INFO -     stock_daily: 1620000/2446613
+2026-04-20 01:53:01 - quant_platform - INFO -     stock_daily: 1625000/2446613
+2026-04-20 01:53:01 - quant_platform - INFO -     stock_daily: 1630000/2446613
+2026-04-20 01:53:01 - quant_platform - INFO -     stock_daily: 1635000/2446613
+2026-04-20 01:53:02 - quant_platform - INFO -     stock_daily: 1640000/2446613
+2026-04-20 01:53:02 - quant_platform - INFO -     stock_daily: 1645000/2446613
+2026-04-20 01:53:02 - quant_platform - INFO -     stock_daily: 1650000/2446613
+2026-04-20 01:53:02 - quant_platform - INFO -     stock_daily: 1655000/2446613
+2026-04-20 01:53:03 - quant_platform - INFO -     stock_daily: 1660000/2446613
+2026-04-20 01:53:03 - quant_platform - INFO -     stock_daily: 1665000/2446613
+2026-04-20 01:53:03 - quant_platform - INFO -     stock_daily: 1670000/2446613
+2026-04-20 01:53:03 - quant_platform - INFO -     stock_daily: 1675000/2446613
+2026-04-20 01:53:04 - quant_platform - INFO -     stock_daily: 1680000/2446613
+2026-04-20 01:53:04 - quant_platform - INFO -     stock_daily: 1685000/2446613
+2026-04-20 01:53:04 - quant_platform - INFO -     stock_daily: 1690000/2446613
+2026-04-20 01:53:04 - quant_platform - INFO -     stock_daily: 1695000/2446613
+2026-04-20 01:53:05 - quant_platform - INFO -     stock_daily: 1700000/2446613
+2026-04-20 01:53:05 - quant_platform - INFO -     stock_daily: 1705000/2446613
+2026-04-20 01:53:05 - quant_platform - INFO -     stock_daily: 1710000/2446613
+2026-04-20 01:53:05 - quant_platform - INFO -     stock_daily: 1715000/2446613
+2026-04-20 01:53:06 - quant_platform - INFO -     stock_daily: 1720000/2446613
+2026-04-20 01:53:06 - quant_platform - INFO -     stock_daily: 1725000/2446613
+2026-04-20 01:53:06 - quant_platform - INFO -     stock_daily: 1730000/2446613
+2026-04-20 01:53:06 - quant_platform - INFO -     stock_daily: 1735000/2446613
+2026-04-20 01:53:07 - quant_platform - INFO -     stock_daily: 1740000/2446613
+2026-04-20 01:53:07 - quant_platform - INFO -     stock_daily: 1745000/2446613
+2026-04-20 01:53:07 - quant_platform - INFO -     stock_daily: 1750000/2446613
+2026-04-20 01:53:08 - quant_platform - INFO -     stock_daily: 1755000/2446613
+2026-04-20 01:53:08 - quant_platform - INFO -     stock_daily: 1760000/2446613
+2026-04-20 01:53:08 - quant_platform - INFO -     stock_daily: 1765000/2446613
+2026-04-20 01:53:08 - quant_platform - INFO -     stock_daily: 1770000/2446613
+2026-04-20 01:53:09 - quant_platform - INFO -     stock_daily: 1775000/2446613
+2026-04-20 01:53:09 - quant_platform - INFO -     stock_daily: 1780000/2446613
+2026-04-20 01:53:09 - quant_platform - INFO -     stock_daily: 1785000/2446613
+2026-04-20 01:53:09 - quant_platform - INFO -     stock_daily: 1790000/2446613
+2026-04-20 01:53:10 - quant_platform - INFO -     stock_daily: 1795000/2446613
+2026-04-20 01:53:10 - quant_platform - INFO -     stock_daily: 1800000/2446613
+2026-04-20 01:53:10 - quant_platform - INFO -     stock_daily: 1805000/2446613
+2026-04-20 01:53:10 - quant_platform - INFO -     stock_daily: 1810000/2446613
+2026-04-20 01:53:11 - quant_platform - INFO -     stock_daily: 1815000/2446613
+2026-04-20 01:53:11 - quant_platform - INFO -     stock_daily: 1820000/2446613
+2026-04-20 01:53:11 - quant_platform - INFO -     stock_daily: 1825000/2446613
+2026-04-20 01:53:11 - quant_platform - INFO -     stock_daily: 1830000/2446613
+2026-04-20 01:53:12 - quant_platform - INFO -     stock_daily: 1835000/2446613
+2026-04-20 01:53:12 - quant_platform - INFO -     stock_daily: 1840000/2446613
+2026-04-20 01:53:12 - quant_platform - INFO -     stock_daily: 1845000/2446613
+2026-04-20 01:53:12 - quant_platform - INFO -     stock_daily: 1850000/2446613
+2026-04-20 01:53:13 - quant_platform - INFO -     stock_daily: 1855000/2446613
+2026-04-20 01:53:13 - quant_platform - INFO -     stock_daily: 1860000/2446613
+2026-04-20 01:53:13 - quant_platform - INFO -     stock_daily: 1865000/2446613
+2026-04-20 01:53:14 - quant_platform - INFO -     stock_daily: 1870000/2446613
+2026-04-20 01:53:14 - quant_platform - INFO -     stock_daily: 1875000/2446613
+2026-04-20 01:53:14 - quant_platform - INFO -     stock_daily: 1880000/2446613
+2026-04-20 01:53:14 - quant_platform - INFO -     stock_daily: 1885000/2446613
+2026-04-20 01:53:15 - quant_platform - INFO -     stock_daily: 1890000/2446613
+2026-04-20 01:53:15 - quant_platform - INFO -     stock_daily: 1895000/2446613
+2026-04-20 01:53:15 - quant_platform - INFO -     stock_daily: 1900000/2446613
+2026-04-20 01:53:15 - quant_platform - INFO -     stock_daily: 1905000/2446613
+2026-04-20 01:53:16 - quant_platform - INFO -     stock_daily: 1910000/2446613
+2026-04-20 01:53:16 - quant_platform - INFO -     stock_daily: 1915000/2446613
+2026-04-20 01:53:16 - quant_platform - INFO -     stock_daily: 1920000/2446613
+2026-04-20 01:53:16 - quant_platform - INFO -     stock_daily: 1925000/2446613
+2026-04-20 01:53:17 - quant_platform - INFO -     stock_daily: 1930000/2446613
+2026-04-20 01:53:17 - quant_platform - INFO -     stock_daily: 1935000/2446613
+2026-04-20 01:53:17 - quant_platform - INFO -     stock_daily: 1940000/2446613
+2026-04-20 01:53:17 - quant_platform - INFO -     stock_daily: 1945000/2446613
+2026-04-20 01:53:18 - quant_platform - INFO -     stock_daily: 1950000/2446613
+2026-04-20 01:53:18 - quant_platform - INFO -     stock_daily: 1955000/2446613
+2026-04-20 01:53:18 - quant_platform - INFO -     stock_daily: 1960000/2446613
+2026-04-20 01:53:18 - quant_platform - INFO -     stock_daily: 1965000/2446613
+2026-04-20 01:53:19 - quant_platform - INFO -     stock_daily: 1970000/2446613
+2026-04-20 01:53:19 - quant_platform - INFO -     stock_daily: 1975000/2446613
+2026-04-20 01:53:19 - quant_platform - INFO -     stock_daily: 1980000/2446613
+2026-04-20 01:53:20 - quant_platform - INFO -     stock_daily: 1985000/2446613
+2026-04-20 01:53:20 - quant_platform - INFO -     stock_daily: 1990000/2446613
+2026-04-20 01:53:20 - quant_platform - INFO -     stock_daily: 1995000/2446613
+2026-04-20 01:53:20 - quant_platform - INFO -     stock_daily: 2000000/2446613
+2026-04-20 01:53:21 - quant_platform - INFO -     stock_daily: 2005000/2446613
+2026-04-20 01:53:21 - quant_platform - INFO -     stock_daily: 2010000/2446613
+2026-04-20 01:53:21 - quant_platform - INFO -     stock_daily: 2015000/2446613
+2026-04-20 01:53:21 - quant_platform - INFO -     stock_daily: 2020000/2446613
+2026-04-20 01:53:22 - quant_platform - INFO -     stock_daily: 2025000/2446613
+2026-04-20 01:53:22 - quant_platform - INFO -     stock_daily: 2030000/2446613
+2026-04-20 01:53:22 - quant_platform - INFO -     stock_daily: 2035000/2446613
+2026-04-20 01:53:22 - quant_platform - INFO -     stock_daily: 2040000/2446613
+2026-04-20 01:53:23 - quant_platform - INFO -     stock_daily: 2045000/2446613
+2026-04-20 01:53:23 - quant_platform - INFO -     stock_daily: 2050000/2446613
+2026-04-20 01:53:23 - quant_platform - INFO -     stock_daily: 2055000/2446613
+2026-04-20 01:53:24 - quant_platform - INFO -     stock_daily: 2060000/2446613
+2026-04-20 01:53:24 - quant_platform - INFO -     stock_daily: 2065000/2446613
+2026-04-20 01:53:24 - quant_platform - INFO -     stock_daily: 2070000/2446613
+2026-04-20 01:53:24 - quant_platform - INFO -     stock_daily: 2075000/2446613
+2026-04-20 01:53:25 - quant_platform - INFO -     stock_daily: 2080000/2446613
+2026-04-20 01:53:25 - quant_platform - INFO -     stock_daily: 2085000/2446613
+2026-04-20 01:53:25 - quant_platform - INFO -     stock_daily: 2090000/2446613
+2026-04-20 01:53:25 - quant_platform - INFO -     stock_daily: 2095000/2446613
+2026-04-20 01:53:26 - quant_platform - INFO -     stock_daily: 2100000/2446613
+2026-04-20 01:53:26 - quant_platform - INFO -     stock_daily: 2105000/2446613
+2026-04-20 01:53:26 - quant_platform - INFO -     stock_daily: 2110000/2446613
+2026-04-20 01:53:26 - quant_platform - INFO -     stock_daily: 2115000/2446613
+2026-04-20 01:53:27 - quant_platform - INFO -     stock_daily: 2120000/2446613
+2026-04-20 01:53:27 - quant_platform - INFO -     stock_daily: 2125000/2446613
+2026-04-20 01:53:27 - quant_platform - INFO -     stock_daily: 2130000/2446613
+2026-04-20 01:53:27 - quant_platform - INFO -     stock_daily: 2135000/2446613
+2026-04-20 01:53:28 - quant_platform - INFO -     stock_daily: 2140000/2446613
+2026-04-20 01:53:28 - quant_platform - INFO -     stock_daily: 2145000/2446613
+2026-04-20 01:53:28 - quant_platform - INFO -     stock_daily: 2150000/2446613
+2026-04-20 01:53:29 - quant_platform - INFO -     stock_daily: 2155000/2446613
+2026-04-20 01:53:29 - quant_platform - INFO -     stock_daily: 2160000/2446613
+2026-04-20 01:53:29 - quant_platform - INFO -     stock_daily: 2165000/2446613
+2026-04-20 01:53:29 - quant_platform - INFO -     stock_daily: 2170000/2446613
+2026-04-20 01:53:30 - quant_platform - INFO -     stock_daily: 2175000/2446613
+2026-04-20 01:53:30 - quant_platform - INFO -     stock_daily: 2180000/2446613
+2026-04-20 01:53:30 - quant_platform - INFO -     stock_daily: 2185000/2446613
+2026-04-20 01:53:30 - quant_platform - INFO -     stock_daily: 2190000/2446613
+2026-04-20 01:53:31 - quant_platform - INFO -     stock_daily: 2195000/2446613
+2026-04-20 01:53:31 - quant_platform - INFO -     stock_daily: 2200000/2446613
+2026-04-20 01:53:31 - quant_platform - INFO -     stock_daily: 2205000/2446613
+2026-04-20 01:53:31 - quant_platform - INFO -     stock_daily: 2210000/2446613
+2026-04-20 01:53:32 - quant_platform - INFO -     stock_daily: 2215000/2446613
+2026-04-20 01:53:32 - quant_platform - INFO -     stock_daily: 2220000/2446613
+2026-04-20 01:53:32 - quant_platform - INFO -     stock_daily: 2225000/2446613
+2026-04-20 01:53:33 - quant_platform - INFO -     stock_daily: 2230000/2446613
+2026-04-20 01:53:33 - quant_platform - INFO -     stock_daily: 2235000/2446613
+2026-04-20 01:53:33 - quant_platform - INFO -     stock_daily: 2240000/2446613
+2026-04-20 01:53:33 - quant_platform - INFO -     stock_daily: 2245000/2446613
+2026-04-20 01:53:34 - quant_platform - INFO -     stock_daily: 2250000/2446613
+2026-04-20 01:53:34 - quant_platform - INFO -     stock_daily: 2255000/2446613
+2026-04-20 01:53:34 - quant_platform - INFO -     stock_daily: 2260000/2446613
+2026-04-20 01:53:34 - quant_platform - INFO -     stock_daily: 2265000/2446613
+2026-04-20 01:53:35 - quant_platform - INFO -     stock_daily: 2270000/2446613
+2026-04-20 01:53:35 - quant_platform - INFO -     stock_daily: 2275000/2446613
+2026-04-20 01:53:35 - quant_platform - INFO -     stock_daily: 2280000/2446613
+2026-04-20 01:53:35 - quant_platform - INFO -     stock_daily: 2285000/2446613
+2026-04-20 01:53:36 - quant_platform - INFO -     stock_daily: 2290000/2446613
+2026-04-20 01:53:36 - quant_platform - INFO -     stock_daily: 2295000/2446613
+2026-04-20 01:53:36 - quant_platform - INFO -     stock_daily: 2300000/2446613
+2026-04-20 01:53:37 - quant_platform - INFO -     stock_daily: 2305000/2446613
+2026-04-20 01:53:37 - quant_platform - INFO -     stock_daily: 2310000/2446613
+2026-04-20 01:53:37 - quant_platform - INFO -     stock_daily: 2315000/2446613
+2026-04-20 01:53:37 - quant_platform - INFO -     stock_daily: 2320000/2446613
+2026-04-20 01:53:38 - quant_platform - INFO -     stock_daily: 2325000/2446613
+2026-04-20 01:53:38 - quant_platform - INFO -     stock_daily: 2330000/2446613
+2026-04-20 01:53:38 - quant_platform - INFO -     stock_daily: 2335000/2446613
+2026-04-20 01:53:38 - quant_platform - INFO -     stock_daily: 2340000/2446613
+2026-04-20 01:53:39 - quant_platform - INFO -     stock_daily: 2345000/2446613
+2026-04-20 01:53:39 - quant_platform - INFO -     stock_daily: 2350000/2446613
+2026-04-20 01:53:39 - quant_platform - INFO -     stock_daily: 2355000/2446613
+2026-04-20 01:53:39 - quant_platform - INFO -     stock_daily: 2360000/2446613
+2026-04-20 01:53:40 - quant_platform - INFO -     stock_daily: 2365000/2446613
+2026-04-20 01:53:40 - quant_platform - INFO -     stock_daily: 2370000/2446613
+2026-04-20 01:53:40 - quant_platform - INFO -     stock_daily: 2375000/2446613
+2026-04-20 01:53:41 - quant_platform - INFO -     stock_daily: 2380000/2446613
+2026-04-20 01:53:41 - quant_platform - INFO -     stock_daily: 2385000/2446613
+2026-04-20 01:53:41 - quant_platform - INFO -     stock_daily: 2390000/2446613
+2026-04-20 01:53:41 - quant_platform - INFO -     stock_daily: 2395000/2446613
+2026-04-20 01:53:42 - quant_platform - INFO -     stock_daily: 2400000/2446613
+2026-04-20 01:53:42 - quant_platform - INFO -     stock_daily: 2405000/2446613
+2026-04-20 01:53:42 - quant_platform - INFO -     stock_daily: 2410000/2446613
+2026-04-20 01:53:42 - quant_platform - INFO -     stock_daily: 2415000/2446613
+2026-04-20 01:53:43 - quant_platform - INFO -     stock_daily: 2420000/2446613
+2026-04-20 01:53:43 - quant_platform - INFO -     stock_daily: 2425000/2446613
+2026-04-20 01:53:43 - quant_platform - INFO -     stock_daily: 2430000/2446613
+2026-04-20 01:53:43 - quant_platform - INFO -     stock_daily: 2435000/2446613
+2026-04-20 01:53:44 - quant_platform - INFO -     stock_daily: 2440000/2446613
+2026-04-20 01:53:44 - quant_platform - INFO -     stock_daily: 2445000/2446613
+2026-04-20 01:53:44 - quant_platform - INFO -     stock_daily: 2446613/2446613
+2026-04-20 01:53:44 - quant_platform - INFO -   DONE stock_daily (2446613 rows)
+2026-04-20 01:53:44 - quant_platform - INFO -   MIGRATING index_daily (3856 rows)...
+2026-04-20 01:53:44 - quant_platform - INFO -   DONE index_daily (3856 rows)
+2026-04-20 01:53:44 - quant_platform - INFO - 序列值修复完成
+2026-04-20 01:53:44 - quant_platform - INFO - 
+迁移完成! 总计迁移 2504582 行
+2026-04-20 01:54:29 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:54:29 - quant_platform - INFO - Application starting...
+2026-04-20 01:54:29 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:57:07 - quant_platform - INFO - Application starting...
+2026-04-20 01:57:07 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:57:07 - app.middleware.middleware - INFO - Request: GET /
+2026-04-20 01:57:07 - app.middleware.middleware - INFO - Response: GET / Status: 200 Time: 0.001s
+2026-04-20 01:57:07 - httpx - INFO - HTTP Request: GET http://testserver/ "HTTP/1.1 200 OK"
+2026-04-20 01:57:07 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:57:07 - quant_platform - INFO - Application starting...
+2026-04-20 01:57:07 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:57:07 - app.middleware.middleware - INFO - Request: GET /health
+2026-04-20 01:57:07 - app.middleware.middleware - INFO - Response: GET /health Status: 200 Time: 0.001s
+2026-04-20 01:57:07 - httpx - INFO - HTTP Request: GET http://testserver/health "HTTP/1.1 200 OK"
+2026-04-20 01:57:07 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:57:07 - quant_platform - INFO - Application starting...
+2026-04-20 01:57:07 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:57:07 - app.middleware.middleware - INFO - Request: POST /api/v1/auth/login
+2026-04-20 01:57:07 - app.middleware.middleware - INFO - Response: POST /api/v1/auth/login Status: 401 Time: 0.013s
+2026-04-20 01:57:07 - httpx - INFO - HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 401 Unauthorized"
+2026-04-20 01:57:07 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:57:07 - quant_platform - INFO - Application starting...
+2026-04-20 01:57:07 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:57:07 - app.middleware.middleware - INFO - Request: GET /api/v1/market/stock-daily
+2026-04-20 01:57:07 - app.middleware.middleware - INFO - Response: GET /api/v1/market/stock-daily Status: 404 Time: 0.002s
+2026-04-20 01:57:07 - httpx - INFO - HTTP Request: GET http://testserver/api/v1/market/stock-daily?ts_code=000001.SZ&start_date=2024-01-01&end_date=2024-01-31 "HTTP/1.1 404 Not Found"
+2026-04-20 01:57:07 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:57:07 - quant_platform - INFO - Application starting...
+2026-04-20 01:57:07 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:57:07 - app.middleware.middleware - INFO - Request: GET /api/v1/factors/
+2026-04-20 01:57:07 - app.middleware.middleware - INFO - Response: GET /api/v1/factors/ Status: 200 Time: 0.001s
+2026-04-20 01:57:07 - httpx - INFO - HTTP Request: GET http://testserver/api/v1/factors/ "HTTP/1.1 200 OK"
+2026-04-20 01:57:07 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:57:07 - quant_platform - INFO - Application starting...
+2026-04-20 01:57:07 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:57:07 - app.middleware.middleware - INFO - Request: GET /api/v1/backtests/
+2026-04-20 01:57:07 - app.middleware.middleware - INFO - Response: GET /api/v1/backtests/ Status: 200 Time: 0.001s
+2026-04-20 01:57:07 - httpx - INFO - HTTP Request: GET http://testserver/api/v1/backtests/ "HTTP/1.1 200 OK"
+2026-04-20 01:57:07 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:57:07 - quant_platform - INFO - Application starting...
+2026-04-20 01:57:07 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:57:07 - app.middleware.middleware - INFO - Request: GET /api/v1/strategies/
+2026-04-20 01:57:07 - app.middleware.middleware - INFO - Response: GET /api/v1/strategies/ Status: 200 Time: 0.002s
+2026-04-20 01:57:07 - httpx - INFO - HTTP Request: GET http://testserver/api/v1/strategies/ "HTTP/1.1 200 OK"
+2026-04-20 01:57:07 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:57:07 - quant_platform - INFO - Application starting...
+2026-04-20 01:57:07 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:57:07 - app.middleware.middleware - INFO - Request: GET /api/v1/notifications/
+2026-04-20 01:57:07 - app.middleware.middleware - INFO - Response: GET /api/v1/notifications/ Status: 200 Time: 0.002s
+2026-04-20 01:57:07 - httpx - INFO - HTTP Request: GET http://testserver/api/v1/notifications/ "HTTP/1.1 200 OK"
+2026-04-20 01:57:07 - quant_platform - INFO - Application shutting down...
+2026-04-20 01:57:08 - quant_platform - WARNING - Factor sparse_factor coverage 25.00% < 60%, skipping
+2026-04-20 01:57:08 - quant_platform - INFO - Barra factor return computed via WLS
+2026-04-20 01:57:08 - quant_platform - INFO - Barra factor return computed via WLS
+2026-04-20 01:57:08 - quant_platform - INFO - MA cross signal computed
+2026-04-20 01:57:08 - quant_platform - INFO - MA cross signal computed
+2026-04-20 01:57:08 - quant_platform - INFO - Timing signals fused
+2026-04-20 01:57:08 - quant_platform - INFO - Kupiec POF test completed
+2026-04-20 01:57:08 - quant_platform - INFO - Christoffersen independence test completed
+2026-04-20 01:57:08 - quant_platform - INFO - VaR backtest completed
+2026-04-20 01:57:08 - quant_platform - INFO - Kupiec POF test completed
+2026-04-20 01:57:08 - quant_platform - INFO - Christoffersen independence test completed
+2026-04-20 01:57:08 - quant_platform - INFO - VaR backtest completed
+2026-04-20 01:57:08 - quant_platform - INFO - Bayesian fuse completed
+2026-04-20 01:57:08 - quant_platform - INFO - Timing signals fused
+2026-04-20 01:57:08 - quant_platform - INFO - Bayesian fuse completed
+2026-04-20 01:57:08 - quant_platform - INFO - Timing signals fused
+2026-04-20 01:57:08 - quant_platform - INFO - Timing signal evaluated
+2026-04-20 01:57:08 - quant_platform - INFO - Timing signal evaluated
+2026-04-20 01:57:08 - quant_platform - INFO - Walk-forward backtest completed
+2026-04-20 01:57:08 - quant_platform - INFO - P&L attribution computed
+2026-04-20 01:57:08 - quant_platform - WARNING - Optimization did not converge: Positive directional derivative for linesearch
+2026-04-20 01:57:08 - quant_platform - WARNING - Optimization did not converge: Positive directional derivative for linesearch
+2026-04-20 01:57:08 - quant_platform - WARNING - Optimization did not converge: Positive directional derivative for linesearch
+2026-04-20 01:57:08 - quant_platform - WARNING - Retry 1/3 after 1s: temporary error
+2026-04-20 01:57:08 - quant_platform - WARNING - Retry 2/3 after 2s: temporary error
+2026-04-20 01:57:08 - quant_platform - WARNING - Retry 1/2 after 1s: permanent error
+2026-04-20 01:57:08 - quant_platform - INFO - Tushare connected successfully (limited API access)
+2026-04-20 01:57:08 - quant_platform - ERROR - Failed to connect Tushare: API error
+2026-04-20 01:57:08 - quant_platform - ERROR - Error getting stock daily: API limit exceeded
+2026-04-20 01:57:08 - quant_platform - INFO - AKShare connected successfully (using Tencent source)
+2026-04-20 01:57:08 - quant_platform - ERROR - Failed to connect AKShare: network error
+2026-04-20 01:57:08 - quant_platform - ERROR - Error getting stock daily: API error
+2026-04-20 01:57:08 - quant_platform - INFO - Crawler data source connected successfully (Sina Finance)
+2026-04-20 01:57:08 - quant_platform - ERROR - Failed to connect crawler source: timeout
+2026-04-20 01:57:08 - quant_platform - INFO - Fetched 4 stocks from EastMoney
+2026-04-20 01:57:08 - quant_platform - INFO - CleanReport: 5 → 5 (removed=0, flagged=1, issues=1)
+2026-04-20 01:57:08 - quant_platform - INFO - CleanReport: 2 → 1 (removed=1, flagged=0, issues=1)
+2026-04-20 01:57:08 - quant_platform - INFO - CleanReport: 2 → 1 (removed=1, flagged=0, issues=1)
+2026-04-20 01:57:08 - quant_platform - INFO - CleanReport: 1 → 1 (removed=0, flagged=1, issues=1)
+2026-04-20 01:57:08 - quant_platform - INFO - CleanReport: 1 → 1 (removed=0, flagged=1, issues=1)
+2026-04-20 01:57:08 - quant_platform - INFO - CleanReport: 1 → 1 (removed=0, flagged=0, issues=0)
+2026-04-20 01:57:08 - quant_platform - INFO - CleanReport: 2 → 2 (removed=0, flagged=0, issues=1)
+2026-04-20 01:57:08 - quant_platform - INFO - CleanReport: 2 → 1 (removed=1, flagged=0, issues=1)
+2026-04-20 01:57:08 - quant_platform - INFO - CleanReport: 2 → 2 (removed=0, flagged=0, issues=1)
+2026-04-20 01:57:08 - quant_platform - INFO - CleanReport: 3 → 3 (removed=0, flagged=0, issues=0)
+2026-04-20 01:57:08 - quant_platform - INFO - CleanReport: 3 → 2 (removed=1, flagged=0, issues=2)
+2026-04-20 01:57:08 - quant_platform - INFO - CleanReport: 2 → 1 (removed=1, flagged=0, issues=1)
+2026-04-20 01:57:08 - quant_platform - INFO - CleanReport: 2 → 1 (removed=1, flagged=0, issues=1)
+2026-04-20 01:57:08 - quant_platform - INFO - CleanReport: 3 → 2 (removed=1, flagged=0, issues=1)
+2026-04-20 01:57:08 - quant_platform - INFO - Application starting...
+2026-04-20 01:57:08 - quant_platform - INFO - Database tables initialized
+2026-04-20 01:57:08 - app.middleware.middleware - INFO - Request: GET /
+2026-04-20 01:57:08 - app.middleware.middleware - INFO - Response: GET / Status: 200 Time: 0.000s
+2026-04-20 01:57:08 - httpx - INFO - HTTP Request: GET http://testserver/ "HTTP/1.1 200 OK"
+2026-04-20 01:57:08 - app.middleware.middleware - INFO - Request: GET /health
+2026-04-20 01:57:08 - app.middleware.middleware - INFO - Response: GET /health Status: 200 Time: 0.001s
+2026-04-20 01:57:08 - httpx - INFO - HTTP Request: GET http://testserver/health "HTTP/1.1 200 OK"
+2026-04-20 01:57:08 - quant_platform - WARNING - Optimization did not converge: Positive directional derivative for linesearch
+2026-04-20 01:57:08 - quant_platform - WARNING - Risk parity optimization did not converge: Positive directional derivative for linesearch
+2026-04-20 01:57:08 - quant_platform - WARNING - Min variance optimization did not converge: Inequality constraints incompatible
+2026-04-20 01:57:08 - quant_platform - INFO - Application shutting down...
+2026-04-20 02:04:40 - quant_platform - INFO - Application shutting down...
+2026-04-20 02:04:41 - quant_platform - INFO - Application starting...
+2026-04-20 02:04:41 - quant_platform - INFO - Database tables initialized

@@ -77,7 +77,7 @@ def fix_file(file_path, issues):
             import_end = i
         elif line.strip() == '' and import_end > 0:
             import_end = i
-        elif line.strip() and not line.strip().startswith(('import ', 'from '#', '#', '"')) and import_end > 0:
+        elif line.strip() and not line.strip().startswith(('import ', 'from ', '#', '"')) and import_end > 0:
             break
 
     # 收集需要添加的导入

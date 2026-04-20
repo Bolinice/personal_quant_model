@@ -378,12 +378,12 @@ class TestICStatistics:
     """IC统计量测试 (含Newey-West)"""
 
     def test_ic_statistics_with_nw(self):
-        from app.core.factor_analyzer import FactorAnalyzer
+        from app.core.factor_engine import FactorEngine
 
         np.random.seed(42)
         ic_series = pd.Series(np.random.randn(120) * 0.05 + 0.03)
 
-        analyzer = FactorAnalyzer.__new__(FactorAnalyzer)
+        analyzer = FactorEngine.__new__(FactorEngine)
         stats = analyzer.calc_ic_statistics(ic_series)
 
         assert 'ic_mean' in stats

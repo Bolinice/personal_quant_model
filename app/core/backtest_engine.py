@@ -3,10 +3,12 @@ A股回测引擎
 实现完整的A股回测逻辑：T+1限制、涨跌停处理、停牌处理、交易成本、滑点等
 符合ADD 12节回测规则和PRD 9.8节需求
 机构级增强: 参与率滑点模型、Walk-Forward验证、蒙特卡洛置换检验、通胀夏普比率
+事件驱动架构: BacktestEvent/Order/OrderBook + EventDrivenBacktestEngine + 自适应调仓
 """
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Protocol
 from datetime import datetime, date, timedelta
 from dataclasses import dataclass, field
+from enum import Enum
 import numpy as np
 import pandas as pd
 from sqlalchemy.orm import Session
@@ -29,6 +31,85 @@ NORTH_LIMIT = 0.20        # 北交所 20%
 
 # 交易单位
 LOT_SIZE = 100  # A股最小交易单位100股
+
+
+# ==================== 事件驱动架构 ====================
+
+class BacktestEventType(str, Enum):
+    """回测事件类型"""
+    MARKET_OPEN = "market_open"
+    MARKET_CLOSE = "market_close"
+    REBALANCE = "rebalance"
+    FILL = "fill"
+    RISK_CHECK = "risk_check"
+
+
+@dataclass
+class BacktestEvent:
+    """回测事件"""
+    event_type: BacktestEventType
+    trade_date: date
+    data: Dict[str, Any] = field(default_factory=dict)
+
+
+class OrderStatus(str, Enum):
+    """订单状态"""
+    PENDING = "pending"
+    FILLED = "filled"
+    PARTIAL_FILLED = "partial_filled"
+    REJECTED = "rejected"
+    CANCELLED = "cancelled"
+
+
+@dataclass
+class Order:
+    """订单 (目标权重→订单→成交的完整链路)"""
+    order_id: str
+    ts_code: str
+    direction: str  # 'buy' or 'sell'
+    target_amount: float
+    price: float
+    trade_date: date
+    status: OrderStatus = OrderStatus.PENDING
+    filled_amount: float = 0.0
+    filled_price: float = 0.0
+    reject_reason: str = ""
+
+    @property
+    def filled_shares(self) -> int:
+        return int(self.filled_amount / self.price) if self.price > 0 else 0
+
+
+@dataclass
+class OrderBook:
+    """订单簿 - 管理当日所有订单"""
+    orders: List[Order] = field(default_factory=list)
+    rejected_orders: List[Order] = field(default_factory=list)
+
+    def add_order(self, order: Order) -> None:
+        self.orders.append(order)
+
+    def add_rejected(self, order: Order) -> None:
+        order.status = OrderStatus.REJECTED
+        self.rejected_orders.append(order)
+
+    def filled_orders(self) -> List[Order]:
+        return [o for o in self.orders if o.status == OrderStatus.FILLED]
+
+    def total_buy_amount(self) -> float:
+        return sum(o.filled_amount for o in self.orders if o.direction == 'buy' and o.status == OrderStatus.FILLED)
+
+    def total_sell_amount(self) -> float:
+        return sum(o.filled_amount for o in self.orders if o.direction == 'sell' and o.status == OrderStatus.FILLED)
+
+    def clear(self) -> None:
+        self.orders.clear()
+        self.rejected_orders.clear()
+
+
+class SignalGenerator(Protocol):
+    """信号生成器协议 (替代Callable，类型安全)"""
+    def __call__(self, trade_date: date, universe: List[str], state: Any) -> Dict[str, float]: ...
 
 
 @dataclass
@@ -1120,3 +1201,348 @@ class ABShareBacktestEngine:
             'total_trades': len(state.trade_records),
             'total_days': len(state.nav_history),
         }
+
+    # ==================== 自适应调仓 ====================
+
+    def should_rebalance_adaptive(self, trade_date: date,
+                                   current_weights: pd.Series,
+                                   target_weights: pd.Series,
+                                   tracking_error_threshold: float = 0.02,
+                                   min_rebalance_days: int = 10,
+                                   last_rebalance_date: Optional[date] = None,
+                                   trading_days: Optional[List[date]] = None) -> bool:
+        """
+        自适应调仓: 基于跟踪误差阈值触发
+        当实际组合与目标组合的跟踪误差超过阈值时才调仓
+        比固定频率调仓更贴近机构实盘操作
+
+        Args:
+            trade_date: 当前交易日
+            current_weights: 当前持仓权重
+            target_weights: 目标权重
+            tracking_error_threshold: 跟踪误差阈值 (权重偏差的L2范数)
+            min_rebalance_days: 最小调仓间隔天数
+            last_rebalance_date: 上次调仓日期
+            trading_days: 交易日列表
+        """
+        # 最小间隔检查
+        if last_rebalance_date is not None and trading_days is not None:
+            days_since = sum(1 for d in trading_days if last_rebalance_date < d <= trade_date)
+            if days_since < min_rebalance_days:
+                return False
+
+        # 跟踪误差 = L2范数(current - target)
+        common = current_weights.index.intersection(target_weights.index)
+        if len(common) == 0:
+            return True
+
+        diff = current_weights.reindex(common, fill_value=0) - target_weights.reindex(common, fill_value=0)
+        tracking_error = np.sqrt((diff ** 2).sum())
+
+        return tracking_error > tracking_error_threshold
+
+    # ==================== 行业约束检查 ====================
+
+    def check_industry_constraints(self, target_weights: pd.Series,
+                                    industry_data: Dict[str, str],
+                                    max_industry_weight: float = 0.30) -> Dict[str, Any]:
+        """
+        行业权重约束检查
+        单个行业权重不超过阈值
+
+        Args:
+            target_weights: 目标权重 {ts_code: weight}
+            industry_data: 行业映射 {ts_code: industry_name}
+            max_industry_weight: 单行业最大权重
+
+        Returns:
+            {is_valid, violations, adjusted_weights}
+        """
+        industry_weights = {}
+        for ts_code, weight in target_weights.items():
+            industry = industry_data.get(ts_code, 'unknown')
+            industry_weights[industry] = industry_weights.get(industry, 0) + weight
+
+        violations = {ind: w for ind, w in industry_weights.items() if w > max_industry_weight}
+        is_valid = len(violations) == 0
+
+        adjusted = target_weights.copy()
+        if not is_valid:
+            # 按行业缩放: 超限行业按比例缩减
+            for industry, total_w in violations.items():
+                scale = max_industry_weight / total_w
+                for ts_code in target_weights.index:
+                    if industry_data.get(ts_code) == industry:
+                        adjusted[ts_code] *= scale
+            # 归一化
+            if adjusted.sum() > 0:
+                adjusted = adjusted / adjusted.sum()
+
+        return {
+            'is_valid': is_valid,
+            'violations': violations,
+            'adjusted_weights': adjusted,
+        }
+
+
+# ==================== 事件驱动回测引擎 ====================
+
+class EventDrivenBacktestEngine(ABShareBacktestEngine):
+    """
+    事件驱动回测引擎
+    支持自定义事件处理器、多组合并行回测、订单追踪
+    """
+
+    def __init__(self, db: Optional[Session] = None,
+                 commission_rate: float = DEFAULT_COMMISSION_RATE,
+                 stamp_tax_rate: float = DEFAULT_STAMP_TAX_RATE,
+                 slippage_rate: float = DEFAULT_SLIPPAGE_RATE) -> None:
+        super().__init__(db, commission_rate, stamp_tax_rate, slippage_rate)
+        self.event_handlers: Dict[BacktestEventType, List[Callable]] = {
+            et: [] for et in BacktestEventType
+        }
+        self.order_book = OrderBook()
+        self.all_order_books: Dict[date, OrderBook] = {}
+
+    def register_handler(self, event_type: BacktestEventType, handler: Callable) -> None:
+        """注册事件处理器"""
+        self.event_handlers[event_type].append(handler)
+
+    def _emit_event(self, event: BacktestEvent) -> None:
+        """触发事件"""
+        for handler in self.event_handlers.get(event.event_type, []):
+            try:
+                handler(event)
+            except Exception as e:
+                logger.warning(f"Event handler failed: {e}")
+
+    def run_backtest_event_driven(self,
+                                   signal_generator: SignalGenerator,
+                                   universe: List[str],
+                                   start_date: date, end_date: date,
+                                   rebalance_freq: str = 'monthly',
+                                   initial_capital: float = 1000000.0,
+                                   trading_days: Optional[List[date]] = None,
+                                   price_data: Optional[Dict[Tuple[str, date], Dict[str, Any]]] = None,
+                                   max_turnover: float = 1.0,
+                                   benchmark_nav: Optional[List[Dict[str, Any]]] = None,
+                                   industry_data: Optional[Dict[str, str]] = None,
+                                   max_industry_weight: float = 0.30) -> Dict[str, Any]:
+        """
+        事件驱动回测主循环
+        完整链路: 信号→订单→成交→NAV，记录未成交订单和行业约束
+        """
+        state = BacktestState(cash=initial_capital, initial_capital=initial_capital)
+        prev_weights = pd.Series(dtype=float)
+
+        if trading_days is None:
+            trading_days = pd.bdate_range(start_date, end_date).date.tolist()
+
+        for trade_date in trading_days:
+            if trade_date < start_date or trade_date > end_date:
+                continue
+
+            self.order_book.clear()
+
+            # MARKET_OPEN事件
+            self._emit_event(BacktestEvent(BacktestEventType.MARKET_OPEN, trade_date))
+
+            is_rebalance = self.should_rebalance(trade_date, rebalance_freq, trading_days)
+
+            if is_rebalance:
+                # REBALANCE事件
+                self._emit_event(BacktestEvent(BacktestEventType.REBALANCE, trade_date))
+
+                try:
+                    target_weights = signal_generator(trade_date, universe, state)
+                except Exception as e:
+                    logger.warning(f"Signal generator failed on {trade_date}: {e}")
+                    target_weights = {}
+
+                if target_weights:
+                    target_w = pd.Series(target_weights)
+
+                    # 行业约束
+                    if industry_data is not None:
+                        constraint_result = self.check_industry_constraints(
+                            target_w, industry_data, max_industry_weight
+                        )
+                        if not constraint_result['is_valid']:
+                            target_w = constraint_result['adjusted_weights']
+
+                    # 换手率控制
+                    if not prev_weights.empty and max_turnover < 1.0:
+                        turnover = (target_w.subtract(prev_weights, fill_value=0).abs().sum()) / 2
+                        if turnover > max_turnover:
+                            alpha = max_turnover / turnover
+                            target_w = prev_weights.reindex(target_w.index, fill_value=0) + alpha * (
+                                target_w - prev_weights.reindex(target_w.index, fill_value=0)
+                            )
+                            if target_w.sum() > 0:
+                                target_w = target_w / target_w.sum()
+
+                    current_total = state.cash + sum(
+                        pos.market_value for pos in state.positions.values()
+                    )
+
+                    # 生成卖出订单
+                    for ts_code in list(state.positions.keys()):
+                        if ts_code not in target_w or target_w[ts_code] < 1e-6:
+                            pos = state.positions[ts_code]
+                            stock_key = (ts_code, trade_date)
+                            stock_info = price_data.get(stock_key, {}) if price_data else {}
+                            sell_price = stock_info.get('close', pos.cost_price)
+
+                            order = Order(
+                                order_id=f"sell_{ts_code}_{trade_date}",
+                                ts_code=ts_code, direction='sell',
+                                target_amount=pos.shares * sell_price,
+                                price=sell_price, trade_date=trade_date,
+                            )
+
+                            # 可交易性检查
+                            tradable, reason = self.is_tradable(ts_code, trade_date, 'sell', stock_info)
+                            if not tradable:
+                                order.reject_reason = reason
+                                self.order_book.add_rejected(order)
+                                continue
+
+                            result = self.execute_sell(state, ts_code, pos.shares, sell_price, trade_date, stock_info)
+                            if result:
+                                order.status = OrderStatus.FILLED
+                                order.filled_amount = result['amount']
+                                order.filled_price = sell_price
+                            self.order_book.add_order(order)
+
+                    # 生成买入订单
+                    for ts_code, weight in target_w.items():
+                        if weight < 1e-6:
+                            continue
+
+                        target_amount = weight * current_total
+                        stock_key = (ts_code, trade_date)
+                        stock_info = price_data.get(stock_key, {}) if price_data else {}
+                        buy_price = stock_info.get('close', 0)
+
+                        if buy_price <= 0:
+                            continue
+
+                        current_amount = 0
+                        if ts_code in state.positions:
+                            current_amount = state.positions[ts_code].shares * buy_price
+
+                        if target_amount > current_amount * 1.05:
+                            order = Order(
+                                order_id=f"buy_{ts_code}_{trade_date}",
+                                ts_code=ts_code, direction='buy',
+                                target_amount=target_amount - current_amount,
+                                price=buy_price, trade_date=trade_date,
+                            )
+
+                            tradable, reason = self.is_tradable(ts_code, trade_date, 'buy', stock_info)
+                            if not tradable:
+                                order.reject_reason = reason
+                                self.order_book.add_rejected(order)
+                                continue
+
+                            result = self.execute_buy(state, ts_code, target_amount - current_amount, buy_price, trade_date, stock_info)
+                            if result:
+                                order.status = OrderStatus.FILLED
+                                order.filled_amount = result['amount']
+                                order.filled_price = buy_price
+                            self.order_book.add_order(order)
+
+                    # FILL事件
+                    self._emit_event(BacktestEvent(
+                        BacktestEventType.FILL, trade_date,
+                        {'filled': self.order_book.filled_orders(), 'rejected': self.order_book.rejected_orders}
+                    ))
+
+                    # 更新权重
+                    total_value = state.cash + sum(
+                        pos.shares * (price_data.get((ts_code, trade_date), {}).get('close', pos.cost_price) if price_data else pos.cost_price)
+                        for ts_code, pos in state.positions.items()
+                    )
+                    if total_value > 0:
+                        prev_weights = pd.Series({
+                            ts_code: (pos.shares * (price_data.get((ts_code, trade_date), {}).get('close', pos.cost_price) if price_data else pos.cost_price)) / total_value
+                            for ts_code, pos in state.positions.items()
+                        })
+
+            # RISK_CHECK事件
+            self._emit_event(BacktestEvent(BacktestEventType.RISK_CHECK, trade_date, {
+                'positions': dict(state.positions), 'cash': state.cash
+            }))
+
+            # mark-to-market
+            price_dict = {}
+            if price_data:
+                for ts_code in state.positions:
+                    stock_key = (ts_code, trade_date)
+                    stock_info = price_data.get(stock_key, {})
+                    if 'close' in stock_info:
+                        price_dict[ts_code] = stock_info['close']
+
+            if price_dict or state.positions:
+                self.calc_nav(state, trade_date, price_dict)
+
+            # MARKET_CLOSE事件
+            self._emit_event(BacktestEvent(BacktestEventType.MARKET_CLOSE, trade_date))
+
+            # 保存当日订单簿
+            self.all_order_books[trade_date] = OrderBook(
+                orders=list(self.order_book.orders),
+                rejected_orders=list(self.order_book.rejected_orders),
+            )
+
+        metrics = self.calc_metrics(state.nav_history, state.trade_records, benchmark_nav)
+
+        # 统计被拒订单
+        total_rejected = sum(len(ob.rejected_orders) for ob in self.all_order_books.values())
+        total_filled = sum(len(ob.filled_orders()) for ob in self.all_order_books.values())
+
+        return {
+            'nav_history': state.nav_history,
+            'trade_records': state.trade_records,
+            'metrics': metrics,
+            'initial_capital': initial_capital,
+            'final_value': state.cash + sum(pos.market_value for pos in state.positions.values()),
+            'total_trades': len(state.trade_records),
+            'total_days': len(state.nav_history),
+            'total_filled_orders': total_filled,
+            'total_rejected_orders': total_rejected,
+            'order_fill_rate': round(total_filled / (total_filled + total_rejected), 4) if (total_filled + total_rejected) > 0 else 1.0,
+        }
+
+    # ==================== 多组合并行回测 ====================
+
+    def run_multi_portfolio_backtest(self,
+                                      signal_generators: Dict[str, SignalGenerator],
+                                      universe: List[str],
+                                      start_date: date, end_date: date,
+                                      rebalance_freq: str = 'monthly',
+                                      initial_capital: float = 1000000.0,
+                                      trading_days: Optional[List[date]] = None,
+                                      price_data: Optional[Dict[Tuple[str, date], Dict[str, Any]]] = None,
+                                      benchmark_nav: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Dict[str, Any]]:
+        """
+        多组合并行回测
+        同一universe下不同策略同时回测，用于策略比较
+
+        Args:
+            signal_generators: {strategy_name: signal_generator}
+        """
+        results = {}
+        for name, sg in signal_generators.items():
+            results[name] = self.run_backtest(
+                signal_generator=sg,
+                universe=universe,
+                start_date=start_date,
+                end_date=end_date,
+                rebalance_freq=rebalance_freq,
+                initial_capital=initial_capital,
+                trading_days=trading_days,
+                price_data=price_data,
+                benchmark_nav=benchmark_nav,
+            )
+        return results

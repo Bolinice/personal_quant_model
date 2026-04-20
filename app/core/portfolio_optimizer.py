@@ -1,10 +1,11 @@
 """
-组合优化器
-基于风险模型的均值方差优化、风险平价优化、最小方差组合
+组合优化器 - 统一优化入口
+均值方差优化、风险平价、最小方差、最大去相关、Black-Litterman、
+Mean-CVaR、HRP层次风险平价、稳健优化、交易成本感知优化
 """
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from scipy.optimize import minimize
 from app.core.logging import logger
 
@@ -596,3 +597,178 @@ class PortfolioOptimizer:
             'non_zero_positions': (weights > 1e-4).sum(),
             'risk_contributions': pd.Series(rc_pct, index=common),
         }
+
+    # ==================== Mean-CVaR优化 (从RiskModel迁入) ====================
+
+    @staticmethod
+    def _ensure_positive_definite(matrix: np.ndarray) -> np.ndarray:
+        """确保矩阵正定"""
+        try:
+            eigenvalues, eigenvectors = np.linalg.eigh(matrix)
+            eigenvalues = np.maximum(eigenvalues, 1e-10)
+            return eigenvectors @ np.diag(eigenvalues) @ eigenvectors.T
+        except np.linalg.LinAlgError:
+            return matrix
+
+    def mean_cvar_optimize(self, expected_returns: np.ndarray,
+                           cov_matrix: np.ndarray,
+                           confidence: float = 0.95,
+                           risk_aversion: float = 1.0,
+                           max_weight: float = 0.05,
+                           min_weight: float = 0.0,
+                           long_only: bool = True) -> Dict[str, Any]:
+        """
+        Mean-CVaR组合优化 (Rockafellar-Uryasev 2000)
+        直接优化尾部风险而非方差，对非正态分布更稳健
+
+        Args:
+            expected_returns: 预期收益向量
+            cov_matrix: 协方差矩阵
+            confidence: CVaR置信水平
+            risk_aversion: 风险厌恶系数
+            max_weight: 单一资产最大权重
+            min_weight: 单一资产最小权重
+            long_only: 是否仅做多
+        """
+        try:
+            import cvxpy as cp
+        except ImportError:
+            logger.warning("cvxpy not available, falling back to mean-variance")
+            return self._mean_variance_fallback(expected_returns, cov_matrix, max_weight)
+
+        N = len(expected_returns)
+        w = cp.Variable(N)
+        xi = cp.Variable()
+
+        L = np.linalg.cholesky(self._ensure_positive_definite(cov_matrix))
+        n_scenarios = 1000
+        Z = np.random.randn(n_scenarios, N)
+        scenarios = Z @ L.T + expected_returns.reshape(1, -1)
+
+        losses = -scenarios @ w
+        slack = cp.Variable(n_scenarios)
+
+        cvar_term = xi + (1.0 / ((1 - confidence) * n_scenarios)) * cp.sum(slack)
+        objective = cp.Minimize(-expected_returns @ w + risk_aversion * cvar_term)
+
+        constraints = [
+            cp.sum(w) == 1,
+            slack >= 0,
+            slack >= losses - xi,
+        ]
+
+        if long_only:
+            constraints.append(w >= min_weight)
+        constraints.append(w <= max_weight)
+
+        problem = cp.Problem(objective, constraints)
+        try:
+            problem.solve(solver=cp.ECOS, max_iters=500)
+        except cp.SolverError:
+            problem.solve(solver=cp.SCS, max_iters=2000)
+
+        if problem.status not in ['optimal', 'optimal_inaccurate']:
+            return self._mean_variance_fallback(expected_returns, cov_matrix, max_weight)
+
+        weights = w.value
+        if weights is None:
+            return self._mean_variance_fallback(expected_returns, cov_matrix, max_weight)
+
+        weights = np.maximum(weights, 0)
+        weights = weights / weights.sum()
+
+        return {
+            'weights': weights,
+            'expected_return': float(expected_returns @ weights),
+            'cvar': float(xi.value + (1.0 / ((1 - confidence) * n_scenarios)) * np.sum(np.maximum(0, -scenarios @ weights - xi.value))),
+            'var': float(xi.value),
+            'portfolio_vol': float(np.sqrt(weights @ cov_matrix @ weights)),
+            'status': problem.status,
+        }
+
+    def _mean_variance_fallback(self, expected_returns: np.ndarray,
+                                 cov_matrix: np.ndarray,
+                                 max_weight: float) -> Dict[str, Any]:
+        """均值-方差优化回退方案"""
+        N = len(expected_returns)
+        try:
+            inv_cov = np.linalg.inv(cov_matrix)
+            raw_weights = inv_cov @ expected_returns
+            raw_weights = np.maximum(raw_weights, 0)
+            if raw_weights.sum() > 0:
+                weights = raw_weights / raw_weights.sum()
+                weights = np.minimum(weights, max_weight)
+                weights = weights / weights.sum()
+            else:
+                weights = np.ones(N) / N
+        except np.linalg.LinAlgError:
+            weights = np.ones(N) / N
+
+        return {
+            'weights': weights,
+            'expected_return': float(expected_returns @ weights),
+            'portfolio_vol': float(np.sqrt(weights @ cov_matrix @ weights)),
+            'status': 'fallback',
+        }
+
+    # ==================== HRP层次风险平价 (从ModelScorer迁入) ====================
+
+    def hrp_optimize(self, cov_matrix: np.ndarray,
+                     index: pd.Index = None) -> pd.Series:
+        """
+        层次风险平价 (Hierarchical Risk Parity, Lopez de Prado 2016)
+        基于相关性的聚类分配，避免矩阵求逆的不稳定性
+
+        Args:
+            cov_matrix: 协方差矩阵
+            index: 资产索引
+        """
+        n = cov_matrix.shape[0]
+        if index is None:
+            index = pd.RangeIndex(n)
+
+        if n < 3:
+            return pd.Series(1.0 / n, index=index)
+
+        try:
+            corr = np.corrcoef(cov_matrix) if cov_matrix.ndim == 2 and cov_matrix.shape[0] > 1 else np.eye(n)
+            dist = np.sqrt(0.5 * (1 - corr))
+            np.fill_diagonal(dist, 0)
+
+            from scipy.cluster.hierarchy import linkage, leaves_list
+            condensed = dist[np.triu_indices(n, k=1)]
+            link = linkage(condensed, method='single')
+            order = leaves_list(link)
+
+            weights = np.ones(n)
+            clusters = [list(range(n))]
+
+            while clusters:
+                new_clusters = []
+                for cluster in clusters:
+                    if len(cluster) <= 1:
+                        continue
+                    mid = len(cluster) // 2
+                    left = cluster[:mid]
+                    right = cluster[mid:]
+
+                    var_left = np.mean(np.diag(cov_matrix)[left])
+                    var_right = np.mean(np.diag(cov_matrix)[right])
+
+                    alpha = 1 - var_left / (var_left + var_right) if (var_left + var_right) > 0 else 0.5
+
+                    for i in left:
+                        weights[i] *= alpha
+                    for i in right:
+                        weights[i] *= (1 - alpha)
+
+                    new_clusters.extend([left, right])
+
+                clusters = new_clusters
+
+            weights = weights / weights.sum()
+            return pd.Series(weights, index=index)
+
+        except Exception as e:
+            logger.warning(f"HRP failed: {e}, falling back to equal weight")
+            return pd.Series(1.0 / n, index=index)

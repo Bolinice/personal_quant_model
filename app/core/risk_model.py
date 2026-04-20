@@ -77,15 +77,15 @@ class RiskModel:
 
     def _calc_optimal_shrinkage(self, X: np.ndarray, S: np.ndarray,
                                 F: np.ndarray, T: int) -> float:
-        """计算最优压缩系数"""
+        """计算最优压缩系数 (向量化: 消除O(T*N^2)循环)"""
         n = S.shape[0]
 
-        # 计算样本协方差的方差
-        sum_sq = 0
-        for t in range(T):
-            x_t = X[t] - X.mean(axis=0)
-            sum_sq += np.sum((np.outer(x_t, x_t) - S) ** 2)
-        var_S = sum_sq / (T ** 2)
+        # 向量化: 一次计算所有 (x_t x_t' - S)^2 的Frobenius范数之和
+        X_centered = X - X.mean(axis=0)  # (T, N)
+        # outer products: (T, N, 1) * (T, 1, N) -> (T, N, N)
+        outer_prods = X_centered[:, :, np.newaxis] * X_centered[:, np.newaxis, :]  # (T, N, N)
+        diffs = outer_prods - S[np.newaxis, :, :]  # (T, N, N)
+        var_S = np.sum(diffs ** 2) / (T ** 2)
 
         # 计算目标与样本的差异
         diff_sq = np.sum((F - S) ** 2)
@@ -649,119 +649,6 @@ class RiskModel:
             'lower_tail_dependence': round(lower_tail_dep, 4),
             'upper_tail_dependence': round(upper_tail_dep, 4),
             'asymmetry': round(lower_tail_dep - upper_tail_dep, 4),  # A股通常下尾>上尾
-        }
-
-    def mean_cvar_optimization(self, expected_returns: np.ndarray,
-                                cov_matrix: np.ndarray,
-                                confidence: float = 0.95,
-                                risk_aversion: float = 1.0,
-                                max_weight: float = 0.05,
-                                min_weight: float = 0.0,
-                                long_only: bool = True) -> Dict[str, Any]:
-        """
-        Mean-CVaR组合优化 (Rockafellar-Uryasev 2000)
-        直接优化尾部风险而非方差，对非正态分布更稳健
-
-        min  -w'*mu + lambda * CVaR_alpha(w)
-        s.t. w >= 0, sum(w) = 1, w_i <= w_max
-
-        Args:
-            expected_returns: 预期收益向量
-            cov_matrix: 协方差矩阵
-            confidence: CVaR置信水平
-            risk_aversion: 风险厌恶系数
-            max_weight: 单一资产最大权重
-            min_weight: 单一资产最小权重
-            long_only: 是否仅做多
-
-        Returns:
-            优化结果 {weights, cvar, expected_return, ...}
-        """
-        try:
-            import cvxpy as cp
-        except ImportError:
-            logger.warning("cvxpy not available, falling back to mean-variance")
-            return self._mean_variance_fallback(expected_returns, cov_matrix, max_weight)
-
-        N = len(expected_returns)
-        w = cp.Variable(N)
-        xi = cp.Variable()  # VaR辅助变量
-
-        # 使用Cholesky分解生成场景
-        L = np.linalg.cholesky(self._ensure_positive_definite(cov_matrix))
-        n_scenarios = 1000
-        Z = np.random.randn(n_scenarios, N)
-        scenarios = Z @ L.T + expected_returns.reshape(1, -1)
-
-        # CVaR线性化: CVaR = xi + 1/((1-alpha)*T) * sum(max(0, -r_t'*w - xi))
-        losses = -scenarios @ w  # 场景损失
-        slack = cp.Variable(n_scenarios)  # 辅助变量: slack >= max(0, loss - xi)
-
-        # 目标函数
-        cvar_term = xi + (1.0 / ((1 - confidence) * n_scenarios)) * cp.sum(slack)
-        objective = cp.Minimize(-expected_returns @ w + risk_aversion * cvar_term)
-
-        # 约束
-        constraints = [
-            cp.sum(w) == 1,
-            slack >= 0,
-            slack >= losses - xi,  # slack >= max(0, loss - xi)
-        ]
-
-        if long_only:
-            constraints.append(w >= min_weight)
-        constraints.append(w <= max_weight)
-
-        # 求解
-        problem = cp.Problem(objective, constraints)
-        try:
-            problem.solve(solver=cp.ECOS, max_iters=500)
-        except cp.SolverError:
-            problem.solve(solver=cp.SCS, max_iters=2000)
-
-        if problem.status not in ['optimal', 'optimal_inaccurate']:
-            return self._mean_variance_fallback(expected_returns, cov_matrix, max_weight)
-
-        weights = w.value
-        if weights is None:
-            return self._mean_variance_fallback(expected_returns, cov_matrix, max_weight)
-
-        # 清理微小权重
-        weights = np.maximum(weights, 0)
-        weights = weights / weights.sum()
-
-        return {
-            'weights': weights,
-            'expected_return': float(expected_returns @ weights),
-            'cvar': float(xi.value + (1.0 / ((1 - confidence) * n_scenarios)) * np.sum(np.maximum(0, -scenarios @ weights - xi.value))),
-            'var': float(xi.value),
-            'portfolio_vol': float(np.sqrt(weights @ cov_matrix @ weights)),
-            'status': problem.status,
-        }
-
-    def _mean_variance_fallback(self, expected_returns: np.ndarray,
-                                 cov_matrix: np.ndarray,
-                                 max_weight: float) -> Dict[str, Any]:
-        """均值-方差优化回退方案"""
-        N = len(expected_returns)
-        try:
-            inv_cov = np.linalg.inv(cov_matrix)
-            raw_weights = inv_cov @ expected_returns
-            raw_weights = np.maximum(raw_weights, 0)
-            if raw_weights.sum() > 0:
-                weights = raw_weights / raw_weights.sum()
-                weights = np.minimum(weights, max_weight)
-                weights = weights / weights.sum()
-            else:
-                weights = np.ones(N) / N
-        except np.linalg.LinAlgError:
-            weights = np.ones(N) / N
-
-        return {
-            'weights': weights,
-            'expected_return': float(expected_returns @ weights),
-            'portfolio_vol': float(np.sqrt(weights @ cov_matrix @ weights)),
-            'status': 'fallback',
         }
 
     def liquidity_adjusted_var(self, returns: pd.Series,

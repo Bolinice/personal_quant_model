@@ -1,11 +1,12 @@
 """
 数据源基类
-定义统一的数据源接口，支持增量同步、错误重试、限流控制
+定义统一的数据源接口，支持增量同步、错误重试、限流控制、数据质量校验、主备切换
 """
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import date, datetime, timedelta
 from dataclasses import dataclass, field
+import numpy as np
 import pandas as pd
 from app.core.logging import logger
 
@@ -23,35 +24,88 @@ class SyncResult:
     details: Dict = field(default_factory=dict)
 
 
+@dataclass
+class DataQualityReport:
+    """数据质量报告"""
+    data_type: str
+    total_records: int = 0
+    missing_rate: float = 0.0  # 缺失率
+    outlier_rate: float = 0.0  # 异常值率
+    date_continuity: float = 1.0  # 日期连续性 (1.0=完全连续)
+    duplicate_rate: float = 0.0  # 重复率
+    is_acceptable: bool = True
+    issues: List[str] = field(default_factory=list)
+
+    def summary(self) -> str:
+        return (f"DataQuality[{self.data_type}]: records={self.total_records}, "
+                f"missing={self.missing_rate:.2%}, outlier={self.outlier_rate:.2%}, "
+                f"continuity={self.date_continuity:.2%}, dup={self.duplicate_rate:.2%}, "
+                f"acceptable={self.is_acceptable}")
+
+
 class DataSourceManager:
-    """数据源管理器 - 注册和切换数据源"""
+    """数据源管理器 - 注册、主备切换、数据新鲜度检查"""
 
     def __init__(self):
         self._sources: Dict[str, BaseDataSource] = {}
         self._primary: Optional[str] = None
+        self._fallback: Optional[str] = None
 
-    def register(self, name: str, source: BaseDataSource, is_primary: bool = False):
+    def register(self, name: str, source: BaseDataSource,
+                 is_primary: bool = False, is_fallback: bool = False):
         self._sources[name] = source
         if is_primary:
             self._primary = name
+        if is_fallback:
+            self._fallback = name
 
     def get(self, name: str) -> Optional[BaseDataSource]:
         return self._sources.get(name)
 
     def get_primary(self) -> Optional[BaseDataSource]:
+        """获取主数据源，不可用时自动切换到备源"""
         if self._primary and self._primary in self._sources:
-            return self._sources[self._primary]
-        # fallback to first available
-        if self._sources:
-            return next(iter(self._sources.values()))
+            source = self._sources[self._primary]
+            try:
+                if source.connect():
+                    return source
+            except Exception:
+                pass
+
+        # 主源不可用，切换到备源
+        if self._fallback and self._fallback in self._sources:
+            logger.warning(f"Primary source {self._primary} unavailable, falling back to {self._fallback}")
+            return self._sources[self._fallback]
+
+        # 最后尝试任意可用源
+        for name, source in self._sources.items():
+            try:
+                if source.connect():
+                    return source
+            except Exception:
+                continue
         return None
+
+    def check_data_freshness(self, data_type: str, max_age_days: int = 1) -> Dict[str, bool]:
+        """检查各数据源的数据新鲜度"""
+        freshness = {}
+        for name, source in self._sources.items():
+            try:
+                last_date = source.get_last_sync_date(data_type)
+                if last_date is None:
+                    freshness[name] = False
+                else:
+                    age = (date.today() - last_date).days
+                    freshness[name] = age <= max_age_days
+            except Exception:
+                freshness[name] = False
+        return freshness
 
     def connect_all(self) -> Dict[str, bool]:
         """尝试连接所有数据源，返回状态"""
         status = {}
         for name, source in self._sources.items():
             try:
-                # 简单验证：调用connect方法
                 status[name] = source.connect()
             except Exception:
                 status[name] = False
@@ -115,6 +169,76 @@ class BaseDataSource(ABC):
                              end_date: str = None) -> pd.DataFrame:
         """获取交易日历"""
         pass
+
+    def get_last_sync_date(self, data_type: str) -> Optional[date]:
+        """获取某类数据的最后同步日期 (用于新鲜度检查, 子类可覆写)"""
+        return None
+
+    def validate(self, df: pd.DataFrame, data_type: str,
+                 required_columns: List[str] = None,
+                 max_missing_rate: float = 0.1,
+                 max_outlier_rate: float = 0.05) -> DataQualityReport:
+        """
+        数据质量校验: 缺失率、异常值率、日期连续性、重复率
+        """
+        report = DataQualityReport(data_type=data_type)
+        report.total_records = len(df)
+
+        if df.empty:
+            report.is_acceptable = False
+            report.issues.append("Empty DataFrame")
+            return report
+
+        total_cells = df.size
+        missing_cells = df.isna().sum().sum()
+        report.missing_rate = missing_cells / total_cells if total_cells > 0 else 0
+
+        if required_columns:
+            missing_cols = [c for c in required_columns if c not in df.columns]
+            if missing_cols:
+                report.issues.append(f"Missing required columns: {missing_cols}")
+                report.is_acceptable = False
+
+        outlier_count = 0
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        for col in numeric_cols:
+            series = df[col].dropna()
+            if len(series) < 10:
+                continue
+            median = series.median()
+            mad = (series - median).abs().median()
+            if mad > 0:
+                outlier_mask = (series - median).abs() > 5 * mad
+                outlier_count += outlier_mask.sum()
+
+        total_numeric = sum(len(df[col].dropna()) for col in numeric_cols)
+        report.outlier_rate = outlier_count / total_numeric if total_numeric > 0 else 0
+
+        if 'trade_date' in df.columns:
+            dates = pd.to_datetime(df['trade_date']).sort_values().dropna()
+            if len(dates) > 1:
+                expected_bdays = np.busday_count(
+                    dates.iloc[0].date(), dates.iloc[-1].date()
+                ) + 1
+                actual_days = len(dates)
+                report.date_continuity = actual_days / expected_bdays if expected_bdays > 0 else 1.0
+
+        if 'trade_date' in df.columns and 'ts_code' in df.columns:
+            total_rows = len(df)
+            unique_rows = df.drop_duplicates(subset=['trade_date', 'ts_code']).shape[0]
+            report.duplicate_rate = (total_rows - unique_rows) / total_rows if total_rows > 0 else 0
+
+        if report.missing_rate > max_missing_rate:
+            report.issues.append(f"Missing rate {report.missing_rate:.2%} > {max_missing_rate:.2%}")
+            report.is_acceptable = False
+        if report.outlier_rate > max_outlier_rate:
+            report.issues.append(f"Outlier rate {report.outlier_rate:.2%} > {max_outlier_rate:.2%}")
+            report.is_acceptable = False
+        if report.duplicate_rate > 0.01:
+            report.issues.append(f"Duplicate rate {report.duplicate_rate:.2%} > 1%")
+            report.is_acceptable = False
+
+        return report
 
     def get_index_components(self, index_code: str, trade_date: str = None) -> pd.DataFrame:
         """获取指数成分股"""

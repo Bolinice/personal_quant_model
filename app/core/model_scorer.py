@@ -681,91 +681,40 @@ class MultiFactorScorer:
     def _mean_cvar_weights(self, top_stocks: pd.DataFrame,
                             risk_model, expected_returns: pd.Series,
                             cov_matrix: np.ndarray) -> pd.Series:
-        """Mean-CVaR优化权重"""
+        """Mean-CVaR优化权重 (委托给PortfolioOptimizer)"""
         if risk_model is None or expected_returns is None:
-            # 回退到分数加权
             scores = top_stocks['total_score']
             scores = scores - scores.min() + 0.01
             return scores / scores.sum()
 
         try:
-            result = risk_model.mean_cvar_optimization(
+            from app.core.portfolio_optimizer import PortfolioOptimizer
+            optimizer = PortfolioOptimizer()
+            result = optimizer.mean_cvar_optimize(
                 expected_returns=expected_returns.values,
                 cov_matrix=cov_matrix,
-                max_weight=1.0 / len(top_stocks) * 2,  # 最大权重2倍等权
+                max_weight=1.0 / len(top_stocks) * 2,
             )
             if 'weights' in result:
                 return pd.Series(result['weights'], index=top_stocks.index)
         except Exception as e:
             logger.warning(f"Mean-CVaR optimization failed: {e}")
 
-        # 回退
         scores = top_stocks['total_score']
         scores = scores - scores.min() + 0.01
         return scores / scores.sum()
 
     def _hrp_weights(self, top_stocks: pd.DataFrame,
                       cov_matrix: np.ndarray = None) -> pd.Series:
-        """
-        层次风险平价 (Hierarchical Risk Parity, Lopez de Prado 2016)
-        基于相关性的聚类分配，避免矩阵求逆的不稳定性
-        """
+        """层次风险平价 (委托给PortfolioOptimizer)"""
         n = len(top_stocks)
         if cov_matrix is None or n < 3:
             return pd.Series(1.0 / n, index=top_stocks.index)
 
         try:
-            # Step 1: 相关矩阵距离矩阵
-            corr = np.corrcoef(cov_matrix) if cov_matrix.ndim == 2 and cov_matrix.shape[0] > 1 else np.eye(n)
-            dist = np.sqrt(0.5 * (1 - corr))
-            np.fill_diagonal(dist, 0)
-
-            # Step 2: 单链接聚类
-            from scipy.cluster.hierarchy import linkage, leaves_list
-            condensed = dist[np.triu_indices(n, k=1)]
-            link = linkage(condensed, method='single')
-            order = leaves_list(link)
-
-            # Step 3: 递归二分分配
-            weights = np.ones(n)
-            clusters = [list(range(n))]
-
-            while clusters:
-                new_clusters = []
-                for cluster in clusters:
-                    if len(cluster) <= 1:
-                        continue
-                    # 分割
-                    mid = len(cluster) // 2
-                    left = cluster[:mid]
-                    right = cluster[mid:]
-
-                    # 计算子集群方差
-                    var_left = np.mean(np.diag(cov_matrix)[left])
-                    var_right = np.mean(np.diag(cov_matrix)[right])
-
-                    # 逆方差分配
-                    alpha = 1 - var_left / (var_left + var_right) if (var_left + var_right) > 0 else 0.5
-
-                    for i in left:
-                        weights[i] *= alpha
-                    for i in right:
-                        weights[i] *= (1 - alpha)
-
-                    new_clusters.extend([left, right])
-
-                clusters = new_clusters
-
-            # 归一化
-            weights = weights / weights.sum()
-
-            # 按聚类顺序映射回原始索引
-            result = pd.Series(0.0, index=top_stocks.index)
-            for i, idx in enumerate(top_stocks.index):
-                result.loc[idx] = weights[i]
-
-            return result
-
+            from app.core.portfolio_optimizer import PortfolioOptimizer
+            optimizer = PortfolioOptimizer()
+            return optimizer.hrp_optimize(cov_matrix, index=top_stocks.index)
         except Exception as e:
             logger.warning(f"HRP failed: {e}, falling back to equal weight")
             return pd.Series(1.0 / n, index=top_stocks.index)

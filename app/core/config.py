@@ -1,5 +1,52 @@
 from pydantic_settings import BaseSettings
 from typing import List
+from pydantic import Field
+
+
+class BacktestConfig(BaseSettings):
+    """回测配置"""
+    INITIAL_CAPITAL: float = 1_000_000.0
+    COMMISSION_RATE: float = 0.00025
+    STAMP_TAX_RATE: float = 0.001
+    SLIPPAGE_RATE: float = 0.001
+    MIN_COMMISSION: float = 5.0
+    DEFAULT_REBALANCE_FREQ: str = "monthly"
+    MAX_TURNOVER: float = 1.0
+    WALK_FORWARD_TRAIN_WINDOW: int = 504
+    WALK_FORWARD_TEST_WINDOW: int = 63
+    WALK_FORWARD_GAP: int = 21
+
+    model_config = {"env_prefix": "BACKTEST_", "extra": "ignore"}
+
+
+class RiskConfig(BaseSettings):
+    """风险模型配置"""
+    COVARIANCE_HALFLIFE: int = 60
+    BARRA_HALFLIFE: int = 168
+    IDIOSYNCRATIC_HALFLIFE: int = 84
+    SHRINKAGE_TARGET: str = "identity"
+    EIGENVALUE_CLIP_PCT: float = 0.05
+    VAR_CONFIDENCE: float = 0.95
+    MAX_POSITION: float = 0.10
+    MAX_INDUSTRY_WEIGHT: float = 0.30
+    RISK_AVERSION: float = 1.0
+
+    model_config = {"env_prefix": "RISK_", "extra": "ignore"}
+
+
+class FactorConfig(BaseSettings):
+    """因子配置"""
+    MIN_COVERAGE: float = 0.8
+    MAD_THRESHOLD: float = 3.0
+    ZSCORE_CLIP: float = 3.0
+    IC_MIN_STOCKS: int = 10
+    FORWARD_PERIOD: int = 20
+    N_GROUPS: int = 5
+    MAX_DECAY_LAG: int = 20
+    CACHE_TTL: int = 1800
+    CACHE_MAX_SIZE: int = 10000
+
+    model_config = {"env_prefix": "FACTOR_", "extra": "ignore"}
 
 
 class Settings(BaseSettings):
@@ -39,6 +86,12 @@ class Settings(BaseSettings):
     # 应用配置
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "text"  # "text" or "json"
+
+    # 分组配置
+    backtest: BacktestConfig = Field(default_factory=BacktestConfig)
+    risk: RiskConfig = Field(default_factory=RiskConfig)
+    factor: FactorConfig = Field(default_factory=FactorConfig)
 
     model_config = {
         "env_file": ".env",

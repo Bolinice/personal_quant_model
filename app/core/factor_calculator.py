@@ -71,6 +71,26 @@ FACTOR_GROUPS = {
         'name': '交互因子',
         'factors': ['value_x_quality', 'size_x_momentum'],
     },
+    'earnings_quality': {
+        'name': '盈利质量因子',
+        'factors': ['accrual_anomaly', 'cash_flow_manipulation', 'earnings_stability', 'cfo_to_net_profit'],
+    },
+    'smart_money': {
+        'name': '聪明钱因子',
+        'factors': ['smart_money_ratio', 'north_momentum_20d', 'margin_signal', 'institutional_holding_chg'],
+    },
+    'technical': {
+        'name': '技术形态因子',
+        'factors': ['rsi_14d', 'bollinger_position', 'macd_signal', 'obv_ratio'],
+    },
+    'industry_rotation': {
+        'name': '行业轮动因子',
+        'factors': ['industry_momentum_1m', 'industry_fund_flow', 'industry_valuation_deviation'],
+    },
+    'alt_data': {
+        'name': '另类数据因子',
+        'factors': ['news_sentiment', 'supply_chain_momentum', 'patent_growth'],
+    },
 }
 
 # 因子方向定义 (ADD 6.3.4 + 机构级扩展)
@@ -90,6 +110,16 @@ FACTOR_DIRECTIONS = {
     'is_st': -1, 'limit_up_ratio_20d': -1, 'limit_down_ratio_20d': -1, 'ipo_age': 1,
     'sloan_accrual': -1,
     'value_x_quality': 1, 'size_x_momentum': 1,
+    # 盈利质量因子
+    'accrual_anomaly': -1, 'cash_flow_manipulation': -1, 'earnings_stability': 1, 'cfo_to_net_profit': 1,
+    # 聪明钱因子
+    'smart_money_ratio': 1, 'north_momentum_20d': 1, 'margin_signal': 1, 'institutional_holding_chg': 1,
+    # 技术形态因子
+    'rsi_14d': -1, 'bollinger_position': 1, 'macd_signal': 1, 'obv_ratio': 1,
+    # 行业轮动因子
+    'industry_momentum_1m': 1, 'industry_fund_flow': 1, 'industry_valuation_deviation': -1,
+    # 另类数据因子
+    'news_sentiment': 1, 'supply_chain_momentum': 1, 'patent_growth': 1,
 }
 
 
@@ -486,6 +516,7 @@ class FactorCalculator:
             factor_dfs.append(self.calc_policy_factors(policy_df))
         if supply_chain_df is not None and not supply_chain_df.empty:
             factor_dfs.append(self.calc_supply_chain_factors(supply_chain_df))
+            factor_dfs.append(self.calc_alt_data_factors(supply_chain_df))
         if sentiment_df is not None and not sentiment_df.empty:
             factor_dfs.append(self.calc_sentiment_factors(sentiment_df))
 
@@ -493,6 +524,11 @@ class FactorCalculator:
         factor_dfs.append(self.calc_ashare_specific_factors(price_df, stock_basic_df, stock_status_df))
         if financial_df is not None and not financial_df.empty:
             factor_dfs.append(self.calc_accruals_factor(financial_df))
+            factor_dfs.append(self.calc_earnings_quality_factors(financial_df))
+
+        # 机构级增强因子
+        factor_dfs.append(self.calc_technical_factors(price_df))
+        factor_dfs.append(self.calc_smart_money_factors(price_df, northbound_df))
 
         # 向量化合并
         merged = self._merge_factor_dfs(factor_dfs)
@@ -536,12 +572,14 @@ class FactorCalculator:
         factor_dfs.append(calculator.calc_momentum_factors(price_df))
         factor_dfs.append(calculator.calc_volatility_factors(price_df))
         factor_dfs.append(calculator.calc_liquidity_factors(price_df))
-        factor_dfs.append(calculator.calc_microstructure_factor(price_df))
+        factor_dfs.append(calculator.calc_microstructure_factors(price_df))
+        factor_dfs.append(calculator.calc_technical_factors(price_df))
 
         if financial_df is not None and not financial_df.empty:
             factor_dfs.append(calculator.calc_valuation_factors(financial_df, price_df))
             factor_dfs.append(calculator.calc_growth_factors(financial_df))
             factor_dfs.append(calculator.calc_quality_factors(financial_df))
+            factor_dfs.append(calculator.calc_earnings_quality_factors(financial_df))
 
         merged = FactorCalculator._merge_factor_dfs(factor_dfs)
         if merged.empty:
@@ -556,3 +594,202 @@ class FactorCalculator:
             direction_map=FACTOR_DIRECTIONS,
         )
         return merged
+
+    # ==================== 盈利质量因子 ====================
+
+    def calc_earnings_quality_factors(self, financial_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        盈利质量因子
+        - accrual_anomaly: 改进Sloan应计异常 (区分经营性/投资性应计)
+        - cash_flow_manipulation: 现金流操纵概率 (CFO与净利偏离度)
+        - earnings_stability: 盈利稳定性 (近8季净利CV的倒数)
+        - cfo_to_net_profit: CFO/净利 (现金流支撑度)
+        """
+        result = pd.DataFrame()
+        result['security_id'] = financial_df.get('ts_code', financial_df.index)
+
+        # 改进Sloan应计异常
+        required = ['net_profit', 'operating_cash_flow', 'total_assets']
+        if all(c in financial_df.columns for c in required):
+            accruals = financial_df['net_profit'] - financial_df['operating_cash_flow']
+            if 'total_assets_prev' in financial_df.columns:
+                avg_assets = (financial_df['total_assets'] + financial_df['total_assets_prev']) / 2
+            else:
+                avg_assets = financial_df['total_assets']
+            result['accrual_anomaly'] = accruals / avg_assets.replace(0, np.nan)
+
+            # 现金流操纵概率: |CFO - Net Profit| / |Net Profit|
+            net_profit = financial_df['net_profit'].replace(0, np.nan)
+            result['cash_flow_manipulation'] = (
+                (financial_df['operating_cash_flow'] - financial_df['net_profit']).abs()
+                / net_profit.abs()
+            )
+
+            # CFO/净利: 现金流支撑度
+            result['cfo_to_net_profit'] = (
+                financial_df['operating_cash_flow'] / net_profit
+            ).clip(-5, 5)
+
+        # 盈利稳定性: 需要多期数据
+        if 'net_profit_std_8q' in financial_df.columns and 'net_profit_mean_8q' in financial_df.columns:
+            mean = financial_df['net_profit_mean_8q'].replace(0, np.nan)
+            std = financial_df['net_profit_std_8q']
+            cv = (std / mean.abs()).clip(0, 10)
+            result['earnings_stability'] = 1 / (1 + cv)
+
+        return result
+
+    # ==================== 聪明钱因子 ====================
+
+    def calc_smart_money_factors(self, price_df: pd.DataFrame,
+                                  northbound_df: Optional[pd.DataFrame] = None,
+                                  margin_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+        """
+        聪明钱因子
+        - smart_money_ratio: 聪明钱比率 (大单净买入/总成交)
+        - north_momentum_20d: 北向资金20日动量
+        - margin_signal: 融资融券信号 (融资余额变化率)
+        - institutional_holding_chg: 机构持仓变化
+        """
+        result = pd.DataFrame()
+        result['security_id'] = price_df.get('ts_code', price_df.index)
+
+        # 聪明钱比率
+        if all(c in price_df.columns for c in ['large_order_volume', 'super_large_order_volume', 'volume']):
+            smart_vol = price_df['large_order_volume'].fillna(0) + price_df['super_large_order_volume'].fillna(0)
+            total_vol = price_df['volume'].replace(0, np.nan)
+            result['smart_money_ratio'] = (smart_vol / total_vol).rolling(20, min_periods=5).mean()
+
+        # 北向资金动量
+        if northbound_df is not None and not northbound_df.empty:
+            if 'north_holding' in northbound_df.columns:
+                result['north_momentum_20d'] = northbound_df['north_holding'].pct_change(20)
+
+        # 融资融券信号
+        if margin_df is not None and not margin_df.empty:
+            if 'margin_balance' in margin_df.columns:
+                result['margin_signal'] = margin_df['margin_balance'].pct_change(5)
+        elif 'margin_balance' in price_df.columns:
+            result['margin_signal'] = price_df['margin_balance'].pct_change(5)
+
+        # 机构持仓变化
+        if 'institutional_holding_pct' in price_df.columns:
+            result['institutional_holding_chg'] = price_df['institutional_holding_pct'].pct_change(20)
+
+        return result
+
+    # ==================== 技术形态因子 ====================
+
+    def calc_technical_factors(self, price_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        技术形态因子
+        - rsi_14d: 14日RSI (相对强弱指标)
+        - bollinger_position: 布林带位置 (0=下轨, 0.5=中轨, 1=上轨)
+        - macd_signal: MACD信号线
+        - obv_ratio: OBV能量潮比率
+        """
+        result = pd.DataFrame()
+        result['security_id'] = price_df.get('ts_code', price_df.index)
+
+        if 'close' not in price_df.columns:
+            return result
+
+        close = price_df['close']
+        daily_ret = close.pct_change()
+
+        # RSI(14)
+        if len(close) >= 15:
+            gain = daily_ret.clip(lower=0)
+            loss = (-daily_ret).clip(lower=0)
+            avg_gain = gain.rolling(14, min_periods=10).mean()
+            avg_loss = loss.rolling(14, min_periods=10).mean()
+            rs = avg_gain / avg_loss.replace(0, np.nan)
+            result['rsi_14d'] = 100 - (100 / (1 + rs))
+
+        # 布林带位置
+        if len(close) >= 20:
+            ma20 = close.rolling(20).mean()
+            std20 = close.rolling(20).std()
+            result['bollinger_position'] = ((close - ma20) / (2 * std20)).clip(-1, 1)
+
+        # MACD信号
+        if len(close) >= 35:
+            ema12 = close.ewm(span=12, adjust=False).mean()
+            ema26 = close.ewm(span=26, adjust=False).mean()
+            dif = ema12 - ema26
+            dea = dif.ewm(span=9, adjust=False).mean()
+            result['macd_signal'] = (dif - dea) / close.replace(0, np.nan) * 100
+
+        # OBV能量潮比率
+        if 'volume' in price_df.columns and len(close) >= 20:
+            direction = np.sign(daily_ret).fillna(0)
+            obv = (direction * price_df['volume']).cumsum()
+            obv_ma = obv.rolling(20, min_periods=10).mean()
+            result['obv_ratio'] = (obv / obv_ma.replace(0, np.nan) - 1).clip(-3, 3)
+
+        return result
+
+    # ==================== 行业轮动因子 ====================
+
+    def calc_industry_rotation_factors(self, price_df: pd.DataFrame,
+                                         industry_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+        """
+        行业轮动因子
+        - industry_momentum_1m: 行业1月动量
+        - industry_fund_flow: 行业资金流向
+        - industry_valuation_deviation: 行业估值偏离
+        """
+        result = pd.DataFrame()
+        result['security_id'] = price_df.get('ts_code', price_df.index)
+
+        if industry_df is None or industry_df.empty:
+            return result
+
+        # 行业动量
+        if 'industry_return_1m' in industry_df.columns:
+            result['industry_momentum_1m'] = industry_df['industry_return_1m']
+
+        # 行业资金流向
+        if 'industry_net_inflow' in industry_df.columns:
+            result['industry_fund_flow'] = industry_df['industry_net_inflow']
+
+        # 行业估值偏离
+        if 'industry_pe' in industry_df.columns and 'industry_pe_mean_3y' in industry_df.columns:
+            mean_pe = industry_df['industry_pe_mean_3y'].replace(0, np.nan)
+            result['industry_valuation_deviation'] = (
+                (industry_df['industry_pe'] - mean_pe) / mean_pe.abs()
+            ).clip(-3, 3)
+
+        return result
+
+    # ==================== 另类数据因子 ====================
+
+    def calc_alt_data_factors(self, alt_data_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        另类数据因子
+        - news_sentiment: 新闻情感得分
+        - supply_chain_momentum: 供应链传导动量 (Cohen-Frazzini增强)
+        - patent_growth: 专利增长率
+        """
+        result = pd.DataFrame()
+        result['security_id'] = alt_data_df.get('ts_code', alt_data_df.index)
+
+        # 新闻情感
+        if 'news_sentiment_score' in alt_data_df.columns:
+            result['news_sentiment'] = alt_data_df['news_sentiment_score'].rolling(20, min_periods=5).mean()
+
+        # 供应链传导动量
+        if 'customer_revenue_growth' in alt_data_df.columns and 'supplier_revenue_growth' in alt_data_df.columns:
+            # Cohen-Frazzini: 客户动量 + 供应商动量的加权平均
+            result['supply_chain_momentum'] = (
+                0.6 * alt_data_df['customer_revenue_growth'] +
+                0.4 * alt_data_df['supplier_revenue_growth']
+            )
+        elif 'customer_revenue_growth' in alt_data_df.columns:
+            result['supply_chain_momentum'] = alt_data_df['customer_revenue_growth']
+
+        # 专利增长
+        if 'patent_count' in alt_data_df.columns:
+            result['patent_growth'] = alt_data_df['patent_count'].pct_change(4)
+
+        return result

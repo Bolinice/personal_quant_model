@@ -7,3 +7,4 @@ export * from './performance';
 export * from './reports';
 export * from './stockPools';
 export * from './subscriptions';
+export * from './content';

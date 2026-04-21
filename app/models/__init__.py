@@ -6,11 +6,12 @@ from .models import Model, ModelFactorWeight, ModelScore, ModelPerformance
 from .portfolios import Portfolio, PortfolioPosition, RebalanceRecord, TimingSignal, TimingConfig
 from .backtests import Backtest, BacktestNav, BacktestPosition, BacktestTrade, BacktestResult
 from .simulated_portfolios import SimulatedPortfolio, SimulatedPortfolioPosition, SimulatedPortfolioNav
-from .products import Product, ProductReport, SubscriptionPlan
+from .products import Product, ProductReport, SubscriptionPlan, PricingMatrix, UpgradePackage
 from .subscriptions import Subscription, SubscriptionHistory, SubscriptionPermission
 from .reports import Report, ReportTemplate
 from .task_logs import TaskLog, AuditLog
 from .alert_logs import AlertLog, AlertRule, Notification
+from .content import ContentBlock
 # Market models from sub-package
 from .market import StockBasic, StockDaily, IndexDaily, TradingCalendar, StockFinancial, StockIndustry
 
@@ -32,13 +33,15 @@ __all__ = [
     # Simulated Portfolios
     "SimulatedPortfolio", "SimulatedPortfolioPosition", "SimulatedPortfolioNav",
     # Products & Subscriptions
-    "Product", "ProductReport", "SubscriptionPlan",
+    "Product", "ProductReport", "SubscriptionPlan", "PricingMatrix", "UpgradePackage",
     "Subscription", "SubscriptionHistory", "SubscriptionPermission",
     # Reports
     "Report", "ReportTemplate",
     # System
     "TaskLog", "AuditLog",
     "AlertLog", "AlertRule", "Notification",
+    # Content
+    "ContentBlock",
     # Market
     "StockBasic", "StockDaily", "IndexDaily", "TradingCalendar", "StockFinancial", "StockIndustry",
 ]

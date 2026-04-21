@@ -1,0 +1,188 @@
+const zh = {
+  // 品牌
+  brand: {
+    name: '银河漫游',
+    tagline: '面向A股市场的量化研究平台',
+    slogan1: '在复杂市场中，',
+    slogan2: '提供更高质量的结构化判断。',
+  },
+
+  // 导航
+  nav: {
+    home: '首页',
+    product: '产品介绍',
+    models: '量化模型',
+    pricing: '定价方案',
+    about: '关于我们',
+    factors: '因子管理',
+    modelMgmt: '模型管理',
+  },
+
+  // 通用按钮
+  btn: {
+    login: '登录',
+    trial: '申请试用',
+    backToSite: '返回官网',
+    contactSales: '联系销售',
+    getQuote: '获取机构报价',
+    bookDemo: '预约演示',
+    contactAdvisor: '联系顾问',
+    viewPricing: '查看价格方案',
+    subscribe: '立即订阅',
+    subscribeNow: '订阅解锁',
+    paying: '支付处理中...',
+    subscribeSuccess: '订阅成功！',
+    subscribeFail: '订阅失败，请重试',
+    payFail: '支付失败，请重试',
+    selectPlan: '选择方案',
+    noPlans: '暂无可订阅方案，请稍后再试',
+    back: '返回',
+  },
+
+  // 首页
+  home: {
+    coreValue: 'Core Value',
+    capability: 'Capability',
+    workflow: 'Workflow',
+    advantage: 'Advantage',
+    team: 'Team',
+    audience: 'Audience',
+  },
+
+  // 关于页
+  about: {
+    label: '关于我们',
+    teamLabel: '团队介绍',
+  },
+
+  // 定价页
+  pricing: {
+    yearly: '年付',
+    monthly: '月付',
+    samePool: '同股票池不同频率：',
+    sameFreq: '同频率不同股票池：',
+  },
+
+  // Dashboard
+  dashboard: {
+    title: '银河漫游',
+    subtitle: 'A股多因子增强策略 · 数据驱动 · 智能投研',
+    factorCount: '因子数量',
+    modelCount: '模型数量',
+    quickActions: '快捷操作',
+    factorMgmt: '因子管理',
+    factorDesc: '查看和管理多因子',
+    modelMgmt: '模型管理',
+    modelDesc: '配置模型和因子权重',
+  },
+
+  // 模型管理
+  models: {
+    overview: '总览',
+    myModels: '我的模型',
+    templates: '模型模板',
+    backtests: '回测分析',
+    plan: '套餐与权益',
+    currentPlan: '当前套餐',
+    expireDate: '到期时间',
+    upgrade: '升级套餐',
+    availablePools: '可用股票池',
+    availableFreq: '可用频率',
+    dataPermission: '数据权限',
+    apiPermission: 'API 权限',
+    collabPermission: '协作权限',
+    modelCount: '模型数量',
+    monthlyBacktests: '本月回测次数',
+    recentModels: '最近运行模型',
+    recentRebalances: '最近调仓',
+    recentExports: '最近导出',
+    createModel: '创建模型',
+    viewTemplates: '查看模板',
+    viewBacktests: '查看回测',
+    dataExport: '数据导出',
+    viewUpgrade: '查看可升级能力',
+    newModel: '新建模型',
+    searchModel: '搜索模型名称',
+    cardView: '卡片视图',
+    tableView: '表格视图',
+    viewDetail: '查看详情',
+    copyModel: '复制模型',
+    runBacktest: '回测',
+    export: '导出',
+    running: '运行中',
+    stopped: '已停用',
+    // 详情页 tabs
+    tabBasic: '基础信息',
+    tabBacktest: '回测结果',
+    tabPositions: '持仓与调仓',
+    tabExport: '数据与导出',
+    tabApi: 'API 映射',
+    tabPermissions: '权限与共享',
+    tabLogs: '运行日志',
+    // 指标
+    annualReturn: '年化收益',
+    maxDrawdown: '最大回撤',
+    sharpe: '夏普比率',
+    volatility: '波动率',
+    winRate: '胜率',
+    turnover: '换手率',
+    cumulativeReturn: '累计收益',
+    // 锁定态
+    locked: '锁定',
+    unlockUpgrade: '升级解锁',
+    apiLocked: 'API 接入为专业版及以上权益',
+    teamLocked: '团队共享为团队版及以上权益',
+    // 模板
+    templateRecommend: '推荐',
+    templateBeginner: '新手友好',
+    templatePro: '专业研究',
+    useTemplate: '立即使用',
+    // 套餐与权益
+    planComparison: '方案对比',
+    recommendUpgrade: '推荐升级',
+    unlockFeatures: '升级后可解锁',
+    upgradeNow: '立即升级',
+    // 回测
+    selectModel: '选择模型',
+    selectPeriod: '选择时间区间',
+    depthAnalysis: '深度分析',
+    industryExposure: '行业暴露',
+    styleExposure: '风格暴露',
+    factorExposure: '因子暴露',
+    // 导出
+    partialExport: '部分导出',
+    fullExport: '全量导出',
+    exportCSV: 'CSV',
+    exportExcel: 'Excel',
+    exportJSON: 'JSON',
+    exportNow: '立即导出',
+    exportHistory: '导出历史',
+  },
+
+  // 页脚
+  footer: {
+    disclaimer: '仅供量化研究参考，不构成投资建议。',
+  },
+
+  // 语言
+  lang: {
+    zh: '中',
+    en: 'EN',
+  },
+
+  // 背景主题
+  bg: {
+    title: '背景主题',
+    subtitle: '选择星座背景，匹配不同时段',
+    galaxy: '银河漫游',
+    taurus: '金牛座',
+    leo: '狮子座',
+    virgo: '室女座',
+    scorpio: '天蝎座',
+    aquarius: '水瓶座',
+    pisces: '双鱼座',
+  },
+} as const;
+
+export default zh;
+export type TranslationKeys = typeof zh;

@@ -1,7 +1,13 @@
 import client from '../client';
 
 export const subscriptionApi = {
-  listPlans: () => client.get('/subscriptions/plans'),
+  listPlans: () => client.get('/products/plans'),
+
+  getPricingOverview: () => client.get('/products/pricing-overview'),
+
+  getPricingMatrix: () => client.get('/products/pricing-matrix'),
+
+  getUpgradePackages: () => client.get('/products/upgrade-packages'),
 
   subscribe: (userId: number, planId: number) =>
     client.post('/subscriptions/subscribe', { user_id: userId, plan_id: planId }),

@@ -14,3 +14,4 @@ export { performanceApi } from './endpoints/performance';
 export { reportApi } from './endpoints/reports';
 export { stockPoolApi } from './endpoints/stockPools';
 export { subscriptionApi } from './endpoints/subscriptions';
+export { contentApi } from './endpoints/content';

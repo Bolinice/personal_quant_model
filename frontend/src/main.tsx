@@ -4,15 +4,20 @@ import { BrowserRouter } from 'react-router-dom'
 import { ThemeProvider, CssBaseline } from '@mui/material'
 import theme from '@/styles/theme'
 import App from './App'
-import { StarfieldBackground } from '@/components/background'
+import { StarfieldBackground, BackgroundProvider } from '@/components/background'
+import { LanguageProvider } from '@/i18n'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <StarfieldBackground />
-        <App />
+        <BackgroundProvider>
+          <LanguageProvider>
+            <StarfieldBackground />
+            <App />
+          </LanguageProvider>
+        </BackgroundProvider>
       </ThemeProvider>
     </BrowserRouter>
   </StrictMode>,

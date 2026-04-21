@@ -7,3 +7,4 @@ export { performanceApi } from './performance';
 export { reportApi } from './reports';
 export { stockPoolApi } from './stockPools';
 export { subscriptionApi } from './subscriptions';
+export { contentApi } from './content';

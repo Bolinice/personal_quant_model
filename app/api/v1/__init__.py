@@ -4,7 +4,7 @@ from app.api.v1 import (
     auth, users, securities, market, stock_pools, factors,
     models, timing, portfolios, backtests, simulated_portfolios,
     products, subscriptions, reports, task_logs, alert_logs, performance,
-    strategies, notifications,
+    strategies, notifications, content,
 )
 
 api_router = APIRouter()
@@ -28,3 +28,4 @@ api_router.include_router(alert_logs.router, prefix="/alert-logs", tags=["告警
 api_router.include_router(performance.router, prefix="/performance", tags=["绩效分析"])
 api_router.include_router(strategies.router, prefix="/strategies", tags=["策略管理"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["通知管理"])
+api_router.include_router(content.router, prefix="/content", tags=["内容管理"])

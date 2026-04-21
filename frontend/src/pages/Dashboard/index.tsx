@@ -7,9 +7,11 @@ import ModelTrainingIcon from '@mui/icons-material/ModelTraining';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { MetricCard, GlassPanel } from '@/components/ui';
 import { factorApi, modelApi } from '@/api';
+import { useT } from '@/i18n';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const t = useT();
   const [stats, setStats] = useState({ factors: 0, models: 0 });
   const [error, setError] = useState('');
 
@@ -24,13 +26,13 @@ export default function Dashboard() {
   }, []);
 
   const cards = [
-    { title: '因子数量', value: stats.factors, icon: <FunctionsIcon />, color: '#22d3ee', path: '/factors' },
-    { title: '模型数量', value: stats.models, icon: <ModelTrainingIcon />, color: '#8b5cf6', path: '/models' },
+    { title: t.dashboard.factorCount, value: stats.factors, icon: <FunctionsIcon />, color: '#22d3ee', path: '/app/factors' },
+    { title: t.dashboard.modelCount, value: stats.models, icon: <ModelTrainingIcon />, color: '#8b5cf6', path: '/app/models' },
   ];
 
   const quickActions = [
-    { label: '因子管理', desc: '查看和管理多因子', path: '/factors', color: '#22d3ee' },
-    { label: '模型管理', desc: '配置模型和因子权重', path: '/models', color: '#8b5cf6' },
+    { label: t.dashboard.factorMgmt, desc: t.dashboard.factorDesc, path: '/app/factors', color: '#22d3ee' },
+    { label: t.dashboard.modelMgmt, desc: t.dashboard.modelDesc, path: '/app/models', color: '#8b5cf6' },
   ];
 
   return (
@@ -53,10 +55,10 @@ export default function Dashboard() {
             letterSpacing: '-0.03em',
           }}
         >
-          量化策略平台
+          {t.dashboard.title}
         </Typography>
         <Typography variant="body1" sx={{ color: '#64748b', mb: 4 }}>
-          A股多因子增强策略 · 数据驱动 · 智能投研
+          {t.dashboard.subtitle}
         </Typography>
       </motion.div>
 
@@ -79,7 +81,7 @@ export default function Dashboard() {
 
       {/* Quick actions */}
       <Typography variant="h6" sx={{ fontWeight: 600, color: '#94a3b8', mb: 2, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-        快捷操作
+        {t.dashboard.quickActions}
       </Typography>
       <Grid container spacing={2}>
         {quickActions.map((action, i) => (

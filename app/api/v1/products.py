@@ -3,10 +3,65 @@ from typing import List
 from sqlalchemy.orm import Session
 from app.db.base import get_db
 from app.services.products_service import get_products, create_product, update_product, get_product_reports, create_product_report, generate_product_report
-from app.models.products import Product, ProductReport
+from app.models.products import Product, ProductReport, SubscriptionPlan, PricingMatrix, UpgradePackage
 from app.schemas.products import ProductCreate, ProductUpdate, ProductReportCreate, ProductOut, ProductReportOut
+from app.schemas.products import SubscriptionPlanOut, PricingMatrixOut, UpgradePackageOut, PricingOverviewOut
 
 router = APIRouter()
+
+
+# ─── 定价相关接口（静态路径必须在 /{product_id} 之前） ───
+
+@router.get("/pricing-overview", response_model=PricingOverviewOut)
+def pricing_overview(db: Session = Depends(get_db)):
+    """定价总览 - 聚合返回所有定价数据"""
+    plans = db.query(SubscriptionPlan).filter(
+        SubscriptionPlan.is_active == True
+    ).order_by(SubscriptionPlan.plan_tier).all()
+
+    matrices = db.query(PricingMatrix).filter(
+        PricingMatrix.is_active == True
+    ).all()
+
+    packages = db.query(UpgradePackage).filter(
+        UpgradePackage.is_active == True
+    ).order_by(UpgradePackage.sort_order).all()
+
+    return PricingOverviewOut(
+        plans=plans,
+        pricing_matrix=matrices,
+        upgrade_packages=packages,
+    )
+
+
+@router.get("/plans", response_model=List[SubscriptionPlanOut])
+def list_plans(db: Session = Depends(get_db)):
+    """列出所有订阅方案"""
+    plans = db.query(SubscriptionPlan).filter(
+        SubscriptionPlan.is_active == True
+    ).order_by(SubscriptionPlan.plan_tier).all()
+    return plans
+
+
+@router.get("/pricing-matrix", response_model=List[PricingMatrixOut])
+def list_pricing_matrix(db: Session = Depends(get_db)):
+    """获取单模型价格矩阵"""
+    matrices = db.query(PricingMatrix).filter(
+        PricingMatrix.is_active == True
+    ).all()
+    return matrices
+
+
+@router.get("/upgrade-packages", response_model=List[UpgradePackageOut])
+def list_upgrade_packages(db: Session = Depends(get_db)):
+    """获取升级包列表"""
+    packages = db.query(UpgradePackage).filter(
+        UpgradePackage.is_active == True
+    ).order_by(UpgradePackage.sort_order).all()
+    return packages
+
+
+# ─── 产品 CRUD ───
 
 @router.get("/", response_model=List[ProductOut])
 def read_products(model_id: int = None, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):

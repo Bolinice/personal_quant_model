@@ -55,7 +55,7 @@ const theme = createTheme({
       styleOverrides: {
         body: {
           background: '#030712',
-          overflow: 'hidden',
+          overflow: 'auto',
         },
         '::-webkit-scrollbar': {
           width: 6,

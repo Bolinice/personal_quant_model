@@ -14,13 +14,45 @@ export interface Subscription {
 
 export interface SubscriptionPlan {
   id: number;
+  plan_name: string;
+  plan_type: string | null;
+  plan_tier: number;
+  price_monthly: number | null;
+  price_yearly: number | null;
+  price_unit: string | null;
+  custom_price: string | null;
+  stock_pools: string[] | null;
+  frequencies: string[] | null;
+  features: string[] | null;
+  description: string | null;
+  highlight: boolean;
+  buttons: string[] | null;
+  is_active: boolean;
+}
+
+export interface PricingMatrix {
+  billing_cycle: string;
+  pools: string[];
+  frequencies: string[];
+  prices: number[][];
+  note: string | null;
+}
+
+export interface UpgradePackage {
+  id: number;
   name: string;
   description: string | null;
-  price: number;
-  billing_cycle: string;
-  features: string[] | null;
-  is_active: boolean;
-  created_at: string;
+  price_monthly: number | null;
+  price_yearly: number | null;
+  price_standard: string | null;
+  price_advanced: string | null;
+  price_unit: string | null;
+}
+
+export interface PricingOverview {
+  plans: SubscriptionPlan[];
+  pricing_matrix: PricingMatrix[];
+  upgrade_packages: UpgradePackage[];
 }
 
 export interface Product {

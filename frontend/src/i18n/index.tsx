@@ -1,0 +1,58 @@
+import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import zh, { type TranslationKeys } from './locales/zh';
+import en from './locales/en';
+
+export type Lang = 'zh' | 'en';
+
+const STORAGE_KEY = 'lang';
+
+const locales: Record<Lang, TranslationKeys> = { zh, en };
+
+function getInitialLang(): Lang {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved === 'zh' || saved === 'en') return saved;
+  } catch {}
+  return 'zh';
+}
+
+interface LanguageContextValue {
+  lang: Lang;
+  t: TranslationKeys;
+  setLang: (lang: Lang) => void;
+  toggleLang: () => void;
+}
+
+const LanguageContext = createContext<LanguageContextValue>({
+  lang: 'zh',
+  t: zh,
+  setLang: () => {},
+  toggleLang: () => {},
+});
+
+export function LanguageProvider({ children }: { children: ReactNode }) {
+  const [lang, setLangState] = useState<Lang>(getInitialLang);
+
+  const setLang = useCallback((l: Lang) => {
+    setLangState(l);
+    try { localStorage.setItem(STORAGE_KEY, l); } catch {}
+  }, []);
+
+  const toggleLang = useCallback(() => {
+    setLang(lang === 'zh' ? 'en' : 'zh');
+  }, [lang, setLang]);
+
+  return (
+    <LanguageContext.Provider value={{ lang, t: locales[lang], setLang, toggleLang }}>
+      {children}
+    </LanguageContext.Provider>
+  );
+}
+
+export function useT(): TranslationKeys {
+  return useContext(LanguageContext).t;
+}
+
+export function useLang() {
+  return useContext(LanguageContext);
+}

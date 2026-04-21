@@ -1,6 +1,6 @@
 from datetime import datetime, date
-from pydantic import BaseModel, ConfigDict
-from typing import Optional, List
+from pydantic import BaseModel, ConfigDict, field_validator
+from typing import Optional, List, Union
 
 class FactorBase(BaseModel):
     factor_code: str
@@ -10,6 +10,13 @@ class FactorBase(BaseModel):
     calc_expression: str
     description: Optional[str] = None
     is_active: bool = True
+
+    @field_validator('direction', mode='before')
+    @classmethod
+    def normalize_direction(cls, v: Union[int, str]) -> str:
+        if isinstance(v, int):
+            return "desc" if v == 1 else "asc"
+        return v
 
 class FactorCreate(FactorBase):
     pass

@@ -49,6 +49,23 @@ class FactorConfig(BaseSettings):
     model_config = {"env_prefix": "FACTOR_", "extra": "ignore"}
 
 
+class MLConfig(BaseSettings):
+    """ML模型训练配置"""
+    N_SPLITS: int = 5                # TimeSeriesSplit折数
+    MIN_TRAIN_SAMPLES: int = 200     # 最小训练样本数
+    EARLY_STOPPING_ROUNDS: int = 30  # 早停轮数
+    TRAIN_WINDOW: int = 504          # Walk-Forward训练窗口(交易日)
+    TEST_WINDOW: int = 63            # Walk-Forward测试窗口
+    GAP: int = 21                    # 训练/测试间隔(防信息泄漏)
+    RETRAIN_FREQ: int = 63           # 重训练频率
+    ML_WEIGHT: float = 0.4           # ML预测权重
+    IC_WEIGHT: float = 0.6           # IC加权权重
+    FUSION_METHOD: str = "simple"    # 融合方法: simple/dynamic/hierarchical
+    MODEL_DIR: str = "models/"       # 模型保存目录
+
+    model_config = {"env_prefix": "ML_", "extra": "ignore"}
+
+
 class Settings(BaseSettings):
     """应用配置 - 所有敏感值必须从环境变量读取"""
 
@@ -69,7 +86,6 @@ class Settings(BaseSettings):
     # Celery
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
-
     # MinIO - 生产环境必须设置环境变量
     MINIO_ENDPOINT: str = "localhost:9000"
     MINIO_ACCESS_KEY: str = ""
@@ -80,7 +96,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
     # 数据源
-    TUSHARE_TOKEN: str = ""
+    TUSHARE_TOKEN: str = "d06935450fbba6e514f65e0fddf63496135a3aef47cc351919462373"
     PRIMARY_DATA_SOURCE: str = "akshare"
 
     # 应用配置
@@ -92,6 +108,7 @@ class Settings(BaseSettings):
     backtest: BacktestConfig = Field(default_factory=BacktestConfig)
     risk: RiskConfig = Field(default_factory=RiskConfig)
     factor: FactorConfig = Field(default_factory=FactorConfig)
+    ml: MLConfig = Field(default_factory=MLConfig)
 
     model_config = {
         "env_file": ".env",

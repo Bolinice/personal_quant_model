@@ -18,17 +18,19 @@ class TushareDataSource(BaseDataSource):
         self._pro = None
 
     def connect(self) -> bool:
-        """连接 Tushare"""
+        """连接 Tushare（使用代理API地址）"""
         try:
             import tushare as ts
             if self.token:
                 ts.set_token(self.token)
             self._pro = ts.pro_api()
-            # 测试连接 - 使用股票基础信息接口（免费账户可用）
+            # 使用代理API地址，解锁全部接口权限
+            self._pro._DataApi__http_url = "http://tsy.xiaodefa.cn"
+            # 测试连接 - 使用股票基础信息接口
             df = self._pro.stock_basic(exchange='', list_status='L', fields='ts_code')
             self._connected = not df.empty
             if self._connected:
-                logger.info("Tushare connected successfully (limited API access)")
+                logger.info("Tushare connected successfully (proxy API, full access)")
             return self._connected
         except Exception as e:
             logger.error(f"Failed to connect Tushare: {e}")
@@ -318,12 +320,20 @@ class TushareDataSource(BaseDataSource):
 
     # ==================== 特色功能 ====================
 
-    def get_daily_basic(self, trade_date: str) -> pd.DataFrame:
+    def get_daily_basic(self, trade_date: str = None, ts_code: str = None,
+                        start_date: str = None, end_date: str = None) -> pd.DataFrame:
         """
-        获取每日基本面数据（PE、PB、市值等）
+        获取每日基本面数据（PE/PB/市值/换手率等）
+
+        支持两种调用方式:
+        1. 按交易日获取全市场: get_daily_basic(trade_date='2026-04-17')
+        2. 按股票+日期范围: get_daily_basic(ts_code='000001.SZ', start_date='2026-01-01', end_date='2026-04-18')
 
         Args:
-            trade_date: 交易日期
+            trade_date: 交易日期 YYYY-MM-DD（获取全市场快照）
+            ts_code: 股票代码
+            start_date: 开始日期 YYYY-MM-DD
+            end_date: 结束日期 YYYY-MM-DD
 
         Returns:
             DataFrame with PE, PB, total_mv, circ_mv etc.
@@ -332,10 +342,19 @@ class TushareDataSource(BaseDataSource):
             return pd.DataFrame()
 
         try:
-            df = self._pro.daily_basic(
-                trade_date=self._format_date(trade_date),
-                fields='ts_code,trade_date,close,turnover_rate,turnover_rate_f,volume_ratio,pe,pe_ttm,pb,ps,ps_ttm,dv_ratio,total_mv,circ_mv'
-            )
+            params = {
+                'fields': 'ts_code,trade_date,close,turnover_rate,turnover_rate_f,volume_ratio,pe,pe_ttm,pb,ps,ps_ttm,dv_ratio,dv_ttm,total_mv,circ_mv'
+            }
+            if trade_date:
+                params['trade_date'] = self._format_date(trade_date)
+            if ts_code:
+                params['ts_code'] = ts_code
+            if start_date:
+                params['start_date'] = self._format_date(start_date)
+            if end_date:
+                params['end_date'] = self._format_date(end_date)
+
+            df = self._pro.daily_basic(**params)
 
             if df.empty:
                 return pd.DataFrame()
@@ -377,6 +396,62 @@ class TushareDataSource(BaseDataSource):
 
         except Exception as e:
             logger.error(f"Error getting money flow: {e}")
+            return pd.DataFrame()
+
+    def get_hsgt_top10(self, trade_date: str) -> pd.DataFrame:
+        """
+        获取沪深港通十大成交股
+
+        Args:
+            trade_date: 交易日期 YYYY-MM-DD
+
+        Returns:
+            DataFrame with north money flow data per stock
+        """
+        if not self._connected:
+            return pd.DataFrame()
+
+        try:
+            df = self._pro.hsgt_top10(trade_date=self._format_date(trade_date))
+
+            if df.empty:
+                return pd.DataFrame()
+
+            df['trade_date'] = df['trade_date'].apply(self._format_date_back)
+            return df
+
+        except Exception as e:
+            logger.error(f"Error getting hsgt_top10: {e}")
+            return pd.DataFrame()
+
+    def get_moneyflow_hsgt(self, start_date: str, end_date: str) -> pd.DataFrame:
+        """
+        获取北向资金净流入汇总
+
+        Args:
+            start_date: 开始日期 YYYY-MM-DD
+            end_date: 结束日期 YYYY-MM-DD
+
+        Returns:
+            DataFrame with daily north/south money flow totals
+        """
+        if not self._connected:
+            return pd.DataFrame()
+
+        try:
+            df = self._pro.moneyflow_hsgt(
+                start_date=self._format_date(start_date),
+                end_date=self._format_date(end_date)
+            )
+
+            if df.empty:
+                return pd.DataFrame()
+
+            df['trade_date'] = df['trade_date'].apply(self._format_date_back)
+            return df
+
+        except Exception as e:
+            logger.error(f"Error getting moneyflow_hsgt: {e}")
             return pd.DataFrame()
 
     def get_limit_price(self, trade_date: str) -> pd.DataFrame:

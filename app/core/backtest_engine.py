@@ -183,6 +183,7 @@ class Position:
     market_value: float = 0.0
     weight: float = 0.0
     board_type: str = 'main'  # main, gem, star, st
+    entry_date: Optional[date] = None  # 首次买入日期，用于T+1检查
 
 
 @dataclass
@@ -331,12 +332,15 @@ class ABShareBacktestEngine:
             total_shares = pos.shares + shares
             pos.cost_price = (pos.cost_price * pos.shares + amount) / total_shares
             pos.shares = total_shares
+            # T+1: 更新entry_date为当日(新买入部分当日不可卖)
+            pos.entry_date = trade_date
         else:
             state.positions[ts_code] = Position(
                 security_id=ts_code,
                 shares=shares,
                 cost_price=price,
                 board_type=self.get_board_type(ts_code),
+                entry_date=trade_date,  # T+1: 记录买入日期
             )
 
         trade = {
@@ -355,7 +359,7 @@ class ABShareBacktestEngine:
     def execute_sell(self, state: BacktestState, ts_code: str,
                      shares: int, price: float,
                      trade_date: date, stock_data: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
-        """执行卖出"""
+        """执行卖出 (含T+1限制: 当日买入的股票不可卖出)"""
         tradable, reason = self.is_tradable(ts_code, trade_date, 'sell', stock_data)
         if not tradable:
             return None
@@ -364,6 +368,15 @@ class ABShareBacktestEngine:
             return None
 
         pos = state.positions[ts_code]
+
+        # T+1检查: 当日买入的股票不可卖出 (A股规则)
+        if pos.entry_date is not None and pos.entry_date == trade_date:
+            logger.debug(
+                "T+1 restriction: cannot sell stock bought today",
+                extra={"ts_code": ts_code, "trade_date": str(trade_date)},
+            )
+            return None
+
         sell_shares = min(shares, pos.shares)
         if sell_shares <= 0:
             return None
@@ -919,7 +932,7 @@ class ABShareBacktestEngine:
                                test_end: date,
                                retrain_freq: int = 63,
                                train_window: int = 504,
-                               gap: int = 21,
+                               gap: int = 60,
                                initial_capital: float = 1000000.0,
                                universe: Optional[List[str]] = None,
                                price_data: Optional[Dict[Tuple[str, date], Dict[str, Any]]] = None,
@@ -936,7 +949,7 @@ class ABShareBacktestEngine:
             test_end: 测试结束日期
             retrain_freq: 重训练频率(交易日数, 63≈1季度)
             train_window: 训练窗口长度
-            gap: 训练/测试间隔(防止信息泄漏)
+            gap: 训练/测试间隔(防止信息泄漏, 默认60覆盖最大因子回看期)
             initial_capital: 初始资金
             universe: 股票池
             price_data: 行情数据
@@ -1070,7 +1083,8 @@ class ABShareBacktestEngine:
                      trading_days: Optional[List[date]] = None,
                      price_data: Optional[Dict[Tuple[str, date], Dict[str, Any]]] = None,
                      max_turnover: float = 1.0,
-                     benchmark_nav: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+                     benchmark_nav: Optional[List[Dict[str, Any]]] = None,
+                     use_next_day_open: bool = True) -> Dict[str, Any]:
         """
         回测主循环 (机构级: 完整信号→权重→交易→NAV流程)
 
@@ -1086,6 +1100,7 @@ class ABShareBacktestEngine:
             price_data: 行情数据 {(ts_code, trade_date): {close, open, pct_chg, volume, amount, is_suspended, is_st, ...}}
             max_turnover: 单次最大换手率 (0-1, 1=无限制)
             benchmark_nav: 基准净值 [{trade_date, nav}]
+            use_next_day_open: 是否使用次日开盘价成交 (True=实盘真实, False=当日收盘价)
 
         Returns:
             回测结果 {nav_history, trade_records, metrics, ...}
@@ -1097,6 +1112,9 @@ class ABShareBacktestEngine:
             # 简化: 生成工作日
             trading_days = pd.bdate_range(start_date, end_date).date.tolist()
 
+        # 构建交易日索引映射，用于查找下一交易日
+        trading_day_to_idx = {td: i for i, td in enumerate(trading_days)}
+
         for trade_date in trading_days:
             if trade_date < start_date or trade_date > end_date:
                 continue
@@ -1105,7 +1123,7 @@ class ABShareBacktestEngine:
             is_rebalance = self.should_rebalance(trade_date, rebalance_freq, trading_days)
 
             if is_rebalance:
-                # 获取目标权重
+                # 获取目标权重 (信号在T日收盘后生成)
                 try:
                     target_weights = signal_generator(trade_date, universe, state)
                 except Exception as e:
@@ -1127,6 +1145,19 @@ class ABShareBacktestEngine:
                             if target_w.sum() > 0:
                                 target_w = target_w / target_w.sum()
 
+                    # 确定成交日期和价格:
+                    # 机构实盘: 信号T日收盘生成 → T+1日开盘价成交
+                    # 简化回测: 信号T日收盘生成 → T日收盘价成交 (use_next_day_open=False)
+                    if use_next_day_open:
+                        # 查找下一交易日
+                        current_idx = trading_day_to_idx.get(trade_date, -1)
+                        if current_idx >= 0 and current_idx + 1 < len(trading_days):
+                            exec_date = trading_days[current_idx + 1]
+                        else:
+                            exec_date = trade_date  # 回退到当日
+                    else:
+                        exec_date = trade_date
+
                     # 执行交易: 先卖后买
                     # 计算当前持仓市值
                     current_total = state.cash + sum(
@@ -1137,11 +1168,15 @@ class ABShareBacktestEngine:
                     for ts_code in list(state.positions.keys()):
                         if ts_code not in target_w or target_w[ts_code] < 1e-6:
                             pos = state.positions[ts_code]
-                            stock_key = (ts_code, trade_date)
+                            stock_key = (ts_code, exec_date)
                             stock_info = price_data.get(stock_key, {}) if price_data else {}
-                            sell_price = stock_info.get('close', pos.cost_price)
+                            # 使用次日开盘价成交(实盘真实)，回退到收盘价
+                            if use_next_day_open:
+                                sell_price = stock_info.get('open', stock_info.get('close', pos.cost_price))
+                            else:
+                                sell_price = stock_info.get('close', pos.cost_price)
                             self.execute_sell(state, ts_code, pos.shares, sell_price,
-                                            trade_date, stock_info)
+                                            exec_date, stock_info)
 
                     # 买入: 目标组合中的持仓
                     for ts_code, weight in target_w.items():
@@ -1149,9 +1184,13 @@ class ABShareBacktestEngine:
                             continue
 
                         target_amount = weight * current_total
-                        stock_key = (ts_code, trade_date)
+                        stock_key = (ts_code, exec_date)
                         stock_info = price_data.get(stock_key, {}) if price_data else {}
-                        buy_price = stock_info.get('close', 0)
+                        # 使用次日开盘价成交(实盘真实)，回退到收盘价
+                        if use_next_day_open:
+                            buy_price = stock_info.get('open', stock_info.get('close', 0))
+                        else:
+                            buy_price = stock_info.get('close', 0)
 
                         if buy_price <= 0:
                             continue
@@ -1164,7 +1203,7 @@ class ABShareBacktestEngine:
                         # 只在需要增仓时买入
                         if target_amount > current_amount * 1.05:  # 5%缓冲避免微小交易
                             self.execute_buy(state, ts_code, target_amount - current_amount,
-                                           buy_price, trade_date, stock_info)
+                                           buy_price, exec_date, stock_info)
 
                     # 更新上期权重
                     total_value = state.cash + sum(
@@ -1327,16 +1366,23 @@ class EventDrivenBacktestEngine(ABShareBacktestEngine):
                                    max_turnover: float = 1.0,
                                    benchmark_nav: Optional[List[Dict[str, Any]]] = None,
                                    industry_data: Optional[Dict[str, str]] = None,
-                                   max_industry_weight: float = 0.30) -> Dict[str, Any]:
+                                   max_industry_weight: float = 0.30,
+                                   use_next_day_open: bool = True) -> Dict[str, Any]:
         """
         事件驱动回测主循环
         完整链路: 信号→订单→成交→NAV，记录未成交订单和行业约束
+
+        Args:
+            use_next_day_open: 是否使用次日开盘价成交 (True=实盘真实T+1, False=当日收盘价)
         """
         state = BacktestState(cash=initial_capital, initial_capital=initial_capital)
         prev_weights = pd.Series(dtype=float)
 
         if trading_days is None:
             trading_days = pd.bdate_range(start_date, end_date).date.tolist()
+
+        # 构建交易日索引映射，用于查找下一交易日
+        trading_day_to_idx = {td: i for i, td in enumerate(trading_days)}
 
         for trade_date in trading_days:
             if trade_date < start_date or trade_date > end_date:
@@ -1385,29 +1431,42 @@ class EventDrivenBacktestEngine(ABShareBacktestEngine):
                         pos.market_value for pos in state.positions.values()
                     )
 
+                    # T+1执行: 信号T日收盘生成 → T+1日开盘价成交
+                    if use_next_day_open:
+                        current_idx = trading_day_to_idx.get(trade_date, -1)
+                        if current_idx >= 0 and current_idx + 1 < len(trading_days):
+                            exec_date = trading_days[current_idx + 1]
+                        else:
+                            exec_date = trade_date
+                    else:
+                        exec_date = trade_date
+
                     # 生成卖出订单
                     for ts_code in list(state.positions.keys()):
                         if ts_code not in target_w or target_w[ts_code] < 1e-6:
                             pos = state.positions[ts_code]
-                            stock_key = (ts_code, trade_date)
+                            stock_key = (ts_code, exec_date)
                             stock_info = price_data.get(stock_key, {}) if price_data else {}
-                            sell_price = stock_info.get('close', pos.cost_price)
+                            if use_next_day_open:
+                                sell_price = stock_info.get('open', stock_info.get('close', pos.cost_price))
+                            else:
+                                sell_price = stock_info.get('close', pos.cost_price)
 
                             order = Order(
-                                order_id=f"sell_{ts_code}_{trade_date}",
+                                order_id=f"sell_{ts_code}_{exec_date}",
                                 ts_code=ts_code, direction='sell',
                                 target_amount=pos.shares * sell_price,
-                                price=sell_price, trade_date=trade_date,
+                                price=sell_price, trade_date=exec_date,
                             )
 
                             # 可交易性检查
-                            tradable, reason = self.is_tradable(ts_code, trade_date, 'sell', stock_info)
+                            tradable, reason = self.is_tradable(ts_code, exec_date, 'sell', stock_info)
                             if not tradable:
                                 order.reject_reason = reason
                                 self.order_book.add_rejected(order)
                                 continue
 
-                            result = self.execute_sell(state, ts_code, pos.shares, sell_price, trade_date, stock_info)
+                            result = self.execute_sell(state, ts_code, pos.shares, sell_price, exec_date, stock_info)
                             if result:
                                 order.status = OrderStatus.FILLED
                                 order.filled_amount = result['amount']
@@ -1420,9 +1479,12 @@ class EventDrivenBacktestEngine(ABShareBacktestEngine):
                             continue
 
                         target_amount = weight * current_total
-                        stock_key = (ts_code, trade_date)
+                        stock_key = (ts_code, exec_date)
                         stock_info = price_data.get(stock_key, {}) if price_data else {}
-                        buy_price = stock_info.get('close', 0)
+                        if use_next_day_open:
+                            buy_price = stock_info.get('open', stock_info.get('close', 0))
+                        else:
+                            buy_price = stock_info.get('close', 0)
 
                         if buy_price <= 0:
                             continue
@@ -1433,19 +1495,19 @@ class EventDrivenBacktestEngine(ABShareBacktestEngine):
 
                         if target_amount > current_amount * 1.05:
                             order = Order(
-                                order_id=f"buy_{ts_code}_{trade_date}",
+                                order_id=f"buy_{ts_code}_{exec_date}",
                                 ts_code=ts_code, direction='buy',
                                 target_amount=target_amount - current_amount,
-                                price=buy_price, trade_date=trade_date,
+                                price=buy_price, trade_date=exec_date,
                             )
 
-                            tradable, reason = self.is_tradable(ts_code, trade_date, 'buy', stock_info)
+                            tradable, reason = self.is_tradable(ts_code, exec_date, 'buy', stock_info)
                             if not tradable:
                                 order.reject_reason = reason
                                 self.order_book.add_rejected(order)
                                 continue
 
-                            result = self.execute_buy(state, ts_code, target_amount - current_amount, buy_price, trade_date, stock_info)
+                            result = self.execute_buy(state, ts_code, target_amount - current_amount, buy_price, exec_date, stock_info)
                             if result:
                                 order.status = OrderStatus.FILLED
                                 order.filled_amount = result['amount']

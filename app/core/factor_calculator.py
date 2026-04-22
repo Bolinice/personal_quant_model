@@ -2,11 +2,71 @@
 因子计算器 - 纯计算类，无数据库依赖
 从FactorEngine拆分出的所有calc_*_factors方法
 机构级: 向量化批处理、跳月动量、TTM原始报表计算、Sloan应计、交互因子
+PIT安全: 所有财务因子计算均遵守Point-in-Time原则，仅使用ann_date <= trade_date的数据
 """
 from typing import Dict, Optional
+from datetime import date
 import numpy as np
 import pandas as pd
 from app.core.factor_preprocess import FactorPreprocessor
+
+
+def _safe_divide(numerator, denominator, eps: float = 1e-8):
+    """安全除法: 分母接近0时返回NaN，避免inf污染"""
+    denom = np.where(np.abs(denominator) < eps, np.nan, denominator)
+    return numerator / denom
+
+
+def pit_filter(financial_df: pd.DataFrame, trade_date: date,
+               ann_date_col: str = 'ann_date') -> pd.DataFrame:
+    """
+    PIT (Point-in-Time) 过滤: 仅使用公告日 <= 交易日的财务数据
+    消除财务数据的前瞻偏差(在公告日前使用未公开财务数据)
+
+    对于同一股票同一报告期有多条记录的情况，取ann_date <= trade_date中最新的一条
+
+    Args:
+        financial_df: 财务数据DataFrame，需包含 ann_date 列和 ts_code 列
+        trade_date: 当前交易日期
+        ann_date_col: 公告日期列名
+
+    Returns:
+        过滤后的DataFrame
+    """
+    if financial_df.empty:
+        return financial_df
+
+    if ann_date_col not in financial_df.columns:
+        # 没有公告日期列，无法做PIT过滤，发出警告
+        import warnings
+        warnings.warn(
+            f"Financial data missing '{ann_date_col}' column, "
+            "PIT filtering cannot be applied. This may introduce look-ahead bias.",
+            UserWarning,
+        )
+        return financial_df
+
+    # 确保日期类型一致
+    ann_dates = pd.to_datetime(financial_df[ann_date_col])
+    trade_dt = pd.to_datetime(trade_date)
+
+    # 仅保留公告日 <= 交易日的记录
+    mask = ann_dates <= trade_dt
+    filtered = financial_df.loc[mask].copy()
+
+    if filtered.empty:
+        return filtered
+
+    # 对于同一股票同一报告期，取最新的公告记录
+    # 如果有report_period列，按(ts_code, report_period)去重取最新ann_date
+    if 'report_period' in filtered.columns:
+        filtered = filtered.sort_values([ann_date_col], ascending=False)
+        filtered = filtered.drop_duplicates(subset=['ts_code', 'report_period'], keep='first')
+    elif 'end_date' in filtered.columns:
+        filtered = filtered.sort_values([ann_date_col], ascending=False)
+        filtered = filtered.drop_duplicates(subset=['ts_code', 'end_date'], keep='first')
+
+    return filtered
 
 
 # 因子分组定义 (ADD 6.3.1 + 机构级扩展)
@@ -131,8 +191,16 @@ class FactorCalculator:
 
     # ==================== 价值因子 ====================
 
-    def calc_valuation_factors(self, financial_df: pd.DataFrame, price_df: pd.DataFrame = None) -> pd.DataFrame:
-        """计算价值因子 (优先从原始财务数据计算TTM, 回退到预计算比率)"""
+    def calc_valuation_factors(self, financial_df: pd.DataFrame,
+                               price_df: pd.DataFrame = None,
+                               trade_date: Optional[date] = None) -> pd.DataFrame:
+        """计算价值因子 (优先从原始财务数据计算TTM, 回退到预计算比率)
+        PIT安全: 当trade_date提供时，仅使用ann_date <= trade_date的财务数据
+        """
+        # PIT过滤
+        if trade_date is not None:
+            financial_df = pit_filter(financial_df, trade_date)
+
         result = pd.DataFrame()
         result['security_id'] = financial_df['ts_code']
 
@@ -161,8 +229,16 @@ class FactorCalculator:
 
     # ==================== 成长因子 ====================
 
-    def calc_growth_factors(self, financial_df: pd.DataFrame) -> pd.DataFrame:
-        """计算成长因子 (优先从连续季报计算YoY)"""
+    def calc_growth_factors(self, financial_df: pd.DataFrame,
+                            trade_date: Optional[date] = None) -> pd.DataFrame:
+        """
+        计算成长因子 (优先从连续季报计算YoY)
+        PIT安全: 当trade_date提供时，仅使用ann_date <= trade_date的财务数据
+        """
+        # PIT过滤
+        if trade_date is not None:
+            financial_df = pit_filter(financial_df, trade_date)
+
         result = pd.DataFrame()
         result['security_id'] = financial_df['ts_code']
 
@@ -189,8 +265,17 @@ class FactorCalculator:
 
     # ==================== 质量因子 ====================
 
-    def calc_quality_factors(self, financial_df: pd.DataFrame) -> pd.DataFrame:
-        """计算质量因子 (ROE/ROA用平均净资产/总资产, 新增Sloan应计)"""
+    def calc_quality_factors(self, financial_df: pd.DataFrame,
+                             trade_date: Optional[date] = None) -> pd.DataFrame:
+        """
+        计算质量因子 (ROE/ROA用平均净资产/总资产)
+        PIT安全: 当trade_date提供时，仅使用ann_date <= trade_date的财务数据
+        注意: Sloan应计已移至calc_accruals_factor，此处不再重复计算
+        """
+        # PIT过滤
+        if trade_date is not None:
+            financial_df = pit_filter(financial_df, trade_date)
+
         result = pd.DataFrame()
         result['security_id'] = financial_df['ts_code']
 
@@ -218,13 +303,7 @@ class FactorCalculator:
             if 'current_assets' in financial_df.columns and 'current_liabilities' in financial_df.columns:
                 result['current_ratio'] = financial_df['current_assets'] / financial_df['current_liabilities'].replace(0, np.nan)
 
-            if 'operating_cash_flow' in financial_df.columns and 'total_assets' in financial_df.columns:
-                accruals = financial_df['net_profit'] - financial_df['operating_cash_flow']
-                if 'total_assets_prev' in financial_df.columns:
-                    avg_assets = (financial_df['total_assets'] + financial_df['total_assets_prev']) / 2
-                else:
-                    avg_assets = financial_df['total_assets']
-                result['sloan_accrual'] = accruals / avg_assets.replace(0, np.nan)
+            # 注意: Sloan应计已移至calc_accruals_factor，避免重复计算
         else:
             result['roe'] = financial_df.get('roe')
             result['roa'] = financial_df.get('roa')
@@ -246,9 +325,9 @@ class FactorCalculator:
         close = price_df['close']
 
         result['ret_1m_reversal'] = close.pct_change(20)
-        result['ret_3m_skip1'] = close.shift(20) / close.shift(60) - 1
-        result['ret_6m_skip1'] = close.shift(20) / close.shift(120) - 1
-        result['ret_12m_skip1'] = close.shift(20) / close.shift(240) - 1
+        result['ret_3m_skip1'] = _safe_divide(close.shift(20), close.shift(60)) - 1
+        result['ret_6m_skip1'] = _safe_divide(close.shift(20), close.shift(120)) - 1
+        result['ret_12m_skip1'] = _safe_divide(close.shift(20), close.shift(240)) - 1
         return result
 
     # ==================== 波动率因子 ====================
@@ -339,12 +418,12 @@ class FactorCalculator:
             result['large_order_ratio'] = result['large_order_ratio'].rolling(20, min_periods=5).mean()
 
         if all(c in price_df.columns for c in ['open', 'close']):
-            result['overnight_return'] = price_df['open'] / price_df['close'].shift(1) - 1
+            result['overnight_return'] = _safe_divide(price_df['open'], price_df['close'].shift(1)) - 1
             result['overnight_return'] = result['overnight_return'].rolling(20, min_periods=5).mean()
 
         if all(c in price_df.columns for c in ['open', 'close']):
-            intraday_ret = price_df['close'] / price_df['open'] - 1
-            overnight_ret = price_df['open'] / price_df['close'].shift(1) - 1
+            intraday_ret = _safe_divide(price_df['close'], price_df['open']) - 1
+            overnight_ret = _safe_divide(price_df['open'], price_df['close'].shift(1)) - 1
             result['intraday_return_ratio'] = (
                 intraday_ret.abs().rolling(20, min_periods=5).mean()
                 / overnight_ret.abs().rolling(20, min_periods=5).mean().replace(0, np.nan)
@@ -353,7 +432,7 @@ class FactorCalculator:
         if all(c in price_df.columns for c in ['close', 'volume']):
             daily_ret = price_df['close'].pct_change()
             abs_ret = daily_ret.abs()
-            vol_ratio = price_df['volume'] / price_df['volume'].rolling(20, min_periods=5).mean()
+            vol_ratio = _safe_divide(price_df['volume'], price_df['volume'].rolling(20, min_periods=5).mean())
             result['vpin'] = (abs_ret * vol_ratio).rolling(20, min_periods=5).mean()
 
         return result
@@ -425,8 +504,14 @@ class FactorCalculator:
 
         return result
 
-    def calc_accruals_factor(self, financial_df: pd.DataFrame) -> pd.DataFrame:
-        """Sloan应计因子"""
+    def calc_accruals_factor(self, financial_df: pd.DataFrame,
+                              trade_date: Optional[date] = None) -> pd.DataFrame:
+        """Sloan应计因子
+        PIT安全: 当trade_date提供时，仅使用ann_date <= trade_date的财务数据
+        """
+        if trade_date is not None:
+            financial_df = pit_filter(financial_df, trade_date)
+
         result = pd.DataFrame()
         result['security_id'] = financial_df.get('ts_code', financial_df.index)
 
@@ -494,14 +579,21 @@ class FactorCalculator:
                          supply_chain_df: pd.DataFrame = None,
                          sentiment_df: pd.DataFrame = None,
                          stock_basic_df: pd.DataFrame = None,
-                         stock_status_df: pd.DataFrame = None) -> pd.DataFrame:
-        """计算所有因子并预处理 (向量化批处理合并)"""
+                         stock_status_df: pd.DataFrame = None,
+                         money_flow_df: pd.DataFrame = None,
+                         margin_df: pd.DataFrame = None,
+                         daily_basic_df: pd.DataFrame = None,
+                         trade_date: Optional[date] = None) -> pd.DataFrame:
+        """
+        计算所有因子并预处理 (向量化批处理合并)
+        PIT安全: 当trade_date提供时，财务因子仅使用ann_date <= trade_date的数据
+        """
         factor_dfs = []
 
-        # 基础因子
-        factor_dfs.append(self.calc_valuation_factors(financial_df, price_df))
-        factor_dfs.append(self.calc_growth_factors(financial_df))
-        factor_dfs.append(self.calc_quality_factors(financial_df))
+        # 基础因子 (财务因子传入trade_date做PIT过滤)
+        factor_dfs.append(self.calc_valuation_factors(financial_df, price_df, trade_date=trade_date))
+        factor_dfs.append(self.calc_growth_factors(financial_df, trade_date=trade_date))
+        factor_dfs.append(self.calc_quality_factors(financial_df, trade_date=trade_date))
         factor_dfs.append(self.calc_momentum_factors(price_df))
         factor_dfs.append(self.calc_volatility_factors(price_df))
         factor_dfs.append(self.calc_liquidity_factors(price_df))
@@ -523,12 +615,41 @@ class FactorCalculator:
         # A股特有因子
         factor_dfs.append(self.calc_ashare_specific_factors(price_df, stock_basic_df, stock_status_df))
         if financial_df is not None and not financial_df.empty:
-            factor_dfs.append(self.calc_accruals_factor(financial_df))
-            factor_dfs.append(self.calc_earnings_quality_factors(financial_df))
+            factor_dfs.append(self.calc_accruals_factor(financial_df, trade_date=trade_date))
+            factor_dfs.append(self.calc_earnings_quality_factors(financial_df, trade_date=trade_date))
 
         # 机构级增强因子
         factor_dfs.append(self.calc_technical_factors(price_df))
-        factor_dfs.append(self.calc_smart_money_factors(price_df, northbound_df))
+        factor_dfs.append(self.calc_smart_money_factors(price_df, northbound_df, margin_df))
+
+        # 行业轮动因子
+        factor_dfs.append(self.calc_industry_rotation_factors(price_df))
+
+        # 另类数据因子
+        if supply_chain_df is not None and not supply_chain_df.empty:
+            factor_dfs.append(self.calc_alt_data_factors(supply_chain_df))
+
+        # 从资金流向表补充微观结构数据
+        if money_flow_df is not None and not money_flow_df.empty:
+            mf_result = pd.DataFrame()
+            mf_result['security_id'] = money_flow_df.get('ts_code', money_flow_df.index)
+            if 'smart_net_pct' in money_flow_df.columns:
+                mf_result['smart_money_ratio'] = money_flow_df['smart_net_pct'].rolling(20, min_periods=5).mean() / 100
+            if 'large_net_pct' in money_flow_df.columns and 'super_large_net_pct' in money_flow_df.columns:
+                mf_result['large_order_ratio'] = (
+                    money_flow_df['large_net_pct'].fillna(0) + money_flow_df['super_large_net_pct'].fillna(0)
+                ).rolling(20, min_periods=5).mean() / 100
+            if not mf_result.empty:
+                factor_dfs.append(mf_result)
+
+        # 从融资融券表补充情绪数据
+        if margin_df is not None and not margin_df.empty:
+            mg_result = pd.DataFrame()
+            mg_result['security_id'] = margin_df.get('ts_code', margin_df.index)
+            if 'margin_balance' in margin_df.columns:
+                mg_result['margin_signal'] = margin_df['margin_balance'].pct_change(5)
+            if not mg_result.empty:
+                factor_dfs.append(mg_result)
 
         # 向量化合并
         merged = self._merge_factor_dfs(factor_dfs)
@@ -597,14 +718,19 @@ class FactorCalculator:
 
     # ==================== 盈利质量因子 ====================
 
-    def calc_earnings_quality_factors(self, financial_df: pd.DataFrame) -> pd.DataFrame:
+    def calc_earnings_quality_factors(self, financial_df: pd.DataFrame,
+                                       trade_date: Optional[date] = None) -> pd.DataFrame:
         """
         盈利质量因子
         - accrual_anomaly: 改进Sloan应计异常 (区分经营性/投资性应计)
         - cash_flow_manipulation: 现金流操纵概率 (CFO与净利偏离度)
         - earnings_stability: 盈利稳定性 (近8季净利CV的倒数)
         - cfo_to_net_profit: CFO/净利 (现金流支撑度)
+        PIT安全: 当trade_date提供时，仅使用ann_date <= trade_date的财务数据
         """
+        if trade_date is not None:
+            financial_df = pit_filter(financial_df, trade_date)
+
         result = pd.DataFrame()
         result['security_id'] = financial_df.get('ts_code', financial_df.index)
 
@@ -697,12 +823,16 @@ class FactorCalculator:
         close = price_df['close']
         daily_ret = close.pct_change()
 
-        # RSI(14)
+        # RSI(14) - Wilder平滑法 (标准定义)
+        # 使用价格差而非收益率，Wilder EMA (alpha=1/14) 而非SMA
         if len(close) >= 15:
-            gain = daily_ret.clip(lower=0)
-            loss = (-daily_ret).clip(lower=0)
-            avg_gain = gain.rolling(14, min_periods=10).mean()
-            avg_loss = loss.rolling(14, min_periods=10).mean()
+            price_diff = close.diff()  # 标准RSI使用价格差
+            gain = price_diff.clip(lower=0)
+            loss = (-price_diff).clip(lower=0)
+            # Wilder平滑: EMA with alpha=1/period
+            wilder_alpha = 1.0 / 14
+            avg_gain = gain.ewm(alpha=wilder_alpha, adjust=False).mean()
+            avg_loss = loss.ewm(alpha=wilder_alpha, adjust=False).mean()
             rs = avg_gain / avg_loss.replace(0, np.nan)
             result['rsi_14d'] = 100 - (100 / (1 + rs))
 

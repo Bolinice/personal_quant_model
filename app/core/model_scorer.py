@@ -86,6 +86,150 @@ class MultiFactorScorer:
 
         return weighted_sum / icir_sum
 
+    # ==================== IC加权 + ML融合 ====================
+
+    def fused_ic_ml_score(self,
+                          factor_scores: pd.DataFrame,
+                          ml_predictions: pd.Series,
+                          ic_weights: Dict[str, float],
+                          ml_weight: float = 0.4,
+                          ic_weight_total: float = 0.6,
+                          method: str = 'simple') -> pd.Series:
+        """
+        IC加权 + ML模型预测融合
+        将传统因子IC加权评分与ML模型预测融合，兼顾可解释性和非线性捕获能力
+
+        Args:
+            factor_scores: 因子得分矩阵 (行=股票, 列=因子)
+            ml_predictions: ML模型预测值Series (index=股票代码)
+            ic_weights: IC/ICIR权重 {factor_name: weight}
+            ml_weight: ML预测权重 (默认0.4)
+            ic_weight_total: IC加权权重 (默认0.6, ml_weight+ic_weight_total应=1)
+            method: 融合方法
+                'simple' - 简单加权: score = α*ic_score + (1-α)*ml_score
+                'dynamic' - 动态权重: 根据近期IC和ML的ICIR动态调整α
+                'hierarchical' - 分层融合: IC粗筛 → ML精排
+
+        Returns:
+            融合评分Series
+        """
+        # 1. 计算IC加权评分
+        if ic_weights:
+            ic_score = self.icir_weight(factor_scores, ic_weights)
+        else:
+            ic_score = self.equal_weight(factor_scores)
+
+        # 2. 标准化ML预测 (z-score)
+        ml_score = ml_predictions.copy()
+        ml_mean = ml_score.mean()
+        ml_std = ml_score.std()
+        if ml_std > 0:
+            ml_score = (ml_score - ml_mean) / ml_std
+        else:
+            ml_score = pd.Series(0.0, index=ml_score.index)
+
+        # 3. 对齐index
+        common_idx = ic_score.index.intersection(ml_score.index)
+        if len(common_idx) == 0:
+            return ic_score
+
+        ic_aligned = ic_score.loc[common_idx]
+        ml_aligned = ml_score.loc[common_idx]
+
+        # 4. 融合
+        if method == 'simple':
+            result = self._fuse_simple(ic_aligned, ml_aligned, ic_weight_total, ml_weight)
+
+        elif method == 'dynamic':
+            result = self._fuse_dynamic(ic_aligned, ml_aligned, ic_weight_total, ml_weight)
+
+        elif method == 'hierarchical':
+            result = self._fuse_hierarchical(ic_aligned, ml_aligned, factor_scores.loc[common_idx])
+
+        else:
+            result = self._fuse_simple(ic_aligned, ml_aligned, ic_weight_total, ml_weight)
+
+        # 保留不在ML预测中的股票 (仅IC评分)
+        missing_idx = ic_score.index.difference(ml_score.index)
+        if len(missing_idx) > 0:
+            result = pd.concat([result, ic_score.loc[missing_idx]])
+
+        logger.info(
+            "IC+ML fusion completed",
+            extra={
+                "method": method,
+                "ml_weight": ml_weight,
+                "n_common": len(common_idx),
+                "n_ic_only": len(missing_idx),
+            },
+        )
+
+        return result
+
+    @staticmethod
+    def _fuse_simple(ic_score: pd.Series,
+                     ml_score: pd.Series,
+                     ic_weight: float,
+                     ml_weight: float) -> pd.Series:
+        """简单加权融合: score = α*ic + (1-α)*ml"""
+        return ic_weight * ic_score + ml_weight * ml_score
+
+    @staticmethod
+    def _fuse_dynamic(ic_score: pd.Series,
+                      ml_score: pd.Series,
+                      ic_base_weight: float,
+                      ml_base_weight: float) -> pd.Series:
+        """
+        动态权重融合
+        根据IC和ML评分的分散度动态调整权重
+        分散度越高(信息含量越大)的信号获得更大权重
+        """
+        ic_dispersion = ic_score.std()
+        ml_dispersion = ml_score.std()
+
+        if ic_dispersion + ml_dispersion > 0:
+            # 按分散度比例分配权重
+            ic_adj = ic_base_weight * (ic_dispersion / (ic_dispersion + ml_dispersion + 1e-8))
+            ml_adj = ml_base_weight * (ml_dispersion / (ic_dispersion + ml_dispersion + 1e-8))
+            total = ic_adj + ml_adj
+            if total > 0:
+                ic_adj /= total
+                ml_adj /= total
+        else:
+            ic_adj = ic_base_weight
+            ml_adj = ml_base_weight
+
+        return ic_adj * ic_score + ml_adj * ml_score
+
+    @staticmethod
+    def _fuse_hierarchical(ic_score: pd.Series,
+                           ml_score: pd.Series,
+                           factor_scores: pd.DataFrame,
+                           top_pct: float = 0.5) -> pd.Series:
+        """
+        分层融合: IC粗筛 → ML精排
+        1. 用IC评分选前top_pct的股票池
+        2. 在股票池内用ML评分排序
+        3. 池外股票用IC评分
+        """
+        threshold = ic_score.quantile(1 - top_pct)
+        pool_mask = ic_score >= threshold
+
+        result = ic_score.copy()
+        if pool_mask.sum() > 10:
+            # 池内: ML评分排序 (保留相对排序)
+            pool_ml = ml_score.loc[pool_mask]
+            # 将ML评分映射到IC评分的池内范围
+            ic_pool_min = ic_score.loc[pool_mask].min()
+            ic_pool_max = ic_score.loc[pool_mask].max()
+            ml_min = pool_ml.min()
+            ml_max = pool_ml.max()
+            if ml_max > ml_min:
+                mapped_ml = ic_pool_min + (pool_ml - ml_min) / (ml_max - ml_min) * (ic_pool_max - ic_pool_min)
+                result.loc[pool_mask] = mapped_ml
+
+        return result
+
     def hierarchical_filter(self, factor_scores: pd.DataFrame,
                             hierarchy: List[Dict]) -> pd.Series:
         """

@@ -311,23 +311,29 @@ class FactorPreprocessor:
         """
         行业中性化
         符合ADD 6.3.5节: 对因子做行业哑变量回归，取残差
+        无行业映射的股票标记为NaN，避免引入行业偏差
 
         x_i = α + Σ β_k * Industry_{i,k} + ε_i
         """
-        # 构建行业哑变量
-        industries = pd.get_dummies(df[industry_col], drop_first=True)
+        # 识别无行业映射的股票
+        has_industry = df[industry_col].notna()
+        no_industry_mask = ~has_industry
+
+        # 构建行业哑变量 (仅对有行业映射的股票)
+        industries = pd.get_dummies(df.loc[has_industry, industry_col], drop_first=True)
         X = industries.values
         y = df[value_col].values
 
         # 处理NaN
-        valid_mask = ~np.isnan(y)
+        valid_mask = has_industry & ~np.isnan(y)
         if valid_mask.sum() < X.shape[1] + 10:
             # 样本不足，退化为行业内标准化
-            result = pd.Series(index=df.index, dtype=float)
-            for industry in df[industry_col].unique():
-                mask = df[industry_col] == industry
+            result = pd.Series(np.nan, index=df.index)
+            for industry in df.loc[has_industry, industry_col].unique():
+                mask = (df[industry_col] == industry) & has_industry
                 industry_values = df.loc[mask, value_col]
                 result.loc[mask] = self.standardize_zscore(industry_values)
+            # 无行业映射的股票保持NaN
             return result
 
         # WLS回归
@@ -515,6 +521,12 @@ class FactorPreprocessor:
         """
         批量预处理多个因子 (机构级: 逐因子配置 + 覆盖率过滤)
 
+        预处理顺序 (修正后):
+          缺失值处理 → 去极值 → 中性化 → 标准化 → 方向统一
+
+        注意: 中性化必须在标准化之前，否则残差不再服从标准正态，
+        标准化会失效。这是机构级因子预处理的标准做法。
+
         Args:
             df: 包含因子值的数据框
             factor_cols: 因子列名列表
@@ -541,22 +553,37 @@ class FactorPreprocessor:
 
             direction = direction_map.get(col, 1) if direction_map else 1
 
-            # 逐因子配置
+            # Step 1-2: 缺失值处理 + 去极值 (不包含标准化和方向)
             if config and col in config:
                 cfg = config[col]
-                result[col] = self.preprocess(
-                    df[col],
-                    fill_method=cfg.get('fill_method', 'median'),
-                    winsorize_method=cfg.get('winsorize_method', 'mad'),
-                    winsorize_param=cfg.get('winsorize_param', 3.0),
-                    standardize_method=cfg.get('standardize_method', 'zscore'),
-                    direction=direction,
-                )
-            else:
-                # 默认预处理
-                result[col] = self.preprocess(df[col], direction=direction)
+                # 缺失值处理
+                fill_method = cfg.get('fill_method', 'median')
+                if fill_method == 'mean':
+                    result[col] = self.fill_missing_mean(result[col])
+                elif fill_method == 'median':
+                    result[col] = self.fill_missing_median(result[col])
+                elif fill_method == 'zero':
+                    result[col] = self.fill_missing_zero(result[col])
+                elif fill_method == 'decay_forward':
+                    result[col] = self.fill_missing_decay_forward(result[col])
 
-            # 中性化
+                # 去极值
+                winsorize_method = cfg.get('winsorize_method', 'mad')
+                winsorize_param = cfg.get('winsorize_param', 3.0)
+                if winsorize_method == 'mad':
+                    result[col] = self.winsorize_mad(result[col], winsorize_param)
+                elif winsorize_method == 'quantile':
+                    result[col] = self.winsorize_quantile(result[col], 1 - winsorize_param / 100, winsorize_param / 100)
+                elif winsorize_method == 'sigma':
+                    result[col] = self.winsorize_sigma(result[col], winsorize_param)
+                elif winsorize_method == 'adaptive_mad':
+                    result[col] = self.winsorize_adaptive_mad(result[col], base_k=winsorize_param)
+            else:
+                # 默认: 缺失值(中位数) + 去极值(MAD)
+                result[col] = self.fill_missing_median(result[col])
+                result[col] = self.winsorize_mad(result[col])
+
+            # Step 3: 中性化 (在标准化之前!)
             if neutralize:
                 if industry_col and cap_col:
                     result[col] = self.neutralize_industry_and_cap(result, col, industry_col, cap_col)
@@ -564,6 +591,27 @@ class FactorPreprocessor:
                     result[col] = self.neutralize_industry(result, col, industry_col)
                 elif cap_col:
                     result[col] = self.neutralize_market_cap(result, col, cap_col)
+
+            # Step 4: 标准化 (在中性化之后)
+            if config and col in config:
+                cfg = config[col]
+                standardize_method = cfg.get('standardize_method', 'zscore')
+            else:
+                standardize_method = 'zscore'
+
+            if standardize_method == 'zscore':
+                result[col] = self.standardize_zscore(result[col])
+            elif standardize_method == 'rank':
+                result[col] = self.standardize_rank(result[col])
+            elif standardize_method == 'minmax':
+                result[col] = self.standardize_minmax(result[col])
+            elif standardize_method == 'rank_normal':
+                result[col] = self.standardize_rank_normal(result[col])
+            elif standardize_method == 'robust_zscore':
+                result[col] = self.standardize_robust_zscore(result[col])
+
+            # Step 5: 方向统一
+            result[col] = self.align_direction(result[col], direction)
 
         return result
 

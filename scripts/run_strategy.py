@@ -3,6 +3,7 @@
 支持股票池: 全A股 / 沪深300 / 中证500 / 中证1000
 端到端流程: 数据加载 → 因子计算 → IC分析 → 评分 → 择时 → 组合构建 → 回测
 性能优化: 向量化因子计算 + 并行IC计算 + 预计算缓存
+ML增强: IC加权 + LightGBM模型融合 (TimeSeriesSplit CV)
 """
 import sys
 sys.path.insert(0, '.')
@@ -20,6 +21,7 @@ from app.core.config import settings
 from app.core.timing_engine import TimingEngine, TimingSignalType, FusionMethod
 from app.core.backtest_engine import ABShareBacktestEngine
 from app.core.factor_preprocess import FactorPreprocessor
+from app.core.model_trainer import ModelTrainer, TrainedModel
 
 # 因子预计算缓存: 避免回测时重复计算
 _factor_cache = {}
@@ -121,14 +123,76 @@ def load_data(engine, universe_key):
         stock_daily['trade_date'] = pd.to_datetime(stock_daily['trade_date'])
         print(f"  股票日线: {len(stock_daily)} 条, {stock_daily['ts_code'].nunique()} 只")
 
-        # 财务数据 (只加载成分股)
+        # 财务数据 (只加载成分股, 包含新增字段)
         financial = pd.read_sql(text(
             f"SELECT ts_code, end_date, revenue, net_profit, roe, roa, "
-            f"gross_profit_margin, net_profit_ratio, asset_liability_ratio "
+            f"gross_profit_margin, net_profit_ratio, asset_liability_ratio, "
+            f"operating_cash_flow, total_assets, total_equity, "
+            f"current_assets, current_liabilities, "
+            f"total_market_cap, pe_ttm, pb, ps_ttm, dividend_yield "
             f"FROM stock_financial WHERE ts_code IN ({codes_str}) ORDER BY ts_code, end_date"
         ), conn)
         financial['end_date'] = pd.to_datetime(financial['end_date'])
         print(f"  财务数据: {len(financial)} 条")
+
+        # 每日基本面 (PE/PB/市值/换手率)
+        daily_basic = pd.DataFrame()
+        try:
+            daily_basic = pd.read_sql(text(
+                f"SELECT ts_code, trade_date, close, turnover_rate, pe, pe_ttm, pb, "
+                f"ps_ttm, dv_ratio, total_mv, circ_mv "
+                f"FROM stock_daily_basic WHERE ts_code IN ({codes_str}) "
+                f"ORDER BY ts_code, trade_date"
+            ), conn)
+            if not daily_basic.empty:
+                daily_basic['trade_date'] = pd.to_datetime(daily_basic['trade_date'])
+            print(f"  每日基本面: {len(daily_basic)} 条")
+        except Exception as e:
+            print(f"  每日基本面: 跳过 ({e})")
+
+        # 北向资金
+        northbound = pd.DataFrame()
+        try:
+            northbound = pd.read_sql(text(
+                f"SELECT ts_code, trade_date, north_holding, north_holding_pct, "
+                f"north_holding_mv, north_net_buy, north_buy, north_sell "
+                f"FROM stock_northbound WHERE ts_code IN ({codes_str}) "
+                f"ORDER BY ts_code, trade_date"
+            ), conn)
+            if not northbound.empty:
+                northbound['trade_date'] = pd.to_datetime(northbound['trade_date'])
+            print(f"  北向资金: {len(northbound)} 条")
+        except Exception as e:
+            print(f"  北向资金: 跳过 ({e})")
+
+        # 资金流向
+        money_flow = pd.DataFrame()
+        try:
+            money_flow = pd.read_sql(text(
+                f"SELECT ts_code, trade_date, smart_net_inflow, smart_net_pct, "
+                f"large_net_pct, super_large_net_pct "
+                f"FROM stock_money_flow WHERE ts_code IN ({codes_str}) "
+                f"ORDER BY ts_code, trade_date"
+            ), conn)
+            if not money_flow.empty:
+                money_flow['trade_date'] = pd.to_datetime(money_flow['trade_date'])
+            print(f"  资金流向: {len(money_flow)} 条")
+        except Exception as e:
+            print(f"  资金流向: 跳过 ({e})")
+
+        # 融资融券
+        margin = pd.DataFrame()
+        try:
+            margin = pd.read_sql(text(
+                f"SELECT ts_code, trade_date, margin_buy, margin_balance "
+                f"FROM stock_margin WHERE ts_code IN ({codes_str}) "
+                f"ORDER BY ts_code, trade_date"
+            ), conn)
+            if not margin.empty:
+                margin['trade_date'] = pd.to_datetime(margin['trade_date'])
+            print(f"  融资融券: {len(margin)} 条")
+        except Exception as e:
+            print(f"  融资融券: 跳过 ({e})")
 
         # 基准指数日线
         benchmark = cfg['benchmark']
@@ -153,6 +217,10 @@ def load_data(engine, universe_key):
         'index_daily': index_daily,
         'trading_days': trading_days,
         'universe_codes': universe_codes,
+        'daily_basic': daily_basic,
+        'northbound': northbound,
+        'money_flow': money_flow,
+        'margin': margin,
     }
 
 
@@ -175,9 +243,17 @@ def calc_cross_section_factors(trade_date, data, use_cache=True):
     if price_window.empty:
         return pd.DataFrame()
 
-    fin_latest = fin[fin['end_date'] <= td].copy()
+    # PIT安全: 使用ann_date(公告日)而非end_date(报告期)过滤财务数据
+    # 避免使用未公告的财务数据(未来函数)
+    if 'ann_date' in fin.columns:
+        fin_latest = fin[fin['ann_date'] <= td].copy()
+    else:
+        fin_latest = fin[fin['end_date'] <= td].copy()
     if not fin_latest.empty:
-        fin_latest = fin_latest.sort_values('end_date').groupby('ts_code').last()
+        if 'ann_date' in fin_latest.columns:
+            fin_latest = fin_latest.sort_values('ann_date').groupby('ts_code').last()
+        else:
+            fin_latest = fin_latest.sort_values('end_date').groupby('ts_code').last()
 
     price_window = price_window.sort_values(['ts_code', 'trade_date'])
 
@@ -239,6 +315,28 @@ def calc_cross_section_factors(trade_date, data, use_cache=True):
             row['roa'] = f.get('roa')
             row['gross_profit_margin'] = f.get('gross_profit_margin')
             row['net_profit_margin'] = f.get('net_profit_ratio')
+
+            # 新增财务因子
+            if pd.notna(f.get('operating_cash_flow')) and pd.notna(f.get('total_assets')) and f.get('total_assets', 0) != 0:
+                net_profit = f.get('net_profit', 0)
+                ocf = f.get('operating_cash_flow', 0)
+                total_assets = f.get('total_assets', 0)
+                # Sloan应计
+                accruals = net_profit - ocf
+                row['sloan_accrual'] = accruals / total_assets
+                # CFO/净利
+                if net_profit != 0:
+                    row['cfo_to_net_profit'] = np.clip(ocf / net_profit, -5, 5)
+
+            # 价值因子 (从daily_basic或financial)
+            if pd.notna(f.get('pe_ttm')) and f.get('pe_ttm', 0) != 0:
+                row['ep_ttm'] = 1 / f.get('pe_ttm')
+            if pd.notna(f.get('pb')) and f.get('pb', 0) != 0:
+                row['bp'] = 1 / f.get('pb')
+            if pd.notna(f.get('ps_ttm')) and f.get('ps_ttm', 0) != 0:
+                row['sp_ttm'] = 1 / f.get('ps_ttm')
+            if pd.notna(f.get('dividend_yield')):
+                row['dp'] = f.get('dividend_yield')
 
     if not results:
         return pd.DataFrame()
@@ -388,13 +486,15 @@ def calc_timing_signals(data, trading_days):
     return fused, exposure
 
 
-def run_backtest(data, trading_days, ic_summary, timing_exposure, universe_key):
-    """运行回测"""
+def run_backtest(data, trading_days, ic_summary, timing_exposure, universe_key,
+                 ml_model=None, ml_factor_cols=None, ml_weight=0.4, fusion_method='simple'):
+    """运行回测 (支持IC+ML融合)"""
     cfg = UNIVERSE_CONFIG[universe_key]
     top_n = cfg['top_n']
     max_position = cfg['max_position']
 
-    print(f"\n[4] 运行回测 [持仓{top_n}只, 单股上限{max_position:.0%}]...")
+    mode = "IC+ML融合" if ml_model is not None else "IC加权"
+    print(f"\n[4] 运行回测 [{mode}, 持仓{top_n}只, 单股上限{max_position:.0%}]...")
     t0 = time.time()
 
     sd = data['stock_daily']
@@ -475,13 +575,38 @@ def run_backtest(data, trading_days, ic_summary, timing_exposure, universe_key):
             return {}
 
         factor_cols = [c for c in factor_df.columns if c in FACTOR_DIR]
+
+        # IC加权评分
         if icir_weights:
-            score = pd.Series(0.0, index=factor_df.index)
+            ic_score = pd.Series(0.0, index=factor_df.index)
             for col, w in icir_weights.items():
                 if col in factor_df.columns:
-                    score += factor_df[col].fillna(0) * w
+                    ic_score += factor_df[col].fillna(0) * w
         else:
-            score = factor_df[factor_cols].mean(axis=1)
+            ic_score = factor_df[factor_cols].mean(axis=1)
+
+        # ML融合
+        if ml_model is not None and ml_factor_cols is not None:
+            trainer = ModelTrainer()
+            ml_pred = trainer.predict(ml_model, factor_df, ml_factor_cols)
+            if ml_pred is not None and not ml_pred.empty:
+                # 标准化ML预测
+                ml_std = ml_pred.std()
+                ml_mean = ml_pred.mean()
+                if ml_std > 0:
+                    ml_score = (ml_pred - ml_mean) / ml_std
+                else:
+                    ml_score = pd.Series(0.0, index=ml_pred.index)
+
+                # 融合: score = (1-α)*ic_score + α*ml_score
+                common_idx = ic_score.index.intersection(ml_score.index)
+                score = ic_score.copy()
+                ic_w = 1.0 - ml_weight
+                score.loc[common_idx] = ic_w * ic_score.loc[common_idx] + ml_weight * ml_score.loc[common_idx]
+            else:
+                score = ic_score
+        else:
+            score = ic_score
 
         top_stocks = score.nlargest(top_n)
 

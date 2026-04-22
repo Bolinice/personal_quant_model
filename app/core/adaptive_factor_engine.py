@@ -1,6 +1,6 @@
 """
 自适应因子选择与权重优化引擎
-机构级核心: 滚动因子筛选、多目标权重优化、因子状态机、正交化选择、过拟合检测
+核心: 滚动因子筛选、多目标权重优化、因子状态机、正交化选择、过拟合检测
 """
 from typing import Dict, List, Optional, Tuple, Any
 from enum import Enum
@@ -253,13 +253,37 @@ class AdaptiveFactorEngine:
 
     @staticmethod
     def _project_simplex(v: np.ndarray) -> np.ndarray:
-        """投影到单纯形 (Duchi et al. 2008)"""
+        """投影到单纯形 (Duchi et al. 2008)
+        带数值稳定性保护: 收敛检查和极端值fallback
+        """
         n = len(v)
-        u = np.sort(v)[::-1]
+        if n == 0:
+            return v.copy()
+
+        # 极端值保护: clamp到合理范围避免溢出
+        v_clamped = np.clip(v, -1e6, 1e6)
+        u = np.sort(v_clamped)[::-1]
         cssv = np.cumsum(u) - 1
-        rho = np.max(np.where(u > cssv / np.arange(1, n + 1)))
-        theta = cssv[rho] / (rho + 1)
-        return np.maximum(v - theta, 0)
+        rho_candidates = np.where(u > cssv / np.arange(1, n + 1))[0]
+
+        if len(rho_candidates) == 0:
+            # fallback: 均匀分布
+            return np.ones(n) / n
+
+        rho = rho_candidates[-1]
+        theta = cssv[rho] / (rho + 1.0)
+
+        # 数值稳定性检查: theta过大时回退到均匀分布
+        if abs(theta) > 1e8:
+            return np.ones(n) / n
+
+        w = np.maximum(v_clamped - theta, 0)
+
+        # 验证投影结果: sum应≈1且无负值
+        if abs(np.sum(w) - 1.0) > 1e-6 or np.any(w < -1e-10):
+            return np.ones(n) / n
+
+        return w
 
     # ==================== 3. 因子状态机 ====================
 

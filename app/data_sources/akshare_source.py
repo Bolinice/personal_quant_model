@@ -447,6 +447,79 @@ class AKShareDataSource(BaseDataSource):
             logger.error(f"Error getting realtime quotes: {e}")
             return pd.DataFrame()
 
+    def get_northbound_hold(self) -> pd.DataFrame:
+        """获取北向持股数据（东方财富）"""
+        try:
+            df = self._ak.stock_hsgt_hold_stock_em(market="北向")
+            if df is not None and not df.empty:
+                logger.info(f"获取北向持股数据: {len(df)} 条")
+            return df
+        except Exception as e:
+            logger.error(f"获取北向持股数据失败: {e}")
+            return pd.DataFrame()
+
+    def get_money_flow(self, ts_code: str) -> pd.DataFrame:
+        """获取个股资金流向（东方财富）"""
+        try:
+            code = ts_code.split('.')[0]
+            market = 'sz' if ts_code.endswith('.SZ') else 'sh'
+            df = self._ak.stock_individual_fund_flow(stock=code, market=market)
+            if df is not None and not df.empty:
+                logger.info(f"获取资金流向 {ts_code}: {len(df)} 条")
+            return df
+        except Exception as e:
+            logger.error(f"获取资金流向 {ts_code} 失败: {e}")
+            return pd.DataFrame()
+
+    def get_daily_basic_em(self) -> pd.DataFrame:
+        """获取全市场每日基本面快照（东方财富实时行情）"""
+        try:
+            df = self._ak.stock_zh_a_spot_em()
+            if df is not None and not df.empty:
+                logger.info(f"获取全市场每日基本面: {len(df)} 条")
+            return df
+        except Exception as e:
+            logger.error(f"获取全市场每日基本面失败: {e}")
+            return pd.DataFrame()
+
+    def get_margin_detail(self, trade_date: str) -> pd.DataFrame:
+        """获取融资融券明细"""
+        # 尝试上交所
+        try:
+            df = self._ak.stock_margin_detail_sse(date=trade_date)
+            if df is not None and not df.empty:
+                return df
+        except Exception:
+            pass
+        # 尝试深交所
+        try:
+            df = self._ak.stock_margin_detail_szse(date=trade_date)
+            if df is not None and not df.empty:
+                return df
+        except Exception:
+            pass
+        return pd.DataFrame()
+
+    def get_financial_abstract(self, ts_code: str) -> pd.DataFrame:
+        """获取同花顺财务摘要（资产负债表关键数据）"""
+        try:
+            code = ts_code.split('.')[0]
+            df = self._ak.stock_financial_abstract_ths(symbol=code, indicator="按报告期")
+            return df
+        except Exception as e:
+            logger.error(f"获取财务摘要 {ts_code} 失败: {e}")
+            return pd.DataFrame()
+
+    def get_financial_analysis_indicator(self, ts_code: str) -> pd.DataFrame:
+        """获取财务分析指标"""
+        try:
+            code = ts_code.split('.')[0]
+            df = self._ak.stock_financial_analysis_indicator(symbol=code, start_year="2020")
+            return df
+        except Exception as e:
+            logger.error(f"获取财务分析指标 {ts_code} 失败: {e}")
+            return pd.DataFrame()
+
     def get_stock_info(self, ts_code: str) -> Dict[str, Any]:
         """获取股票详细信息"""
         if not self._connected:

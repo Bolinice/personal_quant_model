@@ -6,6 +6,9 @@
 from typing import List, Optional, Dict, Any
 from datetime import date, datetime
 import numpy as np
+from datetime import date
+from typing import Optional
+
 import pandas as pd
 from scipy import stats as sp_stats
 from sqlalchemy.orm import Session
@@ -462,8 +465,14 @@ class FactorEngine:
                          supply_chain_df: pd.DataFrame = None,
                          sentiment_df: pd.DataFrame = None,
                          stock_basic_df: pd.DataFrame = None,
-                         stock_status_df: pd.DataFrame = None) -> pd.DataFrame:
-        """计算所有因子并预处理 (委托给FactorCalculator)"""
+                         stock_status_df: pd.DataFrame = None,
+                         money_flow_df: pd.DataFrame = None,
+                         margin_df: pd.DataFrame = None,
+                         daily_basic_df: pd.DataFrame = None,
+                         trade_date: Optional[date] = None) -> pd.DataFrame:
+        """计算所有因子并预处理 (委托给FactorCalculator)
+        PIT安全: trade_date传递给FactorCalculator用于财务数据PIT过滤
+        """
         return self.calculator.calc_all_factors(
             financial_df, price_df,
             industry_col=industry_col, cap_col=cap_col,
@@ -472,6 +481,9 @@ class FactorEngine:
             policy_df=policy_df, supply_chain_df=supply_chain_df,
             sentiment_df=sentiment_df,
             stock_basic_df=stock_basic_df, stock_status_df=stock_status_df,
+            money_flow_df=money_flow_df, margin_df=margin_df,
+            daily_basic_df=daily_basic_df,
+            trade_date=trade_date,
         )
 
     # ==================== 无数据库便捷函数 ====================

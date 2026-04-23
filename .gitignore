@@ -32,6 +32,9 @@ htmlcov/
 logs/
 app/logs/
 
+# Runtime artifacts
+strategy_report*.json
+
 # Environment
 .env
 app/.env

@@ -1,7 +1,8 @@
 """
 组合优化器 - 统一优化入口
 均值方差优化、风险平价、最小方差、最大去相关、Black-Litterman、
-Mean-CVaR、HRP层次风险平价、稳健优化、交易成本感知优化
+Mean-CVaR、HRP层次风险平价、稳健优化、交易成本感知优化、
+Alpha-Risk优化(GPT设计10.1节)、分数映射权重(GPT设计10.3节)
 """
 import numpy as np
 import pandas as pd
@@ -11,10 +12,88 @@ from app.core.logging import logger
 
 
 class PortfolioOptimizer:
-    """组合优化器"""
+    """组合优化器 - 含A股实盘约束"""
 
     def __init__(self):
         pass
+
+    # ==================== A股实盘约束过滤 ====================
+
+    @staticmethod
+    def filter_ashare_constraints(expected_returns: pd.Series,
+                                    cov_matrix: pd.DataFrame,
+                                    stock_status: Optional[Dict[str, Dict]] = None,
+                                    exclude_st: bool = True,
+                                    exclude_new_ipo_days: int = 60,
+                                    exclude_limit_up: bool = True,
+                                    min_daily_volume: float = 0,
+                                    current_date: Optional[Any] = None) -> Tuple[pd.Series, pd.DataFrame]:
+        """
+        A股实盘约束过滤: 在优化前排除不符合交易条件的股票
+
+        Args:
+            expected_returns: 期望收益
+            cov_matrix: 协方差矩阵
+            stock_status: 股票状态 {ts_code: {is_st, list_date, is_limit_up, is_suspended, ...}}
+            exclude_st: 是否排除ST股
+            exclude_new_ipo_days: 排除上市不足N天的新股
+            exclude_limit_up: 是否排除涨停股
+            min_daily_volume: 最低日均成交额(元)
+            current_date: 当前日期(用于计算IPO天数)
+
+        Returns:
+            (过滤后的期望收益, 过滤后的协方差矩阵)
+        """
+        if stock_status is None:
+            return expected_returns, cov_matrix
+
+        common = expected_returns.index.intersection(cov_matrix.index)
+        excluded = set()
+
+        for ts_code in common:
+            status = stock_status.get(ts_code, {})
+
+            # 排除ST股
+            if exclude_st and status.get('is_st', False):
+                excluded.add(ts_code)
+
+            # 排除新股
+            if exclude_new_ipo_days > 0 and current_date is not None:
+                list_date = status.get('list_date')
+                if list_date is not None:
+                    from datetime import date as date_type
+                    if isinstance(list_date, str):
+                        list_date = pd.Timestamp(list_date).date()
+                    if isinstance(current_date, date_type):
+                        days_since_ipo = (current_date - list_date).days
+                    else:
+                        days_since_ipo = (pd.Timestamp(current_date).date() - list_date).days
+                    if days_since_ipo < exclude_new_ipo_days:
+                        excluded.add(ts_code)
+
+            # 排除涨停股
+            if exclude_limit_up and status.get('is_limit_up', False):
+                excluded.add(ts_code)
+
+            # 排除停牌股
+            if status.get('is_suspended', False):
+                excluded.add(ts_code)
+
+            # 排除低流动性股
+            if min_daily_volume > 0:
+                daily_vol = status.get('daily_volume', 0)
+                if daily_vol < min_daily_volume:
+                    excluded.add(ts_code)
+
+        valid = [c for c in common if c not in excluded]
+        if len(valid) < 2:
+            logger.warning(f"Too few assets after constraint filtering: {len(valid)}")
+            return expected_returns, cov_matrix
+
+        if excluded:
+            logger.info(f"A-share constraints excluded {len(excluded)} stocks, {len(valid)} remaining")
+
+        return expected_returns.reindex(valid), cov_matrix.loc[valid, valid]
 
     # ==================== 均值方差优化 ====================
 
@@ -55,6 +134,7 @@ class PortfolioOptimizer:
 
         mu = expected_returns.reindex(common).values
         Sigma = cov_matrix.loc[common, common].values
+        Sigma = self._ensure_positive_definite(Sigma)
 
         # 目标函数: min -w'μ + λ/2 * w'Σw
         def objective(w):
@@ -109,7 +189,253 @@ class PortfolioOptimizer:
             if weights.sum() > 0:
                 weights = weights / weights.sum()
 
+        return self._filter_min_holding(weights)
+
+    @staticmethod
+    def _filter_min_holding(weights: pd.Series,
+                            min_holding_value: float = 0.001) -> pd.Series:
+        """过滤不足最小持仓的权重 (A股最小交易单位100股)
+        如果权重对应的金额不足一手，清零后重新归一化
+
+        Args:
+            weights: 优化后的权重
+            min_holding_value: 最小持仓权重 (如0.001=0.1%，对应100万资金下1000元≈1手)
+        """
+        if min_holding_value <= 0:
+            return weights
+        # 清零不足最小持仓的权重
+        weights = weights.copy()
+        weights[weights < min_holding_value] = 0
+        if weights.sum() > 0:
+            weights = weights / weights.sum()
         return weights
+
+    # ==================== 分数映射权重 (GPT设计10.3方法B) ====================
+
+    def score_to_weight(self, scores: pd.Series,
+                        industry_data: Optional[pd.Series] = None,
+                        max_position: float = 0.03,
+                        max_industry_weight: float = 0.30,
+                        benchmark_weights: Optional[pd.Series] = None,
+                        max_industry_dev: float = 0.03) -> pd.Series:
+        """
+        分数映射权重 (GPT设计10.3方法B)
+        w_i ∝ max(0, S_i), 然后约束单票和行业
+
+        比Top-N排序更优: 保留分数信息, 避免硬切换
+
+        Args:
+            scores: alpha分数, index=ts_code
+            industry_data: 行业映射, index=ts_code
+            max_position: 单票最大权重
+            max_industry_weight: 单行业最大权重
+            benchmark_weights: 基准权重 (用于行业偏离约束)
+            max_industry_dev: 相对基准的最大行业偏离
+
+        Returns:
+            目标权重 Series
+        """
+        # 正分数映射: 只做多正分数股票
+        positive = scores.clip(lower=0)
+        if positive.sum() == 0:
+            # 全部非正, 回退到等权
+            n = len(scores)
+            return pd.Series(1.0 / n, index=scores.index) if n > 0 else pd.Series()
+
+        # 归一化
+        weights = positive / positive.sum()
+
+        # 单票约束
+        weights = weights.clip(upper=max_position)
+        if weights.sum() > 0:
+            weights = weights / weights.sum()
+
+        # 行业约束
+        if industry_data is not None:
+            # 计算行业权重
+            industry_w = {}
+            for ts_code, w in weights.items():
+                if w > 0:
+                    ind = industry_data.get(ts_code, 'unknown')
+                    industry_w[ind] = industry_w.get(ind, 0) + w
+
+            # 基准行业权重 (如果有)
+            bench_ind_w = {}
+            if benchmark_weights is not None:
+                for ts_code, bw in benchmark_weights.items():
+                    if bw > 0:
+                        ind = industry_data.get(ts_code, 'unknown')
+                        bench_ind_w[ind] = bench_ind_w.get(ind, 0) + bw
+
+            # 超限行业缩放
+            for ind, total_w in industry_w.items():
+                if benchmark_weights is not None and ind in bench_ind_w:
+                    limit = bench_ind_w[ind] + max_industry_dev
+                else:
+                    limit = max_industry_weight
+
+                if total_w > limit:
+                    scale = limit / total_w
+                    for ts_code in weights.index:
+                        if industry_data.get(ts_code) == ind and weights[ts_code] > 0:
+                            weights[ts_code] *= scale
+
+            # 重新归一化
+            if weights.sum() > 0:
+                weights = weights / weights.sum()
+
+        return self._filter_min_holding(weights)
+
+    # ==================== Alpha-Risk完整优化 (GPT设计10.1节) ====================
+
+    def alpha_risk_optimize(self, alpha_scores: pd.Series,
+                            risk_model_cov: pd.DataFrame,
+                            current_weights: Optional[pd.Series] = None,
+                            industry_data: Optional[pd.Series] = None,
+                            style_exposures: Optional[pd.DataFrame] = None,
+                            style_bounds: Optional[Dict[str, Tuple[float, float]]] = None,
+                            benchmark_industry_weights: Optional[Dict[str, float]] = None,
+                            risk_aversion: float = 1.0,
+                            turnover_penalty: float = 0.003,
+                            max_position: float = 0.03,
+                            max_industry_dev: float = 0.03,
+                            long_only: bool = True) -> pd.Series:
+        """
+        完整alpha-risk优化 (GPT设计10.1节)
+
+        max: α'w - λ/2 * w'Σw - γ||w-w_prev||_1 - η*ExposurePenalty
+        s.t. 行业偏离<=3%, 单票<=3%, 风格暴露约束, 流动性约束
+
+        Args:
+            alpha_scores: alpha分数, index=ts_code
+            risk_model_cov: 风险模型协方差矩阵
+            current_weights: 当前持仓权重 (用于换手惩罚)
+            industry_data: 行业映射, index=ts_code
+            style_exposures: 风格暴露, index=ts_code, columns=风格因子名
+            style_bounds: 风格暴露约束 {factor: (lower, upper)}
+            benchmark_industry_weights: 基准行业权重 {industry: weight}
+            risk_aversion: 风险厌恶系数 λ
+            turnover_penalty: 换手惩罚系数 γ
+            max_position: 单票最大权重
+            max_industry_dev: 最大行业偏离(相对基准)
+            long_only: 是否仅做多
+
+        Returns:
+            最优权重 Series
+        """
+        common = alpha_scores.index.intersection(risk_model_cov.index)
+        n = len(common)
+        if n < 2:
+            return pd.Series(1.0 / n, index=common) if n > 0 else pd.Series()
+
+        alpha = alpha_scores.reindex(common).values
+        Sigma = risk_model_cov.loc[common, common].values
+        Sigma = self._ensure_positive_definite(Sigma)
+        w_prev = current_weights.reindex(common).fillna(0).values if current_weights is not None else np.zeros(n)
+
+        # 尝试使用cvxpy (支持L1换手惩罚)
+        try:
+            import cvxpy as cp
+
+            w = cp.Variable(n)
+            dw = w - w_prev
+
+            # 目标: max α'w - λ/2 * w'Σw - γ||dw||_1
+            obj = alpha @ w - risk_aversion / 2 * cp.quad_form(w, Sigma)
+            if turnover_penalty > 0:
+                obj -= turnover_penalty * cp.norm1(dw)
+
+            objective = cp.Maximize(obj)
+            constraints = [cp.sum(w) == 1]
+
+            if long_only:
+                constraints.append(w >= 0)
+            constraints.append(w <= max_position)
+
+            # 行业偏离约束
+            if industry_data is not None and benchmark_industry_weights is not None:
+                ind = industry_data.reindex(common)
+                for industry in ind.unique():
+                    if pd.isna(industry) or industry not in benchmark_industry_weights:
+                        continue
+                    idx = np.where(ind.values == industry)[0]
+                    bench_w = benchmark_industry_weights[industry]
+                    if len(idx) > 0:
+                        # 行业权重 - 基准 <= max_dev
+                        constraints.append(cp.sum(w[idx]) - bench_w <= max_industry_dev)
+                        # 基准 - 行业权重 <= max_dev
+                        constraints.append(bench_w - cp.sum(w[idx]) <= max_industry_dev)
+
+            # 风格暴露约束
+            if style_exposures is not None and style_bounds is not None:
+                X = style_exposures.reindex(common).fillna(0)
+                for factor_name, (lo, hi) in style_bounds.items():
+                    if factor_name in X.columns:
+                        exposure = X[factor_name].values
+                        constraints.append(exposure @ w >= lo)
+                        constraints.append(exposure @ w <= hi)
+
+            problem = cp.Problem(objective, constraints)
+            try:
+                problem.solve(solver=cp.SCS, max_iters=2000)
+            except cp.SolverError:
+                problem.solve(solver=cp.ECOS, max_iters=500)
+
+            if problem.status in ['optimal', 'optimal_inaccurate'] and w.value is not None:
+                weights = np.maximum(w.value, 0)
+                if weights.sum() > 0:
+                    weights = weights / weights.sum()
+                return self._filter_min_holding(pd.Series(weights, index=common))
+
+        except ImportError:
+            pass
+
+        # 回退: 使用SLSQP (不支持L1, 用L2近似换手惩罚)
+        def objective(w):
+            alpha_term = -alpha @ w
+            risk_term = risk_aversion / 2 * w @ Sigma @ w
+            turnover_term = turnover_penalty * np.sum((w - w_prev) ** 2)  # L2近似
+            return alpha_term + risk_term + turnover_term
+
+        def gradient(w):
+            return -alpha + risk_aversion * Sigma @ w + 2 * turnover_penalty * (w - w_prev)
+
+        constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1.0}]
+        bounds = [(0, max_position) for _ in range(n)] if long_only else [(-max_position, max_position) for _ in range(n)]
+
+        # 行业约束
+        if industry_data is not None and benchmark_industry_weights is not None:
+            ind = industry_data.reindex(common)
+            for industry in ind.unique():
+                if pd.isna(industry) or industry not in benchmark_industry_weights:
+                    continue
+                idx = np.where(ind.values == industry)[0]
+                bench_w = benchmark_industry_weights[industry]
+                if len(idx) > 0:
+                    constraints.append({
+                        'type': 'ineq',
+                        'fun': lambda w, idx=idx, bw=bench_w: max_industry_dev - (np.sum(w[idx]) - bw)
+                    })
+                    constraints.append({
+                        'type': 'ineq',
+                        'fun': lambda w, idx=idx, bw=bench_w: max_industry_dev - (bw - np.sum(w[idx]))
+                    })
+
+        w0 = np.ones(n) / n
+        result = minimize(objective, w0, method='SLSQP', jac=gradient,
+                          bounds=bounds, constraints=constraints,
+                          options={'maxiter': 500, 'ftol': 1e-10})
+
+        if result.success:
+            weights = pd.Series(result.x, index=common)
+            weights[weights < 1e-4] = 0
+            if weights.sum() > 0:
+                weights = weights / weights.sum()
+        else:
+            logger.warning(f"Alpha-risk optimization did not converge: {result.message}")
+            weights = self.score_to_weight(alpha_scores, industry_data, max_position)
+
+        return self._filter_min_holding(weights)
 
     # ==================== 风险平价优化 ====================
 
@@ -132,6 +458,7 @@ class PortfolioOptimizer:
         stocks = cov_matrix.index
         n = len(stocks)
         Sigma = cov_matrix.values
+        Sigma = self._ensure_positive_definite(Sigma)
 
         if target_risk is None:
             target_risk = np.ones(n) / n
@@ -201,6 +528,7 @@ class PortfolioOptimizer:
         stocks = cov_matrix.index
         n = len(stocks)
         Sigma = cov_matrix.values
+        Sigma = self._ensure_positive_definite(Sigma)
 
         def objective(w):
             return w @ Sigma @ w
@@ -265,6 +593,7 @@ class PortfolioOptimizer:
         stocks = cov_matrix.index
         n = len(stocks)
         Sigma = cov_matrix.values
+        Sigma = self._ensure_positive_definite(Sigma)
 
         # 构建去相关矩阵: C = D^{-1/2} * Σ * D^{-1/2}
         vols = np.sqrt(np.diag(Sigma))
@@ -339,6 +668,7 @@ class PortfolioOptimizer:
             return pd.Series(1.0 / n, index=common) if n > 0 else pd.Series()
 
         Sigma = cov_matrix.loc[common, common].values
+        Sigma = self._ensure_positive_definite(Sigma)
         w_mkt = market_cap_weights.reindex(common).fillna(0).values
 
         # 隐含均衡收益: pi = delta * Sigma * w_mkt
@@ -378,6 +708,52 @@ class PortfolioOptimizer:
             long_only=long_only,
         )
 
+    # ==================== BL敏感性分析 ====================
+
+    def black_litterman_sensitivity(self,
+                                      market_cap_weights: pd.Series,
+                                      cov_matrix: pd.DataFrame,
+                                      P: np.ndarray, Q: np.ndarray,
+                                      Omega: np.ndarray,
+                                      tau_range: Optional[List[float]] = None,
+                                      risk_aversion: float = 1.0,
+                                      delta: float = 2.5,
+                                      max_position: float = 0.10,
+                                      long_only: bool = True) -> Dict[str, Any]:
+        """
+        Black-Litterman tau敏感性分析
+        tau对BL结果影响极大，需扫描范围观察权重稳定性
+
+        Args:
+            tau_range: tau扫描范围, 默认[0.01, 0.025, 0.05, 0.075, 0.1]
+        """
+        if tau_range is None:
+            tau_range = [0.01, 0.025, 0.05, 0.075, 0.1]
+
+        results = {}
+        for tau in tau_range:
+            weights = self.black_litterman_optimize(
+                market_cap_weights, cov_matrix, P, Q, Omega,
+                tau=tau, risk_aversion=risk_aversion, delta=delta,
+                max_position=max_position, long_only=long_only,
+            )
+            results[f'tau={tau:.3f}'] = {
+                'weights': weights.to_dict(),
+                'max_weight': weights.max(),
+                'min_weight': weights[weights > 0].min() if (weights > 0).any() else 0,
+                'n_positions': (weights > 1e-4).sum(),
+            }
+
+        # 计算权重稳定性: 各tau下权重的标准差
+        all_weights = pd.DataFrame({k: pd.Series(v['weights']) for k, v in results.items()})
+        weight_stability = all_weights.std(axis=1).mean()
+
+        return {
+            'tau_results': results,
+            'weight_stability': round(weight_stability, 6),
+            'is_stable': weight_stability < 0.01,  # 权重标准差<1%视为稳定
+        }
+
     # ==================== 稳健优化 ====================
 
     def robust_mean_variance_optimize(self, expected_returns: pd.Series,
@@ -411,6 +787,7 @@ class PortfolioOptimizer:
 
         mu = expected_returns.reindex(common).values
         Sigma = cov_matrix.loc[common, common].values
+        Sigma = self._ensure_positive_definite(Sigma)
         sigma_mu = return_uncertainty.reindex(common).values
 
         try:
@@ -735,36 +1112,13 @@ class PortfolioOptimizer:
             dist = np.sqrt(0.5 * (1 - corr))
             np.fill_diagonal(dist, 0)
 
-            from scipy.cluster.hierarchy import linkage, leaves_list
+            from scipy.cluster.hierarchy import linkage, to_tree
             condensed = dist[np.triu_indices(n, k=1)]
             link = linkage(condensed, method='single')
-            order = leaves_list(link)
 
-            weights = np.ones(n)
-            clusters = [list(range(n))]
-
-            while clusters:
-                new_clusters = []
-                for cluster in clusters:
-                    if len(cluster) <= 1:
-                        continue
-                    mid = len(cluster) // 2
-                    left = cluster[:mid]
-                    right = cluster[mid:]
-
-                    var_left = np.mean(np.diag(cov_matrix)[left])
-                    var_right = np.mean(np.diag(cov_matrix)[right])
-
-                    alpha = 1 - var_left / (var_left + var_right) if (var_left + var_right) > 0 else 0.5
-
-                    for i in left:
-                        weights[i] *= alpha
-                    for i in right:
-                        weights[i] *= (1 - alpha)
-
-                    new_clusters.extend([left, right])
-
-                clusters = new_clusters
+            # Lopez de Prado标准HRP: 按linkage树拓扑结构递归分配
+            root = to_tree(link, rd=True)
+            weights = self._hrp_recursive_split(root[0], cov_matrix)
 
             weights = weights / weights.sum()
             return pd.Series(weights, index=index)

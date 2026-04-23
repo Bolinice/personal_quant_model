@@ -1,7 +1,7 @@
 # 一、《A股多因子增强策略平台 API 接口文档》
 
-**文档版本**：V1.0  
-**产品文档版本**：V2.0  
+**文档版本**：V1.1
+**产品文档版本**：V2.2  
 **适用范围**：MVP / V2.0  
 **接口风格**：RESTful JSON API  
 **鉴权方式**：JWT Bearer Token  
@@ -274,6 +274,70 @@ X-Request-Id: <uuid>
 |---|---|---|---|
 | index_code | string | 是 | 如 CSI500 |
 | trade_date | string | 是 | 查询日期 |
+
+---
+
+## 3.6 数据质量检查
+
+### GET `/api/v1/market/data-quality`
+
+#### 查询参数
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| trade_date | string | 是 | 交易日 |
+| check_type | string | 否 | ohlc_consistency/pct_chg/volume/coverage/cross_validate |
+
+#### 响应示例
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "trade_date": "2026-04-22",
+    "total_stocks": 5200,
+    "checked_stocks": 5180,
+    "issues": [
+      {
+        "ts_code": "000001.SZ",
+        "check_type": "ohlc_consistency",
+        "detail": "high < max(open, close)"
+      }
+    ],
+    "coverage_rate": 0.996
+  }
+}
+```
+
+---
+
+## 3.7 PIT数据查询
+
+### GET `/api/v1/market/pit-financials`
+
+#### 查询参数
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| ts_code | string | 否 | 股票代码 |
+| as_of_date | string | 是 | 截止日期（仅返回该日期前公告的数据） |
+| report_type | string | 否 | Q1/half_year/Q3/annual |
+
+#### 说明
+按公告日（ann_date）过滤财务数据，确保不使用未来信息。
+
+---
+
+## 3.8 幸存者偏差股票池
+
+### GET `/api/v1/market/historical-stock-pool`
+
+#### 查询参数
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| trade_date | string | 是 | 交易日 |
+| include_delisted | bool | 否 | 是否包含退市股（默认true） |
+
+#### 说明
+返回指定交易日实际存续的股票池，包含已退市股票，避免幸存者偏差。
 
 ---
 

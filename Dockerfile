@@ -31,7 +31,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # 创建日志目录
-RUN mkdir -p logs
+RUN mkdir -p app/logs
 
 # 暴露端口
 EXPOSE 8000

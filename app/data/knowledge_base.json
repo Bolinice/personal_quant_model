@@ -1,0 +1,1470 @@
+{
+  "meta": {
+    "version": "1.0.0",
+    "updated": "2026-04-23",
+    "total_terms": 84,
+    "categories": [
+      {"id": "data_management", "name_cn": "数据管理", "name_en": "Data Management", "description": "数据获取、清洗、存储与质量保障相关概念"},
+      {"id": "universe", "name_cn": "股票池", "name_en": "Stock Universe", "description": "选股范围构建与过滤规则"},
+      {"id": "factor_system", "name_cn": "因子体系", "name_en": "Factor System", "description": "因子分类、定义与计算方法"},
+      {"id": "factor_preprocess", "name_cn": "因子预处理", "name_en": "Factor Preprocessing", "description": "因子数据清洗与标准化流程"},
+      {"id": "factor_analysis", "name_cn": "因子分析", "name_en": "Factor Analysis", "description": "因子有效性评估与监控"},
+      {"id": "model_scoring", "name_cn": "模型评分", "name_en": "Model Scoring", "description": "信号合成、加权与评分方法"},
+      {"id": "portfolio_risk", "name_cn": "组合与风控", "name_en": "Portfolio & Risk", "description": "组合构建、权重优化与风险管理"},
+      {"id": "backtest_timing", "name_cn": "回测与择时", "name_en": "Backtest & Timing", "description": "回测方法、过拟合检测与市场择时"}
+    ]
+  },
+  "terms": [
+    {
+      "id": "kb_001",
+      "term_cn": "PIT前视偏差",
+      "term_en": "Point-In-Time Bias",
+      "category": "data_management",
+      "subcategory": "数据偏差",
+      "definition": "使用未来才能获取的数据进行历史分析所导致的偏差。所有财务数据必须按公告发布日期使用，而非报告期。",
+      "formula": null,
+      "key_points": [
+        "核心原则：按公告日期(announce_date)而非报告期(report_date)使用财务数据",
+        "典型错误：用年报数据回测1月行情，但年报4月才发布",
+        "本项目所有财务查询均通过 announce_date 过滤"
+      ],
+      "related_terms": ["kb_002", "kb_008"],
+      "source_module": "data_sources",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_002",
+      "term_cn": "幸存者偏差",
+      "term_en": "Survivorship Bias",
+      "category": "data_management",
+      "subcategory": "数据偏差",
+      "definition": "仅使用当前仍在交易的股票进行分析，忽略已退市股票，导致收益高估。",
+      "formula": null,
+      "key_points": [
+        "必须包含已退市股票的历史数据",
+        "退市股通常表现较差，忽略它们会虚增策略收益",
+        "本项目股票池构建时包含退市整理期股票"
+      ],
+      "related_terms": ["kb_001", "kb_012"],
+      "source_module": "universe",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_003",
+      "term_cn": "前复权",
+      "term_en": "Forward Adjustment",
+      "category": "data_management",
+      "subcategory": "价格处理",
+      "definition": "以当前价格为基准，向历史调整价格，使价格序列连续可比。适合计算历史收益率。",
+      "formula": "adj_price = price × adj_factor",
+      "key_points": [
+        "前复权保持当前价格不变，调整历史价格",
+        "后复权保持历史价格不变，调整当前价格",
+        "计算收益率时必须使用复权价格"
+      ],
+      "related_terms": ["kb_004"],
+      "source_module": "data_sources",
+      "difficulty": "basic"
+    },
+    {
+      "id": "kb_004",
+      "term_cn": "除权除息",
+      "term_en": "Ex-Dividend / Ex-Rights",
+      "category": "data_management",
+      "subcategory": "价格处理",
+      "definition": "股票分红或配股后，股价需相应下调以反映权益变动。",
+      "formula": "除权价 = (前收盘价 - 现金红利 + 配股价×配股比例) / (1 + 送股比例 + 配股比例)",
+      "key_points": [
+        "除权日当天股价跳空下跌是正常现象，非实际亏损",
+        "复权因子用于消除除权除息对价格序列的影响"
+      ],
+      "related_terms": ["kb_003"],
+      "source_module": "data_sources",
+      "difficulty": "basic"
+    },
+    {
+      "id": "kb_005",
+      "term_cn": "交易日历",
+      "term_en": "Trading Calendar",
+      "category": "data_management",
+      "subcategory": "时间管理",
+      "definition": "记录A股市场开闭市日期，用于回测和策略的时间轴对齐。",
+      "formula": null,
+      "key_points": [
+        "A股交易日与自然日不同，需排除周末和法定假日",
+        "回测中所有时间计算必须基于交易日历",
+        "不同板块可能有不同的交易时间安排"
+      ],
+      "related_terms": ["kb_006"],
+      "source_module": "data_sources",
+      "difficulty": "basic"
+    },
+    {
+      "id": "kb_006",
+      "term_cn": "OHLCV",
+      "term_en": "Open-High-Low-Close-Volume",
+      "category": "data_management",
+      "subcategory": "基础数据",
+      "definition": "股票日线行情的五项核心数据：开盘价、最高价、最低价、收盘价、成交量。",
+      "formula": null,
+      "key_points": [
+        "是量化策略最基础的数据输入",
+        "成交量需结合换手率使用以消除市值差异影响"
+      ],
+      "related_terms": ["kb_005"],
+      "source_module": "data_sources",
+      "difficulty": "basic"
+    },
+    {
+      "id": "kb_007",
+      "term_cn": "数据质量检查",
+      "term_en": "Data Quality Check",
+      "category": "data_management",
+      "subcategory": "数据治理",
+      "definition": "对原始数据进行异常值检测、缺失值统计、一致性验证等质量保障流程。",
+      "formula": null,
+      "key_points": [
+        "检查项：缺失率、异常值(如负价格)、重复记录、时间连续性",
+        "数据同步后自动执行质量检查",
+        "质量不达标的数据不进入因子计算流程"
+      ],
+      "related_terms": ["kb_008"],
+      "source_module": "data_sources",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_008",
+      "term_cn": "公告日期",
+      "term_en": "Announce Date",
+      "category": "data_management",
+      "subcategory": "时间管理",
+      "definition": "上市公司发布财报或公告的实际日期，是PIT原则的关键时间锚点。",
+      "formula": null,
+      "key_points": [
+        "与报告期(report_date)不同，公告日期是信息实际进入市场的时点",
+        "同一报告期不同公司公告日期不同",
+        "使用公告日期可避免前视偏差"
+      ],
+      "related_terms": ["kb_001"],
+      "source_module": "data_sources",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_009",
+      "term_cn": "涨跌停",
+      "term_en": "Price Limit",
+      "category": "data_management",
+      "subcategory": "交易规则",
+      "definition": "A股对个股日内涨跌幅设限，超出限制的委托无效。",
+      "formula": null,
+      "key_points": [
+        "主板：±10%",
+        "创业板/科创板：±20%",
+        "ST/*ST：±5%",
+        "北交所：±30%",
+        "新股上市首日不设涨跌幅限制",
+        "回测中涨跌停股票不可买入(涨停)或卖出(跌停)"
+      ],
+      "related_terms": ["kb_010", "kb_075"],
+      "source_module": "backtest_engine",
+      "difficulty": "basic"
+    },
+    {
+      "id": "kb_010",
+      "term_cn": "停牌",
+      "term_en": "Suspension",
+      "category": "data_management",
+      "subcategory": "交易规则",
+      "definition": "股票因重大事项暂停交易，期间无法买卖。",
+      "formula": null,
+      "key_points": [
+        "停牌期间持仓不变，无法调仓",
+        "回测中停牌股票的订单无法执行",
+        "长期停牌可能导致策略偏离"
+      ],
+      "related_terms": ["kb_009", "kb_075"],
+      "source_module": "backtest_engine",
+      "difficulty": "basic"
+    },
+    {
+      "id": "kb_011",
+      "term_cn": "股票池",
+      "term_en": "Stock Universe",
+      "category": "universe",
+      "subcategory": "池构建",
+      "definition": "策略选股的可选范围，通过多层过滤规则从全A股中筛选得到。",
+      "formula": null,
+      "key_points": [
+        "核心池：严格过滤，适合大资金",
+        "扩展池：宽松过滤，适合小资金",
+        "每日重新计算，动态调整成分股"
+      ],
+      "related_terms": ["kb_012", "kb_013", "kb_014"],
+      "source_module": "universe",
+      "difficulty": "basic"
+    },
+    {
+      "id": "kb_012",
+      "term_cn": "ST/*ST过滤",
+      "term_en": "ST Filtering",
+      "category": "universe",
+      "subcategory": "过滤规则",
+      "definition": "排除被实施特别处理(ST)或退市风险警示(*ST)的股票。",
+      "formula": null,
+      "key_points": [
+        "ST股涨跌幅限制为±5%",
+        "ST股流动性差、风险高",
+        "部分策略可单独对ST股建模，但主流选股池应排除"
+      ],
+      "related_terms": ["kb_011", "kb_016"],
+      "source_module": "universe",
+      "difficulty": "basic"
+    },
+    {
+      "id": "kb_013",
+      "term_cn": "上市天数过滤",
+      "term_en": "Listing Days Filter",
+      "category": "universe",
+      "subcategory": "过滤规则",
+      "definition": "排除上市时间过短的股票，避免新股效应和交易不稳定。",
+      "formula": null,
+      "key_points": [
+        "通常要求上市超过60个交易日",
+        "新股上市初期波动大、因子数据不完整",
+        "IPO后短期存在新股溢价效应"
+      ],
+      "related_terms": ["kb_011"],
+      "source_module": "universe",
+      "difficulty": "basic"
+    },
+    {
+      "id": "kb_014",
+      "term_cn": "流动性过滤",
+      "term_en": "Liquidity Filter",
+      "category": "universe",
+      "subcategory": "过滤规则",
+      "definition": "按日均成交额过滤，排除流动性不足的股票，确保策略可实际执行。",
+      "formula": "日均成交额 = mean(每日成交额, N日)",
+      "key_points": [
+        "核心池：日均成交额 > 1000万元",
+        "扩展池：日均成交额 > 500万元",
+        "流动性不足会导致实际交易滑点远大于回测假设"
+      ],
+      "related_terms": ["kb_011", "kb_015"],
+      "source_module": "universe",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_015",
+      "term_cn": "价格过滤",
+      "term_en": "Price Filter",
+      "category": "universe",
+      "subcategory": "过滤规则",
+      "definition": "排除价格过低(如<1元)的股票，避免退市风险和交易异常。",
+      "formula": null,
+      "key_points": [
+        "股价低于1元可能触发面值退市",
+        "低价股波动率畸高，影响因子稳定性"
+      ],
+      "related_terms": ["kb_011"],
+      "source_module": "universe",
+      "difficulty": "basic"
+    },
+    {
+      "id": "kb_016",
+      "term_cn": "退市整理期",
+      "term_en": "Delisting Organizing Period",
+      "category": "universe",
+      "subcategory": "过滤规则",
+      "definition": "股票被决定退市后的15个交易日整理期，期间仍可交易但风险极高。",
+      "formula": null,
+      "key_points": [
+        "退市整理期股票涨跌幅限制为±10%",
+        "应从选股池中排除",
+        "持仓中如遇退市整理期需强制卖出"
+      ],
+      "related_terms": ["kb_012", "kb_002"],
+      "source_module": "universe",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_017",
+      "term_cn": "市值过滤",
+      "term_en": "Market Cap Filter",
+      "category": "universe",
+      "subcategory": "过滤规则",
+      "definition": "按流通市值过滤，排除市值过小或过大的股票。",
+      "formula": null,
+      "key_points": [
+        "小市值股流动性差、操纵风险高",
+        "大市值股对指数影响过大，可能造成集中度风险",
+        "核心池和扩展池可设置不同市值阈值"
+      ],
+      "related_terms": ["kb_011", "kb_014"],
+      "source_module": "universe",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_018",
+      "term_cn": "一字涨停/跌停",
+      "term_en": "One-Word Limit",
+      "category": "universe",
+      "subcategory": "过滤规则",
+      "definition": "开盘即涨停或跌停且全天未打开的股票，实际无法买入或卖出。",
+      "formula": null,
+      "key_points": [
+        "涨停一字板：无法买入",
+        "跌停一字板：无法卖出",
+        "回测中应排除一字板股票的可交易性"
+      ],
+      "related_terms": ["kb_009"],
+      "source_module": "universe",
+      "difficulty": "basic"
+    },
+    {
+      "id": "kb_019",
+      "term_cn": "质量因子",
+      "term_en": "Quality Factor",
+      "category": "factor_system",
+      "subcategory": "基本面因子",
+      "definition": "衡量公司盈利质量和财务稳定性的因子，包括ROE、ROA、毛利率、净利率等。",
+      "formula": null,
+      "key_points": [
+        "ROE = 净利润/净资产，衡量股东回报率",
+        "ROA = 净利润/总资产，衡量资产使用效率",
+        "毛利率 = (营收-成本)/营收，衡量定价能力",
+        "净利率 = 净利润/营收，衡量整体盈利能力"
+      ],
+      "related_terms": ["kb_020", "kb_021"],
+      "source_module": "alpha_modules",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_020",
+      "term_cn": "估值因子",
+      "term_en": "Value Factor",
+      "category": "factor_system",
+      "subcategory": "基本面因子",
+      "definition": "衡量股票价格相对其基本面价值是否合理的因子，包括PE、PB、PS、PEG等。",
+      "formula": "PE = 股价/每股收益, PB = 股价/每股净资产, PS = 股价/每股营收, PEG = PE/盈利增长率",
+      "key_points": [
+        "低PE/PB通常代表价值被低估",
+        "需结合成长性看估值，PEG更全面",
+        "EV/EBITDA不受资本结构影响，适合跨行业比较"
+      ],
+      "related_terms": ["kb_019", "kb_022"],
+      "source_module": "alpha_modules",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_021",
+      "term_cn": "动量因子",
+      "term_en": "Momentum Factor",
+      "category": "factor_system",
+      "subcategory": "量价因子",
+      "definition": "基于股票过去一段时间收益率构建的因子，反映价格趋势延续性。",
+      "formula": "MOM_N = Price_t / Price_{t-N} - 1",
+      "key_points": [
+        "常用周期：1月(21日)、3月(63日)、6月(126日)、12月(252日)",
+        "A股短期(1月)存在反转效应，中长期(3-12月)存在动量效应",
+        "需排除最近1周收益以避免短期反转干扰"
+      ],
+      "related_terms": ["kb_025", "kb_030"],
+      "source_module": "alpha_modules",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_022",
+      "term_cn": "成长因子",
+      "term_en": "Growth Factor",
+      "category": "factor_system",
+      "subcategory": "基本面因子",
+      "definition": "衡量公司业绩增长速度的因子，包括营收同比增长、净利润同比增长等。",
+      "formula": "营收YoY = (本期营收 - 上期营收) / |上期营收|",
+      "key_points": [
+        "同比增长消除季节性影响",
+        "高增长不一定好，需结合估值看性价比",
+        "成长因子与质量因子可形成互补"
+      ],
+      "related_terms": ["kb_019", "kb_020"],
+      "source_module": "alpha_modules",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_023",
+      "term_cn": "风险因子",
+      "term_en": "Risk Factor",
+      "category": "factor_system",
+      "subcategory": "量价因子",
+      "definition": "衡量股票风险水平的因子，包括波动率、Beta、下行波动率等。",
+      "formula": "Beta = Cov(R_i, R_m) / Var(R_m), 下行波动率 = sqrt(mean(min(R_i - 0, 0)^2))",
+      "key_points": [
+        "高波动率股票风险大但可能收益高",
+        "Beta衡量个股相对市场的系统性风险",
+        "下行波动率只考虑负收益，更符合投资者对风险的感知"
+      ],
+      "related_terms": ["kb_024", "kb_068"],
+      "source_module": "alpha_modules",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_024",
+      "term_cn": "流动性因子",
+      "term_en": "Liquidity Factor",
+      "category": "factor_system",
+      "subcategory": "量价因子",
+      "definition": "衡量股票交易活跃度和流动性成本的因子，包括Amihud非流动性、换手率等。",
+      "formula": "Amihud = mean(|r_t| / VOLD_t), 换手率 = 成交量 / 流通股本",
+      "key_points": [
+        "Amihud衡量单位成交额引起的价格变动，值越大流动性越差",
+        "低流动性股票通常有流动性溢价",
+        "换手率过高可能暗示投机过度"
+      ],
+      "related_terms": ["kb_014", "kb_023"],
+      "source_module": "alpha_modules",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_025",
+      "term_cn": "反转因子",
+      "term_en": "Reversal Factor",
+      "category": "factor_system",
+      "subcategory": "量价因子",
+      "definition": "基于股票短期(通常1个月)收益构建的因子，A股短期存在显著的反转效应。",
+      "formula": "REV = -Return_{t-21:t-1}",
+      "key_points": [
+        "A股1月反转效应显著：上月跌得多的股票本月倾向于反弹",
+        "与动量因子方向相反，短期反转 vs 中期动量",
+        "反转因子在A股的IC通常高于动量因子"
+      ],
+      "related_terms": ["kb_021"],
+      "source_module": "alpha_modules",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_026",
+      "term_cn": "应计异常",
+      "term_en": "Accrual Anomaly",
+      "category": "factor_system",
+      "subcategory": "基本面因子",
+      "definition": "Sloan(1996)发现应计利润高的公司未来收益较差，反映盈余质量。",
+      "formula": "Accrual = (净利润 - 经营现金流) / 平均总资产",
+      "key_points": [
+        "应计利润高可能意味着盈余操纵",
+        "经营现金流比净利润更难操纵",
+        "低应计公司未来收益通常优于高应计公司"
+      ],
+      "related_terms": ["kb_019"],
+      "source_module": "alpha_modules",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_027",
+      "term_cn": "北向资金因子",
+      "term_en": "Northbound Capital Factor",
+      "category": "factor_system",
+      "subcategory": "资金流因子",
+      "definition": "基于沪港通/深港通北向资金持股变动构建的因子，反映外资偏好。",
+      "formula": null,
+      "key_points": [
+        "北向资金被视为聪明钱(Smart Money)",
+        "持股比例变化和净买入额均可作为因子",
+        "需注意北向资金行为可能受汇率和海外市场影响"
+      ],
+      "related_terms": ["kb_028"],
+      "source_module": "alpha_modules",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_028",
+      "term_cn": "SUE",
+      "term_en": "Standardized Unexpected Earnings",
+      "category": "factor_system",
+      "subcategory": "基本面因子",
+      "definition": "标准化未预期盈利，衡量盈利超预期程度的因子。",
+      "formula": "SUE = (实际EPS - 预期EPS) / σ(预测误差)",
+      "key_points": [
+        "PEAD(盈利公告后漂移)：SUE高的股票公告后持续上涨",
+        "预期EPS通常用时间序列模型或分析师一致预期",
+        "SUE因子在A股有显著的选股效果"
+      ],
+      "related_terms": ["kb_022", "kb_026"],
+      "source_module": "alpha_modules",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_029",
+      "term_cn": "VPIN",
+      "term_en": "Volume-Synchronized Probability of Informed Trading",
+      "category": "factor_system",
+      "subcategory": "量价因子",
+      "definition": "交易量知情概率，衡量市场中知情交易者活跃程度的指标。",
+      "formula": null,
+      "key_points": [
+        "VPIN高意味着知情交易者活跃，信息不对称严重",
+        "可用于预警短期价格波动",
+        "基于成交量切片(Volume Bucket)而非时间切片计算"
+      ],
+      "related_terms": ["kb_024"],
+      "source_module": "alpha_modules",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_030",
+      "term_cn": "RSI",
+      "term_en": "Relative Strength Index",
+      "category": "factor_system",
+      "subcategory": "量价因子",
+      "definition": "相对强弱指标，衡量价格上涨力度相对于下跌力度的比值。",
+      "formula": "RSI = 100 - 100/(1 + RS), RS = 平均上涨幅度/平均下跌幅度",
+      "key_points": [
+        "RSI > 70 通常视为超买，RSI < 30 视为超卖",
+        "常用周期14日",
+        "在A股可作为短期择时辅助指标"
+      ],
+      "related_terms": ["kb_021", "kb_025"],
+      "source_module": "alpha_modules",
+      "difficulty": "basic"
+    },
+    {
+      "id": "kb_031",
+      "term_cn": "缺失值处理",
+      "term_en": "Missing Value Treatment",
+      "category": "factor_preprocess",
+      "subcategory": "数据清洗",
+      "definition": "对因子数据中的缺失值进行填充或删除，确保后续计算可行。",
+      "formula": null,
+      "key_points": [
+        "行业均值/中位数填充：按同行业股票的均值/中位数填充",
+        "MICE多重插补：利用其他变量预测缺失值，适用于高缺失率场景",
+        "缺失率过高的因子(>30%)应考虑剔除"
+      ],
+      "related_terms": ["kb_032", "kb_033"],
+      "source_module": "factor_preprocess",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_032",
+      "term_cn": "MAD去极值",
+      "term_en": "MAD Winsorization",
+      "category": "factor_preprocess",
+      "subcategory": "数据清洗",
+      "definition": "基于中位数绝对偏差(MAD)的极值处理方法，比标准差方法更稳健。",
+      "formula": "MAD = median(|x_i - median(x)|), 截断阈值 = median ± N × MAD (通常N=3)",
+      "key_points": [
+        "MAD基于中位数，不受极端值影响，比3σ方法更稳健",
+        "超过阈值的值被截断到阈值而非删除",
+        "本项目默认使用3倍MAD作为截断阈值"
+      ],
+      "related_terms": ["kb_033", "kb_031"],
+      "source_module": "factor_preprocess",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_033",
+      "term_cn": "Z-score标准化",
+      "term_en": "Z-score Standardization",
+      "category": "factor_preprocess",
+      "subcategory": "标准化",
+      "definition": "将因子值转换为均值为0、标准差为1的标准正态分布，使不同因子可比。",
+      "formula": "z = (x - μ) / σ",
+      "key_points": [
+        "按横截面(每日)进行标准化",
+        "使不同量纲的因子可加权合成",
+        "标准化前必须先完成去极值，否则极值会扭曲均值和标准差"
+      ],
+      "related_terms": ["kb_032", "kb_034"],
+      "source_module": "factor_preprocess",
+      "difficulty": "basic"
+    },
+    {
+      "id": "kb_034",
+      "term_cn": "逆正态秩变换",
+      "term_en": "Inverse Normal Rank Transform",
+      "category": "factor_preprocess",
+      "subcategory": "标准化",
+      "definition": "将因子值先转为排名百分位，再映射到标准正态分布，消除分布偏态。",
+      "formula": "z = Φ⁻¹(rank(x) / (N+1))",
+      "key_points": [
+        "比Z-score更稳健，完全不受极值影响",
+        "适用于严重偏态的因子分布",
+        "本项目对部分因子采用此方法替代Z-score"
+      ],
+      "related_terms": ["kb_033"],
+      "source_module": "factor_preprocess",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_035",
+      "term_cn": "因子方向统一",
+      "term_en": "Factor Direction Alignment",
+      "category": "factor_preprocess",
+      "subcategory": "标准化",
+      "definition": "确保所有因子的值越大代表越看好，统一因子方向以便合成。",
+      "formula": null,
+      "key_points": [
+        "如PE因子：值越小越看好，需取倒数或取负",
+        "方向统一后才能进行等权或加权合成",
+        "方向错误会导致合成信号完全相反"
+      ],
+      "related_terms": ["kb_033", "kb_047"],
+      "source_module": "factor_preprocess",
+      "difficulty": "basic"
+    },
+    {
+      "id": "kb_036",
+      "term_cn": "行业中性化",
+      "term_en": "Industry Neutralization",
+      "category": "factor_preprocess",
+      "subcategory": "中性化",
+      "definition": "通过哑变量回归去除因子中的行业暴露，使因子值不受行业结构影响。",
+      "formula": "f_neutral = residual(f ~ Σ I_industry)",
+      "key_points": [
+        "使用申万一级行业分类(31个行业)",
+        "回归残差即为行业中性化后的因子值",
+        "行业中性化后的因子IC更纯净，不受行业轮动干扰"
+      ],
+      "related_terms": ["kb_037", "kb_038"],
+      "source_module": "factor_preprocess",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_037",
+      "term_cn": "市值中性化",
+      "term_en": "Market Cap Neutralization",
+      "category": "factor_preprocess",
+      "subcategory": "中性化",
+      "definition": "通过回归去除因子中的市值暴露，使因子值不受大小盘风格影响。",
+      "formula": "f_neutral = residual(f ~ log(市值))",
+      "key_points": [
+        "使用对数市值作为自变量",
+        "消除大小盘风格对因子的污染",
+        "通常在行业中性化之后进行"
+      ],
+      "related_terms": ["kb_036"],
+      "source_module": "factor_preprocess",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_038",
+      "term_cn": "覆盖率检查",
+      "term_en": "Coverage Check",
+      "category": "factor_preprocess",
+      "subcategory": "数据清洗",
+      "definition": "检查因子在股票池中的覆盖比例，覆盖率过低的因子不可靠。",
+      "formula": "覆盖率 = 非空值数 / 股票池总数",
+      "key_points": [
+        "覆盖率 < 70% 的因子应谨慎使用",
+        "覆盖率过低可能导致中性化回归不稳定",
+        "不同行业覆盖率差异大时需分行业评估"
+      ],
+      "related_terms": ["kb_031"],
+      "source_module": "factor_preprocess",
+      "difficulty": "basic"
+    },
+    {
+      "id": "kb_039",
+      "term_cn": "信息系数",
+      "term_en": "IC (Information Coefficient)",
+      "category": "factor_analysis",
+      "subcategory": "因子评估",
+      "definition": "因子值与未来收益之间的横截面相关系数，衡量因子的预测能力。",
+      "formula": "IC_t = Corr(f_t, r_{t+1})",
+      "key_points": [
+        "IC > 0.03 通常认为因子有效",
+        "IC > 0.05 为强有效因子",
+        "需观察IC的时间序列稳定性，单日IC无意义",
+        "本项目使用滚动252日IC均值评估因子"
+      ],
+      "related_terms": ["kb_040", "kb_041", "kb_045"],
+      "source_module": "factor_engine",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_040",
+      "term_cn": "秩信息系数",
+      "term_en": "Rank IC (Spearman IC)",
+      "category": "factor_analysis",
+      "subcategory": "因子评估",
+      "definition": "因子值排名与未来收益排名之间的相关系数，比普通IC更稳健。",
+      "formula": "RankIC_t = Corr(rank(f_t), rank(r_{t+1}))",
+      "key_points": [
+        "使用Spearman秩相关，不受极值影响",
+        "比Pearson IC更稳健，是因子评估的首选指标",
+        "本项目因子评估以RankIC为主"
+      ],
+      "related_terms": ["kb_039", "kb_041"],
+      "source_module": "factor_engine",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_041",
+      "term_cn": "信息比率",
+      "term_en": "ICIR (IC Information Ratio)",
+      "category": "factor_analysis",
+      "subcategory": "因子评估",
+      "definition": "IC均值除以IC标准差，衡量因子预测能力的稳定性。",
+      "formula": "ICIR = mean(IC) / std(IC)",
+      "key_points": [
+        "ICIR > 0.5 为优秀因子",
+        "ICIR同时考虑预测能力(IC均值)和稳定性(IC标准差)",
+        "IC高但ICIR低说明因子不稳定，可能只在特定市场环境有效"
+      ],
+      "related_terms": ["kb_039", "kb_040"],
+      "source_module": "factor_engine",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_042",
+      "term_cn": "分层回测",
+      "term_en": "Layered Backtest",
+      "category": "factor_analysis",
+      "subcategory": "因子评估",
+      "definition": "按因子值将股票分为N组(通常5组)，观察各组收益差异以验证因子有效性。",
+      "formula": null,
+      "key_points": [
+        "Q1(最低)到Q5(最高)五组，观察单调性",
+        "多空收益 = Q5 - Q1，衡量因子的区分能力",
+        "单调性越好，因子越有效",
+        "本项目使用5分组分层回测"
+      ],
+      "related_terms": ["kb_043", "kb_039"],
+      "source_module": "factor_engine",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_043",
+      "term_cn": "多空收益",
+      "term_en": "Long-Short Return",
+      "category": "factor_analysis",
+      "subcategory": "因子评估",
+      "definition": "做多因子最高组、做空因子最低组的收益差，衡量因子的纯Alpha能力。",
+      "formula": "LS = Return(Q5) - Return(Q1)",
+      "key_points": [
+        "多空收益排除了市场Beta的影响",
+        "A股做空受限，多空收益仅为理论指标",
+        "实际策略中关注多头超额收益更实用"
+      ],
+      "related_terms": ["kb_042"],
+      "source_module": "factor_engine",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_044",
+      "term_cn": "衰减分析",
+      "term_en": "Decay Analysis",
+      "category": "factor_analysis",
+      "subcategory": "因子评估",
+      "definition": "分析因子对不同预测窗口的IC变化，判断因子的有效预测周期。",
+      "formula": "IC_N = Corr(f_t, r_{t+1:t+N})",
+      "key_points": [
+        "常用预测窗口：1日、5日、10日、20日",
+        "IC随预测窗口衰减的速度反映因子时效性",
+        "短期因子(1-5日)适合高频调仓，长期因子(10-20日)适合低频策略"
+      ],
+      "related_terms": ["kb_039", "kb_045"],
+      "source_module": "factor_monitor",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_045",
+      "term_cn": "PSI",
+      "term_en": "Population Stability Index",
+      "category": "factor_analysis",
+      "subcategory": "因子监控",
+      "definition": "衡量因子分布随时间的稳定性，PSI过大说明因子发生漂移。",
+      "formula": "PSI = Σ (p_i - q_i) × ln(p_i / q_i)",
+      "key_points": [
+        "PSI < 0.1：分布稳定",
+        "0.1 ≤ PSI < 0.25：轻微漂移，需关注",
+        "PSI ≥ 0.25：显著漂移，因子可能失效",
+        "本项目对因子进行滚动PSI监控"
+      ],
+      "related_terms": ["kb_046", "kb_048"],
+      "source_module": "factor_monitor",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_046",
+      "term_cn": "KS检验",
+      "term_en": "Kolmogorov-Smirnov Test",
+      "category": "factor_analysis",
+      "subcategory": "因子监控",
+      "definition": "非参数检验方法，比较两个分布是否有显著差异，用于检测因子分布漂移。",
+      "formula": "KS = max|F_1(x) - F_2(x)|",
+      "key_points": [
+        "KS统计量越大，两个分布差异越大",
+        "与PSI互补：PSI关注整体分布变化，KS关注最大差异点",
+        "p-value < 0.05 拒绝原假设，说明分布发生显著变化"
+      ],
+      "related_terms": ["kb_045"],
+      "source_module": "factor_monitor",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_047",
+      "term_cn": "滚动IC",
+      "term_en": "Rolling IC",
+      "category": "factor_analysis",
+      "subcategory": "因子监控",
+      "definition": "在滚动窗口内计算IC的时间序列，用于监控因子预测能力的时变特征。",
+      "formula": "RollingIC_t = Corr(f_{t-W:t}, r_{t-W+1:t+1})",
+      "key_points": [
+        "常用窗口：252日(1年)",
+        "滚动IC持续下降说明因子可能衰减",
+        "本项目使用滚动IC作为因子状态机的重要输入"
+      ],
+      "related_terms": ["kb_039", "kb_048"],
+      "source_module": "factor_monitor",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_048",
+      "term_cn": "因子状态机",
+      "term_en": "Factor State Machine",
+      "category": "factor_analysis",
+      "subcategory": "因子监控",
+      "definition": "基于IC、PSI、KS等指标将因子状态分为正常/观察/警告/失效，自动管理因子生命周期。",
+      "formula": null,
+      "key_points": [
+        "正常(Normal)：IC稳定，PSI < 0.1",
+        "观察(Watch)：IC下降或PSI轻微上升",
+        "警告(Warning)：IC显著下降或PSI > 0.25",
+        "失效(Invalid)：IC持续为负或PSI极高",
+        "状态转换触发自动调权或剔除"
+      ],
+      "related_terms": ["kb_045", "kb_046", "kb_047"],
+      "source_module": "factor_monitor",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_049",
+      "term_cn": "等权加权",
+      "term_en": "Equal Weight",
+      "category": "model_scoring",
+      "subcategory": "加权方法",
+      "definition": "所有因子赋予相同权重进行合成，最简单的加权方式。",
+      "formula": "S = (1/N) × Σ f_i",
+      "key_points": [
+        "简单稳健，不依赖历史IC估计",
+        "当因子IC不稳定时可能优于复杂加权",
+        "作为基准方法与其他加权方式比较"
+      ],
+      "related_terms": ["kb_050", "kb_051"],
+      "source_module": "ensemble",
+      "difficulty": "basic"
+    },
+    {
+      "id": "kb_050",
+      "term_cn": "IC动态加权",
+      "term_en": "IC Dynamic Weighting",
+      "category": "model_scoring",
+      "subcategory": "加权方法",
+      "definition": "根据因子近期IC表现动态分配权重，IC高的因子获得更大权重。",
+      "formula": "w_i = IC_i / Σ|IC_j|",
+      "key_points": [
+        "使用滚动IC均值作为权重依据",
+        "比等权更灵活，能适应市场风格变化",
+        "IC估计本身有噪声，需设置权重下限"
+      ],
+      "related_terms": ["kb_049", "kb_051"],
+      "source_module": "ensemble",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_051",
+      "term_cn": "ICIR加权",
+      "term_en": "ICIR Weighting",
+      "category": "model_scoring",
+      "subcategory": "加权方法",
+      "definition": "根据因子ICIR分配权重，同时考虑预测能力和稳定性。",
+      "formula": "w_i = ICIR_i / Σ|ICIR_j|",
+      "key_points": [
+        "ICIR加权比纯IC加权更稳定",
+        "惩罚IC波动大的因子",
+        "本项目默认使用ICIR加权"
+      ],
+      "related_terms": ["kb_049", "kb_050", "kb_041"],
+      "source_module": "ensemble",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_052",
+      "term_cn": "分层筛选",
+      "term_en": "Layered Screening",
+      "category": "model_scoring",
+      "subcategory": "筛选方法",
+      "definition": "按因子类别分层筛选股票，如先选质量好的，再从中选估值低的，最后选动量强的。",
+      "formula": null,
+      "key_points": [
+        "典型流程：质量 → 估值 → 动量",
+        "每层筛选保留Top N%，逐层过滤",
+        "与综合评分法互补，更直观可解释"
+      ],
+      "related_terms": ["kb_019", "kb_020", "kb_021"],
+      "source_module": "alpha_modules",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_053",
+      "term_cn": "Alpha模块化架构",
+      "term_en": "Alpha Modular Architecture",
+      "category": "model_scoring",
+      "subcategory": "信号架构",
+      "definition": "将Alpha信号按信息来源分为独立模块(价格/基本面/修正/资金流)，各模块独立评分后融合。",
+      "formula": null,
+      "key_points": [
+        "价格模块：动量、反转、波动率等量价因子",
+        "基本面模块：质量、估值、成长等财务因子",
+        "修正模块：分析师修正、盈利超预期等",
+        "资金流模块：北向资金、大单净流入等",
+        "模块化便于独立迭代和A/B测试"
+      ],
+      "related_terms": ["kb_054", "kb_055"],
+      "source_module": "alpha_modules",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_054",
+      "term_cn": "信号融合",
+      "term_en": "Signal Fusion",
+      "category": "model_scoring",
+      "subcategory": "信号架构",
+      "definition": "将多个Alpha模块的信号按动态权重合成为最终评分。",
+      "formula": "S_final = Σ w_m × z(S_m), Σw_m = 1",
+      "key_points": [
+        "各模块信号先标准化为Z-score再融合",
+        "权重基于滚动IC动态调整",
+        "高相关模块间进行权重收缩以避免重复计算"
+      ],
+      "related_terms": ["kb_053", "kb_055", "kb_050"],
+      "source_module": "ensemble",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_055",
+      "term_cn": "Regime调权",
+      "term_en": "Regime Weight Adjustment",
+      "category": "model_scoring",
+      "subcategory": "信号架构",
+      "definition": "根据市场状态(趋势/震荡/防御/进攻)动态调整各Alpha模块的权重。",
+      "formula": null,
+      "key_points": [
+        "趋势市场：增加动量模块权重",
+        "震荡市场：增加价值模块权重",
+        "防御模式：降低整体仓位，增加质量模块权重",
+        "进攻模式：提高整体仓位，增加成长模块权重"
+      ],
+      "related_terms": ["kb_054", "kb_081"],
+      "source_module": "ensemble",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_056",
+      "term_cn": "高相关模块收缩",
+      "term_en": "Correlation Shrinkage",
+      "category": "model_scoring",
+      "subcategory": "信号架构",
+      "definition": "当两个Alpha模块信号高度相关时，收缩其权重以避免信息重复。",
+      "formula": "w_adj = w × (1 - ρ^2), ρ为模块间相关系数",
+      "key_points": [
+        "相关系数 > 0.7 的模块视为高相关",
+        "收缩后释放的权重分配给其他模块",
+        "防止信号同质化导致集中度风险"
+      ],
+      "related_terms": ["kb_054"],
+      "source_module": "ensemble",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_057",
+      "term_cn": "正交化因子选择",
+      "term_en": "Orthogonalize Factor Selection",
+      "category": "model_scoring",
+      "subcategory": "因子选择",
+      "definition": "使用贪心算法逐步选择ICIR最高且与已选因子正交的因子，避免多重共线性。",
+      "formula": null,
+      "key_points": [
+        "贪心策略：每步选ICIR最高且与已选因子相关性 < 阈值的因子",
+        "正交化保证入选因子提供增量信息",
+        "相关性阈值通常设为0.5",
+        "本项目使用该方法进行因子筛选"
+      ],
+      "related_terms": ["kb_041", "kb_058"],
+      "source_module": "factor_engine",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_058",
+      "term_cn": "滚动因子筛选",
+      "term_en": "Rolling Factor Selection",
+      "category": "model_scoring",
+      "subcategory": "因子选择",
+      "definition": "在滚动窗口内定期重新筛选有效因子，适应市场风格变化。",
+      "formula": null,
+      "key_points": [
+        "滚动窗口：通常252日(1年)",
+        "每月重新筛选一次",
+        "入选因子集合随时间动态调整",
+        "避免使用全样本筛选导致的过拟合"
+      ],
+      "related_terms": ["kb_057", "kb_047"],
+      "source_module": "factor_engine",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_059",
+      "term_cn": "多目标权重优化",
+      "term_en": "Multi-Objective Weight Optimization",
+      "category": "model_scoring",
+      "subcategory": "因子选择",
+      "definition": "同时优化多个目标(收益、风险、换手率)的因子权重，通过帕累托前沿寻找最优解。",
+      "formula": "max w: [E[r(w)], -σ(w), -Turnover(w)]",
+      "key_points": [
+        "三个目标：最大化预期收益、最小化风险、最小化换手率",
+        "帕累托前沿上的解互不支配",
+        "实际使用时根据偏好选择帕累托最优解",
+        "比单目标优化更贴近实际投资需求"
+      ],
+      "related_terms": ["kb_051", "kb_063"],
+      "source_module": "ensemble",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_060",
+      "term_cn": "等权组合",
+      "term_en": "Equal Weight Portfolio",
+      "category": "portfolio_risk",
+      "subcategory": "组合构建",
+      "definition": "每只股票分配相同权重的组合构建方法。",
+      "formula": "w_i = 1/N",
+      "key_points": [
+        "最简单的组合方法",
+        "通常优于市值加权(小市值溢价)",
+        "作为基准与其他优化方法比较"
+      ],
+      "related_terms": ["kb_061", "kb_062"],
+      "source_module": "portfolio_optimizer",
+      "difficulty": "basic"
+    },
+    {
+      "id": "kb_061",
+      "term_cn": "评分加权",
+      "term_en": "Score Weighting",
+      "category": "portfolio_risk",
+      "subcategory": "组合构建",
+      "definition": "根据股票综合评分分配权重，评分高的股票权重更大。",
+      "formula": "w_i = score_i / Σ score_j",
+      "key_points": [
+        "评分可来自多因子模型",
+        "可设置权重上限以控制集中度",
+        "简单直观，是常用的组合构建方法"
+      ],
+      "related_terms": ["kb_060", "kb_054"],
+      "source_module": "portfolio_optimizer",
+      "difficulty": "basic"
+    },
+    {
+      "id": "kb_062",
+      "term_cn": "风险平价",
+      "term_en": "Risk Parity",
+      "category": "portfolio_risk",
+      "subcategory": "组合构建",
+      "definition": "每只股票对组合风险的贡献相等，通过逆波动率加权实现。",
+      "formula": "w_i ∝ 1/σ_i",
+      "key_points": [
+        "波动率高的股票权重小，波动率低的股票权重大",
+        "避免少数高波动股票主导组合风险",
+        "需配合风险预算调整行业权重"
+      ],
+      "related_terms": ["kb_060", "kb_063"],
+      "source_module": "portfolio_optimizer",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_063",
+      "term_cn": "均值方差优化",
+      "term_en": "Mean-Variance Optimization (MVO)",
+      "category": "portfolio_risk",
+      "subcategory": "组合优化",
+      "definition": "Markowitz提出的经典组合优化框架，在给定风险水平下最大化预期收益。",
+      "formula": "max w: w'μ - λ/2 × w'Σw, s.t. w'1 = 1",
+      "key_points": [
+        "对输入参数(μ, Σ)极其敏感",
+        "估计误差会被优化器放大",
+        "实际中需配合收缩估计和约束条件使用"
+      ],
+      "related_terms": ["kb_064", "kb_066"],
+      "source_module": "portfolio_optimizer",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_064",
+      "term_cn": "最小方差组合",
+      "term_en": "Minimum Variance Portfolio",
+      "category": "portfolio_risk",
+      "subcategory": "组合优化",
+      "definition": "在所有可行组合中方差最小的组合，不需要估计预期收益。",
+      "formula": "min w: w'Σw, s.t. w'1 = 1",
+      "key_points": [
+        "不需要估计预期收益，减少参数不确定性",
+        "通常比MVO更稳健",
+        "适合对收益预测不确定时使用"
+      ],
+      "related_terms": ["kb_063"],
+      "source_module": "portfolio_optimizer",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_065",
+      "term_cn": "HRP层次风险平价",
+      "term_en": "Hierarchical Risk Parity",
+      "category": "portfolio_risk",
+      "subcategory": "组合优化",
+      "definition": "基于层次聚类和图论的风险平价方法，避免协方差矩阵求逆。",
+      "formula": null,
+      "key_points": [
+        "通过层次聚类将资产分组，再在组间和组内分配风险",
+        "不需要协方差矩阵求逆，数值更稳定",
+        "对异常值和估计误差更鲁棒",
+        "适合资产数量较多时使用"
+      ],
+      "related_terms": ["kb_062", "kb_063"],
+      "source_module": "portfolio_optimizer",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_066",
+      "term_cn": "Mean-CVaR优化",
+      "term_en": "Mean-CVaR Optimization",
+      "category": "portfolio_risk",
+      "subcategory": "组合优化",
+      "definition": "以CVaR替代方差作为风险度量的组合优化，更关注尾部风险。",
+      "formula": "max w: E[r(w)] - λ × CVaR_α(w)",
+      "key_points": [
+        "CVaR衡量最坏情况下的平均损失",
+        "比方差更符合投资者对风险的实际感知",
+        "可通过线性规划高效求解"
+      ],
+      "related_terms": ["kb_063", "kb_070"],
+      "source_module": "portfolio_optimizer",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_067",
+      "term_cn": "Ledoit-Wolf压缩",
+      "term_en": "Ledoit-Wolf Shrinkage",
+      "category": "portfolio_risk",
+      "subcategory": "协方差估计",
+      "definition": "将样本协方差矩阵向结构化目标矩阵收缩，减少估计误差。",
+      "formula": "Σ_shrunk = α × Σ_sample + (1-α) × F, F为收缩目标(通常为单位阵×平均方差)",
+      "key_points": [
+        "收缩强度α由数据自动确定",
+        "当样本量不足时效果显著",
+        "本项目使用Ledoit-Wolf作为默认协方差估计方法"
+      ],
+      "related_terms": ["kb_068", "kb_063"],
+      "source_module": "risk_model",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_068",
+      "term_cn": "EWMA协方差",
+      "term_en": "EWMA Covariance",
+      "category": "portfolio_risk",
+      "subcategory": "协方差估计",
+      "definition": "指数加权移动平均协方差，近期数据权重更大，对市场变化反应更快。",
+      "formula": "Σ_t = λ × Σ_{t-1} + (1-λ) × r_t × r_t'",
+      "key_points": [
+        "λ通常取0.94-0.97",
+        "对近期波动更敏感，适合捕捉波动率聚集效应",
+        "与Ledoit-Wolf可结合使用"
+      ],
+      "related_terms": ["kb_067"],
+      "source_module": "risk_model",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_069",
+      "term_cn": "在险价值",
+      "term_en": "VaR (Value at Risk)",
+      "category": "portfolio_risk",
+      "subcategory": "风险度量",
+      "definition": "在给定置信水平下，组合在一定持有期内的最大可能损失。",
+      "formula": "P(Loss > VaR_α) = 1 - α, 通常α=95%或99%",
+      "key_points": [
+        "VaR(95%, 1日) = 2% 表示有95%的概率日损失不超过2%",
+        "三种计算方法：参数法、历史模拟法、蒙特卡洛法",
+        "VaR不满足次可加性，可能低估组合风险"
+      ],
+      "related_terms": ["kb_070", "kb_071"],
+      "source_module": "risk_model",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_070",
+      "term_cn": "条件在险价值",
+      "term_en": "CVaR / Expected Shortfall",
+      "category": "portfolio_risk",
+      "subcategory": "风险度量",
+      "definition": "超过VaR阈值后的平均损失，衡量尾部风险的期望值。",
+      "formula": "CVaR_α = E[Loss | Loss > VaR_α]",
+      "key_points": [
+        "CVaR是一致性风险度量，满足次可加性",
+        "比VaR更好地捕捉极端损失",
+        "本项目风控模块使用CVaR作为核心风险指标"
+      ],
+      "related_terms": ["kb_069", "kb_071"],
+      "source_module": "risk_model",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_071",
+      "term_cn": "流动性调整VaR",
+      "term_en": "Liquidity-adjusted VaR (LVaR)",
+      "category": "portfolio_risk",
+      "subcategory": "风险度量",
+      "definition": "在VaR基础上加入流动性成本调整，更贴近实际交易中的风险。",
+      "formula": "LVaR = VaR + 0.5 × (持仓量/日均成交量) × 价格 × 价差",
+      "key_points": [
+        "持仓量相对于日均成交量越大，流动性成本越高",
+        "忽略流动性风险会低估大资金的实际风险",
+        "适合管理大额持仓的风险"
+      ],
+      "related_terms": ["kb_069", "kb_024"],
+      "source_module": "risk_model",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_072",
+      "term_cn": "Barra风格因子",
+      "term_en": "Barra Style Factors",
+      "category": "portfolio_risk",
+      "subcategory": "风险模型",
+      "definition": "MSCI Barra多因子风险模型中的风格因子，用于风险归因和暴露控制。",
+      "formula": null,
+      "key_points": [
+        "CNE5模型包含10个风格因子：Beta、Book-to-Price、Earnings Yield、Growth、Leverage、Liquidity、Momentum、Non-linear Size、Residual Volatility、Size",
+        "用于风险归因：分解组合收益来源",
+        "用于暴露控制：限制对特定风格因子的偏离"
+      ],
+      "related_terms": ["kb_023", "kb_024"],
+      "source_module": "risk_model",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_073",
+      "term_cn": "调仓缓冲区",
+      "term_en": "Rebalance Buffer Zone",
+      "category": "portfolio_risk",
+      "subcategory": "交易管理",
+      "definition": "设置权重偏离阈值，仅在偏离超过阈值时才调仓，减少不必要的交易成本。",
+      "formula": null,
+      "key_points": [
+        "如目标权重5%，缓冲区±1%，则权重在4%-6%之间不调仓",
+        "显著降低换手率和交易成本",
+        "需权衡跟踪误差与交易成本"
+      ],
+      "related_terms": ["kb_074"],
+      "source_module": "portfolio_optimizer",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_074",
+      "term_cn": "行业偏离约束",
+      "term_en": "Industry Deviation Constraint",
+      "category": "portfolio_risk",
+      "subcategory": "约束条件",
+      "definition": "限制组合中各行业权重相对基准的偏离幅度，控制行业集中度风险。",
+      "formula": "|w_industry - w_benchmark| ≤ threshold",
+      "key_points": [
+        "通常限制行业偏离在±3%以内",
+        "防止组合在单一行业过度集中",
+        "偏离约束过严会限制Alpha表达"
+      ],
+      "related_terms": ["kb_073", "kb_036"],
+      "source_module": "portfolio_optimizer",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_075",
+      "term_cn": "T+1交易规则",
+      "term_en": "T+1 Trading Rule",
+      "category": "backtest_timing",
+      "subcategory": "交易规则",
+      "definition": "A股当日买入的股票次日才能卖出，回测中必须严格遵守。",
+      "formula": null,
+      "key_points": [
+        "买入当日不可卖出",
+        "回测中需标记当日买入股票，次日才允许卖出",
+        "影响策略换手率和资金使用效率",
+        "与T+0市场(如期货)的回测逻辑不同"
+      ],
+      "related_terms": ["kb_009", "kb_010"],
+      "source_module": "backtest_engine",
+      "difficulty": "basic"
+    },
+    {
+      "id": "kb_076",
+      "term_cn": "Walk-Forward验证",
+      "term_en": "Walk-Forward Validation",
+      "category": "backtest_timing",
+      "subcategory": "回测方法",
+      "definition": "逐步向前滚动训练和测试，模拟策略在未知数据上的真实表现，防止过拟合。",
+      "formula": null,
+      "key_points": [
+        "训练窗口(如2年) → 测试窗口(如3个月) → 滚动前进",
+        "每次滚动后重新估计模型参数",
+        "比单次训练-测试分割更接近实际使用场景",
+        "本项目回测引擎支持Walk-Forward模式"
+      ],
+      "related_terms": ["kb_077", "kb_078"],
+      "source_module": "backtest_engine",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_077",
+      "term_cn": "蒙特卡洛置换检验",
+      "term_en": "Monte Carlo Permutation Test",
+      "category": "backtest_timing",
+      "subcategory": "过拟合检测",
+      "definition": "通过随机打乱收益时序生成大量伪策略，检验真实策略收益是否显著优于随机。",
+      "formula": "p-value = #{伪策略收益 ≥ 真实收益} / N_permutations",
+      "key_points": [
+        "生成1000+个随机策略作为参照",
+        "p-value < 0.05 说明策略收益不太可能由随机产生",
+        "比传统t检验更适合非正态分布的收益序列"
+      ],
+      "related_terms": ["kb_076", "kb_078"],
+      "source_module": "backtest_engine",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_078",
+      "term_cn": "通胀夏普比率",
+      "term_en": "Deflated Sharpe Ratio (DSR)",
+      "category": "backtest_timing",
+      "subcategory": "过拟合检测",
+      "definition": "考虑多次试验后的夏普比率显著性检验，修正因多次尝试导致的虚假发现。",
+      "formula": "DSR = Φ((SR - SR_0) / σ_SR), SR_0 = √((1-γ₁×SR+γ₂/2×SR²)×Var[SR̂])",
+      "key_points": [
+        "传统夏普比率未考虑多次试验的偏差",
+        "DSR修正了'试了100次终于找到一个SR>2的策略'的问题",
+        "试验次数越多，DSR的阈值越高",
+        "本项目使用DSR作为策略有效性的核心检验指标"
+      ],
+      "related_terms": ["kb_079", "kb_080"],
+      "source_module": "backtest_engine",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_079",
+      "term_cn": "最小回测长度",
+      "term_en": "Minimum Backtest Length (MinBTL)",
+      "category": "backtest_timing",
+      "subcategory": "过拟合检测",
+      "definition": "策略回测所需的最短时间长度，低于此长度的回测结果不可靠。",
+      "formula": "MinBTL = (SR² - 1) / (2 × SR) × ln(N_trials)",
+      "key_points": [
+        "由Bailey & Lopez de Prado提出",
+        "SR越高、试验次数越多，所需回测长度越长",
+        "如MinBTL=3年，则2年的回测结果不可信",
+        "本项目要求回测长度至少覆盖一个完整牛熊周期"
+      ],
+      "related_terms": ["kb_078", "kb_080"],
+      "source_module": "backtest_engine",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_080",
+      "term_cn": "Bootstrap置信区间",
+      "term_en": "Bootstrap Confidence Interval",
+      "category": "backtest_timing",
+      "subcategory": "过拟合检测",
+      "definition": "通过有放回重采样估计策略收益的置信区间，不依赖分布假设。",
+      "formula": null,
+      "key_points": [
+        "重采样1000+次，每次计算策略收益",
+        "取2.5%和97.5%分位数作为95%置信区间",
+        "如果置信区间不包含0，则策略显著有效",
+        "比参数方法更适合非正态分布"
+      ],
+      "related_terms": ["kb_077"],
+      "source_module": "backtest_engine",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_081",
+      "term_cn": "Regime检测",
+      "term_en": "Regime Detection",
+      "category": "backtest_timing",
+      "subcategory": "市场择时",
+      "definition": "识别市场当前所处的状态(趋势/震荡/防御/进攻)，用于动态调整策略参数。",
+      "formula": null,
+      "key_points": [
+        "趋势市场：均线多头排列，波动率适中",
+        "震荡市场：均线缠绕，波动率较低",
+        "防御模式：市场下行，波动率升高，降低仓位",
+        "进攻模式：市场上行，波动率下降，提高仓位",
+        "本项目使用贝叶斯共轭更新实时检测Regime"
+      ],
+      "related_terms": ["kb_082", "kb_083"],
+      "source_module": "regime",
+      "difficulty": "advanced"
+    },
+    {
+      "id": "kb_082",
+      "term_cn": "均线择时",
+      "term_en": "Moving Average Timing",
+      "category": "backtest_timing",
+      "subcategory": "市场择时",
+      "definition": "基于均线系统的择时方法，通过价格与均线的关系判断市场趋势。",
+      "formula": null,
+      "key_points": [
+        "常用均线：20日(月线)、60日(季线)、120日(半年线)、250日(年线)",
+        "价格站上均线看多，跌破均线看空",
+        "多均线共振信号更可靠",
+        "均线择时在趋势市场有效，震荡市场频繁误判"
+      ],
+      "related_terms": ["kb_081", "kb_083"],
+      "source_module": "regime",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_083",
+      "term_cn": "市场宽度",
+      "term_en": "Market Breadth",
+      "category": "backtest_timing",
+      "subcategory": "市场择时",
+      "definition": "衡量市场参与上涨的股票比例，反映市场整体强弱。",
+      "formula": "Breadth = 上涨股票数 / (上涨股票数 + 下跌股票数)",
+      "key_points": [
+        "Breadth > 0.7：市场强势，多数股票上涨",
+        "Breadth < 0.3：市场弱势，多数股票下跌",
+        "市场宽度与指数走势背离时需警惕",
+        "本项目将市场宽度作为Regime检测的输入之一"
+      ],
+      "related_terms": ["kb_081"],
+      "source_module": "regime",
+      "difficulty": "intermediate"
+    },
+    {
+      "id": "kb_084",
+      "term_cn": "贝叶斯共轭更新",
+      "term_en": "Bayesian Conjugate Update",
+      "category": "backtest_timing",
+      "subcategory": "市场择时",
+      "definition": "利用贝叶斯定理和共轭先验分布，实时更新市场状态的后验概率。",
+      "formula": "P(Regime|Data) ∝ P(Data|Regime) × P(Regime)",
+      "key_points": [
+        "共轭先验使后验分布与先验同族，计算高效",
+        "每日新数据到来时更新后验概率",
+        "概率最高的Regime作为当前市场状态",
+        "比硬规则判断更平滑，避免频繁切换"
+      ],
+      "related_terms": ["kb_081"],
+      "source_module": "regime",
+      "difficulty": "advanced"
+    }
+  ]
+}

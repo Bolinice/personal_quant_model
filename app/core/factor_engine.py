@@ -6,8 +6,6 @@
 from typing import List, Optional, Dict, Any
 from datetime import date, datetime
 import numpy as np
-from datetime import date
-from typing import Optional
 
 import pandas as pd
 from scipy import stats as sp_stats
@@ -233,7 +231,7 @@ class FactorEngine:
         return {
             'ic_mean': ic_series.mean(),
             'ic_std': ic_series.std(),
-            'icir': ic_series.mean() / ic_series.std() if ic_series.std() > 0 else 0,
+            'icir': ic_series.mean() / nw_se if nw_se > 0 and not np.isnan(nw_se) else (ic_series.mean() / ic_series.std() if ic_series.std() > 0 else 0),
             'ic_positive_ratio': (ic_series > 0).mean(),
             'ic_t_stat': naive_t,
             'ic_p_value': naive_p,
@@ -339,9 +337,23 @@ class FactorEngine:
             'rank_correlation': round(rank_corr, 4) if not np.isnan(rank_corr) else 0,
         }
 
+    def _get_limit_by_ts_code(self, ts_code: str) -> float:
+        """根据股票代码判断涨跌停限制
+        主板: 10%, 创业板(300/301开头.SZ): 20%, 科创板(688开头.SH): 20%, 北交所(8/4开头.BJ): 30%
+        """
+        if ts_code.endswith('.BJ'):
+            return 0.30
+        if ts_code.startswith(('688',)):
+            return 0.20
+        if ts_code.startswith(('300', '301')):
+            return 0.20
+        return 0.10
+
     def group_backtest(self, factor_id: int, start_date: date, end_date: date,
                        n_groups: int = 5, forward_period: int = 20) -> Dict:
-        """因子分组回测 (计算各组实际收益 + 多空Sharpe)"""
+        """因子分组回测 (计算各组实际收益 + 多空Sharpe)
+        修正: 排除涨跌停股票的异常收益(不同板块涨跌停限制不同)
+        """
         factor_data = self.get_factor_values_range(factor_id, start_date, end_date)
         if factor_data.empty:
             return {}
@@ -361,6 +373,9 @@ class FactorEngine:
                 continue
 
             day_return = forward_returns[trade_date].dropna()
+            # 排除停牌导致的0收益和极端收益(涨跌停不可交易)
+            day_return = day_return[day_return.abs() > 1e-10]
+            day_return = day_return[day_return.abs() < 0.21]  # 排除超过20%的极端收益(涨跌停)
             day_data = day_data[day_data['security_id'].isin(day_return.index)]
 
             if len(day_data) < n_groups * 2:
@@ -373,9 +388,18 @@ class FactorEngine:
             group_returns = {}
             for group_num in range(n_groups):
                 group_stocks = day_data[day_data['group'] == group_num]['security_id']
-                group_ret = day_return.reindex(group_stocks).mean()
-                if not np.isnan(group_ret):
-                    group_returns[group_num] = group_ret
+                # 排除涨跌停股票: 收益超过板块限制视为涨跌停，不纳入均值计算
+                group_ret_values = day_return.reindex(group_stocks)
+                # 根据股票代码判断涨跌停限制
+                filtered_rets = []
+                for ts_code, ret in group_ret_values.items():
+                    if not np.isnan(ret):
+                        limit = self._get_limit_by_ts_code(ts_code)
+                        # 收益绝对值超过限制+1%容差视为涨跌停
+                        if abs(ret) <= limit + 0.01:
+                            filtered_rets.append(ret)
+                if filtered_rets:
+                    group_returns[group_num] = np.mean(filtered_rets)
 
             if group_returns:
                 group_returns_by_date[trade_date] = group_returns

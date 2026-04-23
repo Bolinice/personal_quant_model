@@ -1,1 +1,1 @@
-# Schemas package - import directly from submodules as needed
+"""Pydantic 数据模型（Schema）包。"""

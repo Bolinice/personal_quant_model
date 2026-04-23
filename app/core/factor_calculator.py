@@ -285,7 +285,9 @@ class FactorCalculator:
                 avg_equity = (financial_df['total_equity'] + financial_df['total_equity_prev']) / 2
                 result['roe'] = financial_df['net_profit'] / avg_equity.replace(0, np.nan)
             else:
-                result['roe'] = financial_df['net_profit'] / financial_df['total_equity'].replace(0, np.nan)
+                # 无上期数据时用期末*0.9近似期初值，避免高估ROE
+                avg_equity = (financial_df['total_equity'] + financial_df['total_equity'] * 0.9) / 2
+                result['roe'] = financial_df['net_profit'] / avg_equity.replace(0, np.nan)
 
             if 'total_assets' in financial_df.columns:
                 if 'total_assets_prev' in financial_df.columns:
@@ -316,53 +318,103 @@ class FactorCalculator:
     # ==================== 动量因子 ====================
 
     def calc_momentum_factors(self, price_df: pd.DataFrame) -> pd.DataFrame:
-        """计算动量因子 (跳月处理: 跳过最近1月避免短期反转污染)"""
+        """计算动量因子 (跳月处理: 跳过最近1月避免短期反转污染)
+        面板数据安全: 使用groupby('ts_code')确保rolling/shift不跨股票边界
+        """
         result = pd.DataFrame()
         if 'close' not in price_df.columns or 'ts_code' not in price_df.columns:
             return result
 
-        result['security_id'] = price_df['ts_code']
-        close = price_df['close']
+        # 关键: 面板数据必须先按(ts_code, trade_date)排序，否则shift会跨股票边界
+        if 'trade_date' in price_df.columns:
+            price_df = price_df.sort_values(['ts_code', 'trade_date'])
 
-        result['ret_1m_reversal'] = close.pct_change(20)
-        result['ret_3m_skip1'] = _safe_divide(close.shift(20), close.shift(60)) - 1
-        result['ret_6m_skip1'] = _safe_divide(close.shift(20), close.shift(120)) - 1
-        result['ret_12m_skip1'] = _safe_divide(close.shift(20), close.shift(240)) - 1
+        # 面板数据: 按股票分组计算，避免跨股票边界
+        grouped = price_df.groupby('ts_code')
+        close = price_df['close']
+        close_shift_20 = grouped['close'].shift(20)
+        close_shift_60 = grouped['close'].shift(60)
+        close_shift_120 = grouped['close'].shift(120)
+        close_shift_240 = grouped['close'].shift(240)
+
+        result['security_id'] = price_df['ts_code']
+        result['ret_1m_reversal'] = close / close_shift_20 - 1
+        result['ret_3m_skip1'] = _safe_divide(close_shift_20, close_shift_60) - 1
+        result['ret_6m_skip1'] = _safe_divide(close_shift_20, close_shift_120) - 1
+        result['ret_12m_skip1'] = _safe_divide(close_shift_20, close_shift_240) - 1
         return result
 
     # ==================== 波动率因子 ====================
 
     def calc_volatility_factors(self, price_df: pd.DataFrame) -> pd.DataFrame:
-        """计算波动率因子"""
+        """计算波动率因子
+        面板数据安全: 使用groupby('ts_code')确保rolling不跨股票边界
+        """
         result = pd.DataFrame()
         if 'close' not in price_df.columns:
             return result
 
         result['security_id'] = price_df.get('ts_code')
-        daily_ret = price_df['close'].pct_change()
-        result['vol_20d'] = daily_ret.rolling(20).std() * np.sqrt(252)
-        result['vol_60d'] = daily_ret.rolling(60).std() * np.sqrt(252)
+
+        if 'ts_code' in price_df.columns:
+            # 面板数据: 按股票分组rolling
+            result['vol_20d'] = price_df.groupby('ts_code')['close'].transform(
+                lambda s: s.pct_change().rolling(20, min_periods=10).std()
+            ) * np.sqrt(252)
+            result['vol_60d'] = price_df.groupby('ts_code')['close'].transform(
+                lambda s: s.pct_change().rolling(60, min_periods=30).std()
+            ) * np.sqrt(252)
+        else:
+            # 单股时间序列
+            daily_ret = price_df['close'].pct_change()
+            result['vol_20d'] = daily_ret.rolling(20).std() * np.sqrt(252)
+            result['vol_60d'] = daily_ret.rolling(60).std() * np.sqrt(252)
         return result
 
     # ==================== 流动性因子 ====================
 
     def calc_liquidity_factors(self, price_df: pd.DataFrame) -> pd.DataFrame:
-        """计算流动性因子"""
+        """计算流动性因子
+        面板数据安全: 使用groupby('ts_code')确保rolling不跨股票边界
+        """
         result = pd.DataFrame()
         if 'turnover_rate' not in price_df.columns:
             return result
 
         result['security_id'] = price_df.get('ts_code')
-        result['turnover_20d'] = price_df['turnover_rate'].rolling(20).mean()
-        result['turnover_60d'] = price_df['turnover_rate'].rolling(60).mean()
 
-        if 'amount' in price_df.columns and 'close' in price_df.columns:
-            abs_ret = price_df['close'].pct_change().abs()
-            amount = price_df['amount']
-            result['amihud_20d'] = (abs_ret / amount.replace(0, np.nan)).rolling(20).mean()
+        if 'ts_code' in price_df.columns:
+            grouped = price_df.groupby('ts_code')
+            result['turnover_20d'] = grouped['turnover_rate'].transform(
+                lambda s: s.rolling(20, min_periods=10).mean()
+            )
+            result['turnover_60d'] = grouped['turnover_rate'].transform(
+                lambda s: s.rolling(60, min_periods=30).mean()
+            )
 
-        daily_ret = price_df['close'].pct_change() if 'close' in price_df.columns else pd.Series()
-        result['zero_return_ratio'] = (daily_ret.abs() < 0.001).rolling(20).mean()
+            if 'amount' in price_df.columns and 'close' in price_df.columns:
+                daily_ret = price_df['close'] / grouped['close'].shift(1) - 1
+                amihud_daily = daily_ret.abs() / price_df['amount'].replace(0, np.nan)
+                result['amihud_20d'] = amihud_daily.groupby(price_df['ts_code']).transform(
+                    lambda s: s.rolling(20, min_periods=10).mean()
+                )
+
+            if 'close' in price_df.columns:
+                daily_ret = price_df['close'] / grouped['close'].shift(1) - 1
+                result['zero_return_ratio'] = (daily_ret.abs() < 0.001).groupby(
+                    price_df['ts_code']
+                ).transform(lambda s: s.rolling(20, min_periods=10).mean())
+        else:
+            result['turnover_20d'] = price_df['turnover_rate'].rolling(20).mean()
+            result['turnover_60d'] = price_df['turnover_rate'].rolling(60).mean()
+
+            if 'amount' in price_df.columns and 'close' in price_df.columns:
+                abs_ret = price_df['close'].pct_change().abs()
+                amount = price_df['amount']
+                result['amihud_20d'] = (abs_ret / amount.replace(0, np.nan)).rolling(20).mean()
+
+            daily_ret = price_df['close'].pct_change() if 'close' in price_df.columns else pd.Series()
+            result['zero_return_ratio'] = (daily_ret.abs() < 0.001).rolling(20).mean()
         return result
 
     # ==================== 机构级扩展因子 ====================
@@ -408,32 +460,79 @@ class FactorCalculator:
         return result
 
     def calc_microstructure_factors(self, price_df: pd.DataFrame) -> pd.DataFrame:
-        """微观结构因子"""
+        """微观结构因子
+        面板数据安全: 使用groupby('ts_code')确保shift/rolling不跨股票边界
+        """
         result = pd.DataFrame()
         result['security_id'] = price_df.get('ts_code')
+
+        if 'ts_code' not in price_df.columns:
+            # 单股时间序列模式
+            if all(c in price_df.columns for c in ['large_order_volume', 'super_large_order_volume', 'volume']):
+                smart_money_vol = price_df['large_order_volume'].fillna(0) + price_df['super_large_order_volume'].fillna(0)
+                result['large_order_ratio'] = smart_money_vol / price_df['volume'].replace(0, np.nan)
+                result['large_order_ratio'] = result['large_order_ratio'].rolling(20, min_periods=5).mean()
+
+            if all(c in price_df.columns for c in ['open', 'close']):
+                result['overnight_return'] = _safe_divide(price_df['open'], price_df['close'].shift(1)) - 1
+                result['overnight_return'] = result['overnight_return'].rolling(20, min_periods=5).mean()
+
+            if all(c in price_df.columns for c in ['open', 'close']):
+                intraday_ret = _safe_divide(price_df['close'], price_df['open']) - 1
+                overnight_ret = _safe_divide(price_df['open'], price_df['close'].shift(1)) - 1
+                result['intraday_return_ratio'] = (
+                    intraday_ret.abs().rolling(20, min_periods=5).mean()
+                    / overnight_ret.abs().rolling(20, min_periods=5).mean().replace(0, np.nan)
+                )
+
+            if all(c in price_df.columns for c in ['close', 'volume']):
+                daily_ret = price_df['close'].pct_change()
+                abs_ret = daily_ret.abs()
+                vol_ratio = _safe_divide(price_df['volume'], price_df['volume'].rolling(20, min_periods=5).mean())
+                result['vpin'] = (abs_ret * vol_ratio).rolling(20, min_periods=5).mean()
+            return result
+
+        # 面板数据模式: 按股票分组
+        grouped = price_df.groupby('ts_code')
 
         if all(c in price_df.columns for c in ['large_order_volume', 'super_large_order_volume', 'volume']):
             smart_money_vol = price_df['large_order_volume'].fillna(0) + price_df['super_large_order_volume'].fillna(0)
             result['large_order_ratio'] = smart_money_vol / price_df['volume'].replace(0, np.nan)
-            result['large_order_ratio'] = result['large_order_ratio'].rolling(20, min_periods=5).mean()
+            result['large_order_ratio'] = result['large_order_ratio'].groupby(price_df['ts_code']).transform(
+                lambda s: s.rolling(20, min_periods=5).mean()
+            )
 
         if all(c in price_df.columns for c in ['open', 'close']):
-            result['overnight_return'] = _safe_divide(price_df['open'], price_df['close'].shift(1)) - 1
-            result['overnight_return'] = result['overnight_return'].rolling(20, min_periods=5).mean()
+            prev_close = grouped['close'].shift(1)
+            result['overnight_return'] = _safe_divide(price_df['open'], prev_close) - 1
+            result['overnight_return'] = result['overnight_return'].groupby(price_df['ts_code']).transform(
+                lambda s: s.rolling(20, min_periods=5).mean()
+            )
 
         if all(c in price_df.columns for c in ['open', 'close']):
             intraday_ret = _safe_divide(price_df['close'], price_df['open']) - 1
-            overnight_ret = _safe_divide(price_df['open'], price_df['close'].shift(1)) - 1
-            result['intraday_return_ratio'] = (
-                intraday_ret.abs().rolling(20, min_periods=5).mean()
-                / overnight_ret.abs().rolling(20, min_periods=5).mean().replace(0, np.nan)
+            overnight_ret = _safe_divide(price_df['open'], grouped['close'].shift(1)) - 1
+            result['intraday_return_ratio'] = _safe_divide(
+                intraday_ret.abs().groupby(price_df['ts_code']).transform(
+                    lambda s: s.rolling(20, min_periods=5).mean()
+                ),
+                overnight_ret.abs().groupby(price_df['ts_code']).transform(
+                    lambda s: s.rolling(20, min_periods=5).mean()
+                )
             )
 
         if all(c in price_df.columns for c in ['close', 'volume']):
-            daily_ret = price_df['close'].pct_change()
+            daily_ret = price_df['close'] / grouped['close'].shift(1) - 1
             abs_ret = daily_ret.abs()
-            vol_ratio = _safe_divide(price_df['volume'], price_df['volume'].rolling(20, min_periods=5).mean())
-            result['vpin'] = (abs_ret * vol_ratio).rolling(20, min_periods=5).mean()
+            vol_ratio = _safe_divide(
+                price_df['volume'],
+                price_df.groupby('ts_code')['volume'].transform(
+                    lambda s: s.rolling(20, min_periods=5).mean()
+                )
+            )
+            result['vpin'] = (abs_ret * vol_ratio).groupby(price_df['ts_code']).transform(
+                lambda s: s.rolling(20, min_periods=5).mean()
+            )
 
         return result
 
@@ -486,10 +585,36 @@ class FactorCalculator:
                 result['is_st'] = 0.0
 
         if 'pct_chg' in price_df.columns:
-            is_limit_up = (price_df['pct_chg'] >= 9.9).astype(float)
-            result['limit_up_ratio_20d'] = is_limit_up.rolling(20, min_periods=10).mean()
-            is_limit_down = (price_df['pct_chg'] <= -9.9).astype(float)
-            result['limit_down_ratio_20d'] = is_limit_down.rolling(20, min_periods=10).mean()
+            # 涨跌停判断需区分板块: 主板10%, 创业板/科创板20%, 北交所30%, ST5%
+            # pct_chg为百分比形式(如9.9表示9.9%)
+            limit_pct = pd.Series(10.0, index=price_df.index)  # 默认主板10%
+
+            if 'ts_code' in price_df.columns:
+                ts = price_df['ts_code'].astype(str)
+                # 创业板(300xxx.SZ)
+                limit_pct[ts.str.startswith('3') & ts.str.endswith('.SZ')] = 20.0
+                # 科创板(688xxx.SH)
+                limit_pct[ts.str.startswith('688') & ts.str.endswith('.SH')] = 20.0
+                # 北交所(8xxxxx.BJ / 4xxxxx.BJ)
+                limit_pct[ts.str.endswith('.BJ')] = 30.0
+
+            # ST股5%涨跌停
+            if stock_status_df is not None and 'is_st' in stock_status_df.columns:
+                st_map = stock_status_df.set_index('ts_code')['is_st']
+                is_st = price_df['ts_code'].map(st_map).fillna(False) if 'ts_code' in price_df.columns else pd.Series(False, index=price_df.index)
+                limit_pct[is_st] = 5.0
+
+            is_limit_up = (price_df['pct_chg'] >= limit_pct - 0.01).astype(float)
+            is_limit_down = (price_df['pct_chg'] <= -(limit_pct - 0.01)).astype(float)
+
+            if 'ts_code' in price_df.columns:
+                result['limit_up_ratio_20d'] = is_limit_up.groupby(price_df['ts_code']).transform(
+                    lambda s: s.rolling(20, min_periods=10).mean())
+                result['limit_down_ratio_20d'] = is_limit_down.groupby(price_df['ts_code']).transform(
+                    lambda s: s.rolling(20, min_periods=10).mean())
+            else:
+                result['limit_up_ratio_20d'] = is_limit_up.rolling(20, min_periods=10).mean()
+                result['limit_down_ratio_20d'] = is_limit_down.rolling(20, min_periods=10).mean()
 
         if stock_basic_df is not None and 'list_date' in stock_basic_df.columns:
             list_dates = stock_basic_df.set_index('ts_code')['list_date']
@@ -527,7 +652,9 @@ class FactorCalculator:
         return result
 
     def calc_interaction_factors(self, factor_df: pd.DataFrame) -> pd.DataFrame:
-        """因子交互项 (value×quality, size×momentum)"""
+        """因子交互项 (在原始值层面计算，保留经济含义)
+        重要: 交互项必须在标准化之前计算，两个z-score相乘不再具有原始经济含义
+        """
         result = pd.DataFrame()
         result['security_id'] = factor_df['security_id']
 
@@ -625,9 +752,8 @@ class FactorCalculator:
         # 行业轮动因子
         factor_dfs.append(self.calc_industry_rotation_factors(price_df))
 
-        # 另类数据因子
-        if supply_chain_df is not None and not supply_chain_df.empty:
-            factor_dfs.append(self.calc_alt_data_factors(supply_chain_df))
+        # 另类数据因子 (已在supply_chain_df处理中调用，此处不再重复)
+        # 注: calc_alt_data_factors已在上方supply_chain_df分支中调用
 
         # 从资金流向表补充微观结构数据
         if money_flow_df is not None and not money_flow_df.empty:
@@ -656,7 +782,13 @@ class FactorCalculator:
         if merged.empty:
             return merged
 
-        # 预处理
+        # 交互因子 (必须在标准化之前计算，保留原始经济含义)
+        # 两个z-score相乘不再具有原始经济含义
+        interaction = self.calc_interaction_factors(merged)
+        if not interaction.empty and 'security_id' in interaction.columns:
+            merged = pd.merge(merged, interaction, on='security_id', how='outer')
+
+        # 预处理 (包含交互因子)
         factor_cols = [c for c in merged.columns if c != 'security_id']
         merged = self.preprocessor.preprocess_dataframe(
             merged, factor_cols,
@@ -665,16 +797,6 @@ class FactorCalculator:
             neutralize=neutralize,
             direction_map=FACTOR_DIRECTIONS,
         )
-
-        # 交互因子 (标准化后计算)
-        interaction = self.calc_interaction_factors(merged)
-        if not interaction.empty and 'security_id' in interaction.columns:
-            interaction_cols = [c for c in interaction.columns if c != 'security_id']
-            interaction = self.preprocessor.preprocess_dataframe(
-                interaction, interaction_cols,
-                direction_map=FACTOR_DIRECTIONS,
-            )
-            merged = pd.merge(merged, interaction, on='security_id', how='outer')
 
         return merged
 

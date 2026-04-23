@@ -12,6 +12,13 @@
 ## 关键目录
 - `app/api/v1/` — API 路由
 - `app/core/` — 核心量化模块（因子引擎、评分、择时、回测等）
+  - `alpha_modules.py` — Alpha模块化架构 (价格/基本面/修正/资金流)
+  - `ensemble.py` — 信号融合层 (动态IC加权+Regime调权)
+  - `universe.py` — 股票池构建 (流动性/上市天数/ST过滤)
+  - `labels.py` — 超额收益标签 (行业中性/多周期)
+  - `regime.py` — 市场状态检测 (趋势/震荡/防御/进攻)
+  - `factor_monitor.py` — 因子衰减与漂移监控 (IC漂移/PSI/KS)
+  - `daily_pipeline.py` — 日终流水线 (串联所有模块)
 - `app/models/` — SQLAlchemy 模型（含 `market/` 子目录）
 - `app/schemas/` — Pydantic 模型
 - `app/services/` — 业务逻辑
@@ -21,13 +28,13 @@
 - `document/` — 项目文档
 
 ## 文档
-- [PRD](document/PRD.md) — 产品需求文档 V2.1
-- [TDD](document/TDD.md) — 技术架构与数据库设计 V2.0
-- [ADD](document/ADD.md) — 算法设计说明书 V1.1
-- [WORKFLOW](document/WORKFLOW.md) — 工作流文档 V1.1（日终流水线、数据流、性能优化、自然语言解读）
-- [API](document/API.md) — API 接口文档
-- [DEPLOYMENT](document/DEPLOYMENT.md) — 部署指南 V1.1
-- [user_guide](document/user_guide.md) — 客户端使用指南
+- [PRD](document/PRD.md) — 产品需求文档 V2.2
+- [TDD](document/TDD.md) — 技术架构与数据库设计 V2.1
+- [ADD](document/ADD.md) — 算法设计说明书 V1.2
+- [WORKFLOW](document/WORKFLOW.md) — 工作流文档 V1.2（日终流水线、数据流、性能优化、自然语言解读）
+- [API](document/API.md) — API 接口文档 V1.1
+- [DEPLOYMENT](document/DEPLOYMENT.md) — 部署指南 V1.2
+- [user_guide](document/user_guide.md) — 客户端使用指南 V1.1
 
 ## 开发规范
 - 所有财务数据必须按公告发布日期使用，禁止未来函数

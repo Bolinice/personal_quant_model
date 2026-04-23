@@ -1,3 +1,5 @@
+"""订阅管理 API。"""
+
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
 from typing import List, Optional
@@ -8,6 +10,7 @@ from app.services.subscriptions_service import get_subscriptions, create_subscri
 from app.models.subscriptions import Subscription, SubscriptionHistory, SubscriptionPermission
 from app.models.products import Product, SubscriptionPlan
 from app.schemas.subscriptions import SubscriptionCreate, SubscriptionUpdate, SubscriptionHistoryCreate, SubscriptionPermissionCreate, SubscriptionOut, SubscriptionHistoryOut, SubscriptionPermissionOut
+from app.core.response import success, error
 
 router = APIRouter()
 
@@ -28,10 +31,11 @@ class SubscribeRequest(BaseModel):
     plan_id: int
 
 
-@router.get("/plans", response_model=List[dict])
+@router.get("/plans")
 def list_plans(db: Session = Depends(get_db)):
+    """列出订阅方案"""
     plans = db.query(SubscriptionPlan).filter(SubscriptionPlan.is_active == True).all()
-    return [{"id": p.id, "plan_name": p.plan_name, "plan_type": p.plan_type, "price": p.price, "duration_days": p.duration_days, "features": p.features} for p in plans]
+    return success([{"id": p.id, "plan_name": p.plan_name, "plan_type": p.plan_type, "price": p.price, "duration_days": p.duration_days, "features": p.features} for p in plans])
 
 
 @router.post("/check-access")
@@ -39,15 +43,12 @@ def check_access(req: CheckAccessRequest, db: Session = Depends(get_db)):
     """检查用户是否有权限访问付费资源"""
     product_code = PAID_PRODUCT_MAP.get(req.resource_code)
     if not product_code:
-        # 不在付费映射中的资源，默认免费
-        return {"has_access": True, "resource_code": req.resource_code}
+        return success({"has_access": True, "resource_code": req.resource_code})
 
-    # 查找对应产品
     product = db.query(Product).filter(Product.product_code == product_code).first()
     if not product:
-        return {"has_access": False, "resource_code": req.resource_code}
+        return success({"has_access": False, "resource_code": req.resource_code})
 
-    # 检查用户是否有该产品的有效订阅
     today = date.today()
     subscription = db.query(Subscription).filter(
         Subscription.user_id == req.user_id,
@@ -57,7 +58,7 @@ def check_access(req: CheckAccessRequest, db: Session = Depends(get_db)):
         Subscription.end_date >= today,
     ).first()
 
-    return {"has_access": subscription is not None, "resource_code": req.resource_code}
+    return success({"has_access": subscription is not None, "resource_code": req.resource_code})
 
 
 @router.post("/subscribe")
@@ -67,7 +68,6 @@ def subscribe(req: SubscribeRequest, db: Session = Depends(get_db)):
     if not plan:
         raise HTTPException(status_code=404, detail="套餐不存在")
 
-    # 获取套餐关联的产品
     products = db.query(Product).filter(Product.is_active == True).all()
     if not products:
         raise HTTPException(status_code=404, detail="没有可订阅的产品")
@@ -77,7 +77,6 @@ def subscribe(req: SubscribeRequest, db: Session = Depends(get_db)):
 
     created = []
     for product in products:
-        # 检查是否已有有效订阅
         existing = db.query(Subscription).filter(
             Subscription.user_id == req.user_id,
             Subscription.product_id == product.id,
@@ -103,7 +102,6 @@ def subscribe(req: SubscribeRequest, db: Session = Depends(get_db)):
         db.add(sub)
         db.flush()
 
-        # 创建权限
         perm = SubscriptionPermission(
             subscription_id=sub.id,
             permission_type='read_report',
@@ -113,60 +111,72 @@ def subscribe(req: SubscribeRequest, db: Session = Depends(get_db)):
         created.append({"product_id": product.id, "product_name": product.product_name, "status": "subscribed"})
 
     db.commit()
-    return {"success": True, "plan_name": plan.plan_name, "price": plan.price, "end_date": str(end_date), "products": created}
+    return success({"plan_name": plan.plan_name, "price": plan.price, "end_date": str(end_date), "products": created})
 
 
-@router.get("/my/subscriptions", response_model=List[SubscriptionOut])
+@router.get("/my/subscriptions")
 def read_my_subscriptions(user_id: int, db: Session = Depends(get_db)):
+    """获取我的订阅"""
     subscriptions = get_subscriptions(user_id=user_id, db=db)
-    return subscriptions
+    return success(subscriptions)
 
 
-@router.post("/", response_model=SubscriptionOut)
+@router.post("/")
 def create_subscription_endpoint(subscription: SubscriptionCreate, db: Session = Depends(get_db)):
-    return create_subscription(subscription, db=db)
+    """创建订阅"""
+    result = create_subscription(subscription, db=db)
+    return success(result)
 
 
-@router.put("/{subscription_id}", response_model=SubscriptionOut)
+@router.put("/{subscription_id}")
 def update_subscription_endpoint(subscription_id: int, subscription_update: SubscriptionUpdate, db: Session = Depends(get_db)):
+    """更新订阅"""
     subscription = update_subscription(subscription_id, subscription_update, db=db)
     if subscription is None:
         raise HTTPException(status_code=404, detail="Subscription not found")
-    return subscription
+    return success(subscription)
 
 
-@router.get("/{subscription_id}/histories", response_model=List[SubscriptionHistoryOut])
+@router.get("/{subscription_id}/histories")
 def read_subscription_histories(subscription_id: int, db: Session = Depends(get_db)):
+    """获取订阅历史"""
     histories = get_subscription_histories(subscription_id, db=db)
-    return histories
+    return success(histories)
 
 
-@router.post("/{subscription_id}/history", response_model=SubscriptionHistoryOut)
+@router.post("/{subscription_id}/history")
 def create_subscription_history_endpoint(subscription_id: int, history: SubscriptionHistoryCreate, db: Session = Depends(get_db)):
-    return create_subscription_history(subscription_id, history, db=db)
+    """创建订阅历史"""
+    result = create_subscription_history(subscription_id, history, db=db)
+    return success(result)
 
 
-@router.get("/{subscription_id}/permissions", response_model=List[SubscriptionPermissionOut])
+@router.get("/{subscription_id}/permissions")
 def read_subscription_permissions(subscription_id: int, db: Session = Depends(get_db)):
+    """获取订阅权限"""
     permissions = get_subscription_permissions(subscription_id, db=db)
-    return permissions
+    return success(permissions)
 
 
-@router.post("/{subscription_id}/permissions", response_model=SubscriptionPermissionOut)
+@router.post("/{subscription_id}/permissions")
 def create_subscription_permission_endpoint(subscription_id: int, permission: SubscriptionPermissionCreate, db: Session = Depends(get_db)):
-    return create_subscription_permission(permission, db=db)
+    """创建订阅权限"""
+    result = create_subscription_permission(permission, db=db)
+    return success(result)
 
 
-@router.post("/{subscription_id}/renew", response_model=SubscriptionOut)
+@router.post("/{subscription_id}/renew")
 def renew_subscription_endpoint(subscription_id: int, db: Session = Depends(get_db)):
-    success = renew_subscription(subscription_id, db=db)
-    if not success:
+    """续订"""
+    renewed = renew_subscription(subscription_id, db=db)
+    if not renewed:
         raise HTTPException(status_code=400, detail="Subscription renewal failed")
     subscription = db.query(Subscription).filter(Subscription.id == subscription_id).first()
-    return subscription
+    return success(subscription)
 
 
 @router.post("/{subscription_id}/check-permission")
 def check_subscription_permission_endpoint(subscription_id: int, permission_type: str, db: Session = Depends(get_db)):
+    """检查订阅权限"""
     has_permission = check_subscription_permission(subscription_id, permission_type, db=db)
-    return {"has_permission": has_permission}
+    return success({"has_permission": has_permission})

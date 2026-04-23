@@ -183,7 +183,9 @@ class Position:
     market_value: float = 0.0
     weight: float = 0.0
     board_type: str = 'main'  # main, gem, star, st
-    entry_date: Optional[date] = None  # 首次买入日期，用于T+1检查
+    entry_date: Optional[date] = None  # 首次买入日期
+    shares_bought_today: int = 0  # 当日买入股数(T+1: 当日买入部分不可卖出)
+    dividend_income: float = 0.0  # 累计分红收入(现金分红)
 
 
 @dataclass
@@ -210,6 +212,70 @@ class ABShareBacktestEngine:
             stamp_tax_rate=stamp_tax_rate,
             slippage_rate=slippage_rate,
         )
+
+    # ==================== 分红派息处理 ====================
+
+    def process_dividend(self, state: BacktestState, trade_date: date,
+                         dividend_data: Optional[Dict[str, Dict]] = None) -> None:
+        """处理分红派息: 现金分红计入现金，送股/转增调整持仓股数
+        Args:
+            state: 回测状态
+            trade_date: 交易日期
+            dividend_data: 分红数据 {ts_code: {cash_div: 每股现金分红(税前),
+                                               bonus_shares: 每股送股数,
+                                               converted_shares: 每股转增数}}
+        """
+        if dividend_data is None:
+            return
+
+        for ts_code, div_info in dividend_data.items():
+            if ts_code not in state.positions:
+                continue
+
+            pos = state.positions[ts_code]
+
+            # 计算持股期限对应的税率 (移到最外层，避免仅送股时tax_rate未定义)
+            holding_days = (trade_date - pos.entry_date).days if pos.entry_date else 0
+            if holding_days > 365:
+                tax_rate = 0.0
+            elif holding_days > 30:
+                tax_rate = 0.10
+            else:
+                tax_rate = 0.20
+
+            # 现金分红: 每股现金分红 × 持仓股数
+            cash_div_per_share = div_info.get('cash_div', 0)
+            if cash_div_per_share > 0:
+                net_cash_div = cash_div_per_share * (1 - tax_rate) * pos.shares
+                state.cash += net_cash_div
+                pos.dividend_income += net_cash_div
+
+                logger.debug(
+                    f"Dividend: {ts_code} cash_div={cash_div_per_share}, "
+                    f"shares={pos.shares}, net={net_cash_div}, tax={tax_rate}"
+                )
+
+            # 送股/转增: 调整持仓股数和成本价
+            bonus_per_share = div_info.get('bonus_shares', 0)
+            converted_per_share = div_info.get('converted_shares', 0)
+            total_new_shares = (bonus_per_share + converted_per_share) * pos.shares
+
+            if total_new_shares > 0:
+                # 送股部分也需要扣税(红股按面值1元计税)
+                bonus_tax = bonus_per_share * 1.0 * tax_rate * pos.shares
+                state.cash -= bonus_tax  # 扣税从现金中扣除
+
+                # 调整持仓
+                old_shares = pos.shares
+                old_cost = pos.cost_price
+                pos.shares = old_shares + int(total_new_shares)
+                # 成本价不变(总成本不变，但股数增加)
+                pos.cost_price = (old_cost * old_shares) / pos.shares
+
+                logger.debug(
+                    f"Bonus shares: {ts_code} old={old_shares}, new={pos.shares}, "
+                    f"cost_price={old_cost}->{pos.cost_price}"
+                )
 
     # ==================== A股交易规则 ====================
 
@@ -332,15 +398,16 @@ class ABShareBacktestEngine:
             total_shares = pos.shares + shares
             pos.cost_price = (pos.cost_price * pos.shares + amount) / total_shares
             pos.shares = total_shares
-            # T+1: 更新entry_date为当日(新买入部分当日不可卖)
-            pos.entry_date = trade_date
+            # T+1: 记录当日新买入股数，原有持仓仍可卖出
+            pos.shares_bought_today += shares
         else:
             state.positions[ts_code] = Position(
                 security_id=ts_code,
                 shares=shares,
                 cost_price=price,
                 board_type=self.get_board_type(ts_code),
-                entry_date=trade_date,  # T+1: 记录买入日期
+                entry_date=trade_date,
+                shares_bought_today=shares,  # T+1: 全部为当日买入
             )
 
         trade = {
@@ -359,7 +426,7 @@ class ABShareBacktestEngine:
     def execute_sell(self, state: BacktestState, ts_code: str,
                      shares: int, price: float,
                      trade_date: date, stock_data: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
-        """执行卖出 (含T+1限制: 当日买入的股票不可卖出)"""
+        """执行卖出 (含T+1限制: 当日买入的部分不可卖出，原有持仓可卖出)"""
         tradable, reason = self.is_tradable(ts_code, trade_date, 'sell', stock_data)
         if not tradable:
             return None
@@ -369,15 +436,18 @@ class ABShareBacktestEngine:
 
         pos = state.positions[ts_code]
 
-        # T+1检查: 当日买入的股票不可卖出 (A股规则)
-        if pos.entry_date is not None and pos.entry_date == trade_date:
+        # T+1检查: 只能卖出非当日买入的部分
+        sellable_shares = pos.shares - pos.shares_bought_today
+        if sellable_shares <= 0:
             logger.debug(
                 "T+1 restriction: cannot sell stock bought today",
-                extra={"ts_code": ts_code, "trade_date": str(trade_date)},
+                extra={"ts_code": ts_code, "trade_date": str(trade_date),
+                       "total_shares": pos.shares, "bought_today": pos.shares_bought_today},
             )
             return None
 
-        sell_shares = min(shares, pos.shares)
+        # 卖出数量不超过可卖数量
+        sell_shares = min(shares, sellable_shares)
         if sell_shares <= 0:
             return None
 
@@ -465,6 +535,11 @@ class ABShareBacktestEngine:
             'position_pnl': position_pnl,
         }
         state.nav_history.append(nav_record)
+
+        # 每日结算: 重置shares_bought_today (T+1限制只针对当日买入)
+        for pos in state.positions.values():
+            pos.shares_bought_today = 0
+
         logger.debug(
             "NAV calculated",
             extra={
@@ -559,9 +634,9 @@ class ABShareBacktestEngine:
         returns = nav_series.pct_change().dropna()
         cum_return = nav_series.iloc[-1] - 1
 
-        # 年化收益
+        # 年化收益 (修正: 使用nav_series.iloc[-1]/nav_series.iloc[0]而非nav_series.iloc[-1])
         total_days = len(nav_series)
-        annual_return = (nav_series.iloc[-1]) ** (252 / total_days) - 1 if total_days > 0 else 0
+        annual_return = (nav_series.iloc[-1] / nav_series.iloc[0]) ** (252 / total_days) - 1 if total_days > 0 else 0
 
         # 最大回撤
         cummax = nav_series.cummax()
@@ -589,10 +664,11 @@ class ABShareBacktestEngine:
         # 卡玛比率
         calmar = annual_return / abs(max_drawdown) if max_drawdown != 0 else 0
 
-        # 换手率
+        # 换手率 (双边: 买入+卖出)
         total_buy = sum(t.get('amount', 0) for t in trade_records if t.get('action') == 'buy')
+        total_sell = sum(t.get('amount', 0) for t in trade_records if t.get('action') == 'sell')
         avg_nav = nav_df['total_value'].mean()
-        turnover_rate = total_buy / avg_nav / (total_days / 252) if avg_nav > 0 and total_days > 0 else 0
+        turnover_rate = (total_buy + total_sell) / (2 * avg_nav) / (total_days / 252) if avg_nav > 0 and total_days > 0 else 0
 
         # 胜率
         win_rate = (returns > 0).sum() / len(returns) if len(returns) > 0 else 0
@@ -628,7 +704,7 @@ class ABShareBacktestEngine:
         if benchmark_nav and len(benchmark_nav) > 0:
             bm_df = pd.DataFrame(benchmark_nav)
             bm_returns = bm_df['nav'].pct_change().dropna()
-            bm_annual_return = (bm_df['nav'].iloc[-1]) ** (252 / len(bm_df)) - 1
+            bm_annual_return = (bm_df['nav'].iloc[-1] / bm_df['nav'].iloc[0]) ** (252 / len(bm_df)) - 1
 
             # 对齐
             common_idx = returns.index.intersection(bm_returns.index)

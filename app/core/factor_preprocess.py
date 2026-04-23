@@ -146,6 +146,14 @@ class FactorPreprocessor:
         median = s.median()
         mad = np.median(np.abs(s - median))
         if mad == 0:
+            # MAD=0表示超过50%数据相同，可能是数据质量问题
+            # 回退到分位数去极值
+            q_low = series.quantile(0.01)
+            q_high = series.quantile(0.99)
+            iqr = q_high - q_low
+            if iqr > 0:
+                return series.clip(q_low - 1.5 * iqr, q_high + 1.5 * iqr)
+            logger.warning(f"Factor MAD=0 and IQR=0, skipping winsorization")
             return series
         upper_bound = median + n_mad * mad
         lower_bound = median - n_mad * mad
@@ -462,10 +470,16 @@ class FactorPreprocessor:
                    winsorize_method: str = 'mad',
                    winsorize_param: float = 3.0,
                    standardize_method: str = 'zscore',
-                   direction: int = 1) -> pd.Series:
+                   direction: int = 1,
+                   df: pd.DataFrame = None,
+                   industry_col: str = None,
+                   cap_col: str = None,
+                   value_col: str = None,
+                   neutralize: bool = False) -> pd.Series:
         """
         完整的因子预处理流程
-        符合ADD 6.3节: 缺失值处理 → 去极值 → 标准化 → 方向统一
+        符合ADD 6.3节: 缺失值处理 → 去极值 → 中性化 → 标准化 → 方向统一
+        注意: 中性化必须在标准化之前，否则残差不再服从标准正态
 
         Args:
             series: 原始因子值
@@ -474,6 +488,11 @@ class FactorPreprocessor:
             winsorize_param: 去极值参数
             standardize_method: 标准化方法 ('zscore', 'rank', 'minmax', 'rank_normal', 'robust_zscore')
             direction: 因子方向 (1=正向, -1=反向)
+            df: 包含行业/市值信息的DataFrame (中性化时需要)
+            industry_col: 行业列 (中性化时需要)
+            cap_col: 市值列 (中性化时需要)
+            value_col: 因子值列名 (中性化时需要)
+            neutralize: 是否进行中性化
         """
         # 1. 缺失值处理
         if fill_method == 'mean':
@@ -495,7 +514,18 @@ class FactorPreprocessor:
         elif winsorize_method == 'adaptive_mad':
             series = self.winsorize_adaptive_mad(series, base_k=winsorize_param)
 
-        # 3. 标准化
+        # 3. 中性化 (在标准化之前!)
+        if neutralize and df is not None and value_col is not None:
+            df_neutral = df.copy()
+            df_neutral[value_col] = series
+            if industry_col and cap_col:
+                series = self.neutralize_industry_and_cap(df_neutral, value_col, industry_col, cap_col)
+            elif industry_col:
+                series = self.neutralize_industry(df_neutral, value_col, industry_col)
+            elif cap_col:
+                series = self.neutralize_market_cap(df_neutral, value_col, cap_col)
+
+        # 4. 标准化
         if standardize_method == 'zscore':
             series = self.standardize_zscore(series)
         elif standardize_method == 'rank':
@@ -507,7 +537,7 @@ class FactorPreprocessor:
         elif standardize_method == 'robust_zscore':
             series = self.standardize_robust_zscore(series)
 
-        # 4. 方向统一
+        # 5. 方向统一
         series = self.align_direction(series, direction)
 
         return series
@@ -517,12 +547,13 @@ class FactorPreprocessor:
                             neutralize: bool = False,
                             direction_map: Dict[str, int] = None,
                             config: Dict[str, Dict] = None,
-                            min_coverage: float = 0.6) -> pd.DataFrame:
+                            min_coverage: float = 0.6,
+                            add_missing_indicators: bool = True) -> pd.DataFrame:
         """
-        批量预处理多个因子 (机构级: 逐因子配置 + 覆盖率过滤)
+        批量预处理多个因子 (机构级: 逐因子配置 + 覆盖率过滤 + 缺失指示器)
 
         预处理顺序 (修正后):
-          缺失值处理 → 去极值 → 中性化 → 标准化 → 方向统一
+          缺失指示器 → 缺失值处理 → 去极值 → 中性化 → 标准化 → 方向统一
 
         注意: 中性化必须在标准化之前，否则残差不再服从标准正态，
         标准化会失效。这是机构级因子预处理的标准做法。
@@ -537,8 +568,18 @@ class FactorPreprocessor:
             config: 逐因子预处理配置 {col: {fill_method, winsorize_method, winsorize_param, standardize_method}}
                     未配置的因子使用默认值
             min_coverage: 最低覆盖率阈值, 低于此值的因子跳过
+            add_missing_indicators: 是否添加缺失指示器列(缺失本身可能包含信息)
         """
         result = df.copy()
+
+        # Step 0: 添加缺失指示器 (缺失本身可能包含信息，如停牌、未披露等)
+        if add_missing_indicators:
+            for col in factor_cols:
+                if col in result.columns:
+                    missing_ratio = result[col].isna().mean()
+                    # 只对缺失率>5%且<95%的因子添加缺失指示器
+                    if 0.05 < missing_ratio < 0.95:
+                        result[f'{col}_missing'] = result[col].isna().astype(int)
 
         for col in factor_cols:
             if col not in result.columns:

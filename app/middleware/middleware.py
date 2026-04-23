@@ -3,9 +3,7 @@ from collections import defaultdict
 from fastapi import Request, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.monitoring.metrics import REQUEST_DURATION, REQUEST_COUNT, ACTIVE_USERS
-import logging
-
-logger = logging.getLogger(__name__)
+from app.core.logging import logger
 
 # Rate limiter
 class RateLimitMiddleware(BaseHTTPMiddleware):

@@ -57,10 +57,13 @@ class RiskModel:
         elif shrinkage_target == 'single_factor':
             # 目标: 单因子模型
             market_returns = returns.mean(axis=1)
-            betas = returns.covwith(market_returns) / market_returns.var() if hasattr(returns, 'covwith') else np.ones(n)
             var_market = market_returns.var()
+            if var_market > 0:
+                betas = returns.apply(lambda x: x.cov(market_returns)) / var_market
+            else:
+                betas = np.ones(n)
             F = np.outer(betas, betas) * var_market + np.diag(np.diag(S) - betas**2 * var_market)
-            F = np.maximum(F, 1e-10)  # 确保正定
+            F = self._ensure_positive_definite(F)
         else:
             F = np.trace(S) / n * np.eye(n)
 
@@ -111,7 +114,16 @@ class RiskModel:
         指数加权移动平均协方差 (EWMA)
         近期数据权重更大
         """
-        return returns.ewm(halflife=halflife).cov().iloc[-len(returns.columns):]
+        ewm_result = returns.ewm(halflife=halflife).cov()
+        # pandas ewm().cov()返回MultiIndex (date, asset), 取最后一个时间截面
+        if isinstance(ewm_result.index, pd.MultiIndex):
+            last_date = ewm_result.index.get_level_values(0)[-1]
+            cov_matrix = ewm_result.loc[last_date].values
+        else:
+            # 单时间点情况
+            cov_matrix = ewm_result.values
+        cov_matrix = self._ensure_positive_definite(cov_matrix)
+        return pd.DataFrame(cov_matrix, index=returns.columns, columns=returns.columns)
 
     def dcc_garch_covariance(self, returns: pd.DataFrame,
                               alpha: Optional[float] = None, beta: Optional[float] = None,
@@ -268,6 +280,11 @@ class RiskModel:
                         eps_t = std_residuals[t]
                         ll += -0.5 * (np.log(det_R) + eps_t @ R_inv @ eps_t)
                     except np.linalg.LinAlgError:
+                        valid = False
+                        break
+
+                    # 早停: 如果当前对数似然已低于best_ll且已过1/4时间步，跳过
+                    if best_ll > -np.inf and ll < best_ll and t > T // 4:
                         valid = False
                         break
 

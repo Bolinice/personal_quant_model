@@ -262,17 +262,22 @@ class PortfolioBuilder:
             调整后的权重
         """
         adjusted_weights = weights.copy()
-        excess = 0
 
-        # 找出超限股票
-        for stock, weight in weights.items():
-            if weight > max_position:
-                excess += weight - max_position
-                adjusted_weights[stock] = max_position
+        # 迭代应用仓位限制(单轮可能因重分配导致新的超限)
+        for _ in range(10):  # 最多10轮迭代
+            excess = 0
+            for stock, weight in adjusted_weights.items():
+                if weight > max_position:
+                    excess += weight - max_position
+                    adjusted_weights[stock] = max_position
 
-        # 将超限部分分配给未超限股票
-        under_limit_stocks = weights[weights <= max_position]
-        if not under_limit_stocks.empty and excess > 0:
+            if excess <= 1e-10:
+                break
+
+            # 将超限部分分配给未超限股票
+            under_limit_stocks = adjusted_weights[adjusted_weights < max_position]
+            if under_limit_stocks.empty or excess <= 0:
+                break
             redistribute = excess / len(under_limit_stocks)
             for stock in under_limit_stocks.index:
                 adjusted_weights[stock] = min(
@@ -281,7 +286,8 @@ class PortfolioBuilder:
                 )
 
         # 重新归一化
-        adjusted_weights = adjusted_weights / adjusted_weights.sum()
+        if adjusted_weights.sum() > 0:
+            adjusted_weights = adjusted_weights / adjusted_weights.sum()
 
         return adjusted_weights
 

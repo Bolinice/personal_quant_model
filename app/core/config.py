@@ -15,6 +15,7 @@ class BacktestConfig(BaseSettings):
     WALK_FORWARD_TRAIN_WINDOW: int = 504
     WALK_FORWARD_TEST_WINDOW: int = 63
     WALK_FORWARD_GAP: int = 21
+    RISK_FREE_RATE: float = 0.03  # 无风险利率(年化)
 
     model_config = {"env_prefix": "BACKTEST_", "extra": "ignore"}
 
@@ -95,8 +96,8 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
-    # 数据源
-    TUSHARE_TOKEN: str = "d06935450fbba6e514f65e0fddf63496135a3aef47cc351919462373"
+    # 数据源 - Token必须从.env环境变量读取，禁止硬编码
+    TUSHARE_TOKEN: str = ""
     PRIMARY_DATA_SOURCE: str = "akshare"
 
     # 应用配置
@@ -125,6 +126,8 @@ class Settings(BaseSettings):
             warnings.append("MINIO_ACCESS_KEY 未设置")
         if not self.MINIO_SECRET_KEY:
             warnings.append("MINIO_SECRET_KEY 未设置")
+        if not self.TUSHARE_TOKEN:
+            warnings.append("TUSHARE_TOKEN 未设置，数据同步功能不可用")
         return warnings
 
 

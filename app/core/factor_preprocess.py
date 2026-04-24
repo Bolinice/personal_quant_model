@@ -354,7 +354,7 @@ class FactorPreprocessor:
             predicted = X_with_const @ beta
             residuals = y_valid - predicted
             result = pd.Series(np.nan, index=df.index)
-            result.iloc[valid_mask] = residuals
+            result.loc[result.index[valid_mask]] = residuals
             return result
         except np.linalg.LinAlgError:
             logger.warning("Industry neutralization failed, falling back to within-industry zscore")

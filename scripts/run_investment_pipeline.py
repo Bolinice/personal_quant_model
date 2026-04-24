@@ -21,18 +21,6 @@ from sqlalchemy import create_engine, text
 from app.core.config import settings
 
 
-# ==================== 因子方向定义 ====================
-FACTOR_DIR = {
-    'roe': 1, 'roa': 1, 'gross_profit_margin': 1, 'net_profit_margin': 1,
-    'ret_1m_reversal': -1, 'ret_3m_skip1': 1, 'ret_6m_skip1': 1,
-    'vol_20d': -1, 'vol_60d': -1,
-    'amihud_20d': -1, 'zero_return_ratio': -1,
-    'overnight_return': -1,
-    'ep_ttm': 1, 'bp': 1, 'sp_ttm': 1, 'dp': 1,
-    'sloan_accrual': -1, 'cfo_to_net_profit': 1,
-}
-
-
 # ==================== Step 1: 数据同步 ====================
 
 def step1_sync_data(trade_date: str, start_date: str, end_date: str,
@@ -111,7 +99,7 @@ def step2_load_data(engine, universe_key: str = 'hs300'):
         stock_daily['trade_date'] = pd.to_datetime(stock_daily['trade_date'])
         print(f"  股票日线: {len(stock_daily)} 条, {stock_daily['ts_code'].nunique()} 只")
 
-        # 财务数据 (独立连接，避免事务中止影响后续查询)
+        # 财务数据 (独立连接)
         financial = pd.DataFrame()
         try:
             with engine.connect() as conn2:
@@ -119,18 +107,22 @@ def step2_load_data(engine, universe_key: str = 'hs300'):
                     f"SELECT ts_code, end_date, ann_date, roe, roa, "
                     f"gross_profit_margin, net_profit_ratio, current_ratio, debt_to_assets, "
                     f"eps, bvps, pe_ttm, pb, ps_ttm, dividend_yield, "
-                    f"revenue, net_profit, operating_cash_flow, total_assets "
+                    f"revenue, net_profit, operating_cash_flow, total_assets, "
+                    f"total_equity, current_assets, current_liabilities "
                     f"FROM stock_financial WHERE ts_code IN ({codes_str}) ORDER BY ts_code, end_date"
                 ), conn2)
             if not financial.empty:
                 financial['end_date'] = pd.to_datetime(financial['end_date'])
                 if 'ann_date' in financial.columns:
                     financial['ann_date'] = pd.to_datetime(financial['ann_date'])
+                # Rename net_profit_ratio → net_profit_margin for FactorCalculator
+                if 'net_profit_ratio' in financial.columns:
+                    financial = financial.rename(columns={'net_profit_ratio': 'net_profit_margin'})
             print(f"  财务数据: {len(financial)} 条")
         except Exception as e:
             print(f"  财务数据: 跳过 ({str(e)[:80]})")
 
-        # 每日基本面 (独立连接)
+        # 每日基本面 (独立连接) - 包含turnover_rate供流动性因子使用
         daily_basic = pd.DataFrame()
         try:
             with engine.connect() as conn3:
@@ -142,6 +134,9 @@ def step2_load_data(engine, universe_key: str = 'hs300'):
                 ), conn3)
             if not daily_basic.empty:
                 daily_basic['trade_date'] = pd.to_datetime(daily_basic['trade_date'])
+                # Rename total_mv → total_market_cap for FactorCalculator
+                if 'total_mv' in daily_basic.columns:
+                    daily_basic = daily_basic.rename(columns={'total_mv': 'total_market_cap'})
             print(f"  每日基本面: {len(daily_basic)} 条")
         except Exception as e:
             print(f"  每日基本面: 跳过 ({str(e)[:80]})")
@@ -155,7 +150,7 @@ def step2_load_data(engine, universe_key: str = 'hs300'):
         index_daily['trade_date'] = pd.to_datetime(index_daily['trade_date'])
         print(f"  基准指数({benchmark}): {len(index_daily)} 条")
 
-        # 股票基础信息
+        # 股票基础信息 (供A股特有因子使用)
         stock_basic = pd.read_sql(text(
             f"SELECT ts_code, name, industry, list_date, list_status "
             f"FROM stock_basic WHERE ts_code IN ({codes_str})"
@@ -173,6 +168,69 @@ def step2_load_data(engine, universe_key: str = 'hs300'):
         except Exception:
             pass
 
+        # 北向资金 (独立连接)
+        northbound = pd.DataFrame()
+        try:
+            with engine.connect() as conn5:
+                northbound = pd.read_sql(text(
+                    f"SELECT ts_code, trade_date, north_net_buy, north_buy, north_sell "
+                    f"FROM stock_northbound WHERE ts_code IN ({codes_str}) "
+                    f"ORDER BY ts_code, trade_date"
+                ), conn5)
+            if not northbound.empty:
+                northbound['trade_date'] = pd.to_datetime(northbound['trade_date'])
+                # Fill north_net_buy from north_buy - north_sell if null
+                mask = northbound['north_net_buy'].isna() & northbound['north_buy'].notna() & northbound['north_sell'].notna()
+                northbound.loc[mask, 'north_net_buy'] = northbound.loc[mask, 'north_buy'] - northbound.loc[mask, 'north_sell']
+            print(f"  北向资金: {len(northbound)} 条")
+        except Exception:
+            pass
+
+        # 资金流向 (独立连接)
+        money_flow = pd.DataFrame()
+        try:
+            with engine.connect() as conn6:
+                money_flow = pd.read_sql(text(
+                    f"SELECT ts_code, trade_date, smart_net_inflow, smart_net_pct "
+                    f"FROM stock_money_flow WHERE ts_code IN ({codes_str}) "
+                    f"ORDER BY ts_code, trade_date"
+                ), conn6)
+            if not money_flow.empty:
+                money_flow['trade_date'] = pd.to_datetime(money_flow['trade_date'])
+            print(f"  资金流向: {len(money_flow)} 条")
+        except Exception:
+            pass
+
+        # 融资融券 (独立连接)
+        margin = pd.DataFrame()
+        try:
+            with engine.connect() as conn7:
+                margin = pd.read_sql(text(
+                    f"SELECT ts_code, trade_date, margin_buy, margin_balance "
+                    f"FROM stock_margin WHERE ts_code IN ({codes_str}) "
+                    f"ORDER BY ts_code, trade_date"
+                ), conn7)
+            if not margin.empty:
+                margin['trade_date'] = pd.to_datetime(margin['trade_date'])
+            print(f"  融资融券: {len(margin)} 条")
+        except Exception:
+            pass
+
+        # 涨跌停状态 (独立连接, 供A股特有因子使用)
+        stock_status = pd.DataFrame()
+        try:
+            with engine.connect() as conn8:
+                stock_status = pd.read_sql(text(
+                    f"SELECT ts_code, trade_date, is_limit_up, is_limit_down "
+                    f"FROM stock_status_daily WHERE ts_code IN ({codes_str}) "
+                    f"ORDER BY ts_code, trade_date"
+                ), conn8)
+            if not stock_status.empty:
+                stock_status['trade_date'] = pd.to_datetime(stock_status['trade_date'])
+            print(f"  涨跌停: {len(stock_status)} 条")
+        except Exception:
+            pass
+
     print(f"  数据加载耗时: {time.time()-t0:.1f}s")
     return {
         'stock_daily': stock_daily,
@@ -181,6 +239,10 @@ def step2_load_data(engine, universe_key: str = 'hs300'):
         'index_daily': index_daily,
         'stock_basic': stock_basic,
         'industry_df': industry_df,
+        'northbound': northbound,
+        'money_flow': money_flow,
+        'margin': margin,
+        'stock_status': stock_status,
         'universe_codes': codes,
         'config': cfg,
     }
@@ -189,142 +251,104 @@ def step2_load_data(engine, universe_key: str = 'hs300'):
 # ==================== Step 3: 因子计算 ====================
 
 def step3_calc_factors(trade_date, data):
-    """计算截面因子值"""
+    """计算全量69因子 — 复用FactorCalculator"""
     print("\n" + "=" * 60)
     print("Step 3: 因子计算")
     print("=" * 60)
 
     t0 = time.time()
-    sd = data['stock_daily']
-    fin = data['financial']
-    db = data['daily_basic']
     td = pd.Timestamp(trade_date)
 
-    start_date = td - timedelta(days=400)
-    price_window = sd[(sd['trade_date'] >= start_date) & (sd['trade_date'] <= td)].copy()
+    from app.core.factor_calculator import FactorCalculator, FACTOR_GROUPS, FACTOR_DIRECTIONS
+    calculator = FactorCalculator()
 
-    if price_window.empty:
-        print("  错误: 无行情数据")
-        return pd.DataFrame()
+    # 准备price_df: 截取500天窗口, 合并turnover_rate
+    sd = data['stock_daily']
+    start_date = td - timedelta(days=500)
+    price_df = sd[(sd['trade_date'] >= start_date) & (sd['trade_date'] <= td)].copy()
+    price_df = price_df.sort_values(['ts_code', 'trade_date'])
 
-    # PIT安全: 使用ann_date过滤财务数据
-    fin_latest = pd.DataFrame()
-    if not fin.empty:
-        if 'ann_date' in fin.columns:
-            fin_latest = fin[fin['ann_date'] <= td].copy()
-        else:
-            fin_latest = fin[fin['end_date'] <= td].copy()
-        if not fin_latest.empty:
-            if 'ann_date' in fin_latest.columns:
-                fin_latest = fin_latest.sort_values('ann_date').groupby('ts_code').last()
-            else:
-                fin_latest = fin_latest.sort_values('end_date').groupby('ts_code').last()
-
-    price_window = price_window.sort_values(['ts_code', 'trade_date'])
-
-    stock_counts = price_window.groupby('ts_code').size()
+    # 过滤数据不足60天的股票
+    stock_counts = price_df.groupby('ts_code').size()
     valid_stocks = stock_counts[stock_counts >= 60].index
-    price_window = price_window[price_window['ts_code'].isin(valid_stocks)]
+    price_df = price_df[price_df['ts_code'].isin(valid_stocks)]
 
-    if price_window.empty:
-        print("  错误: 无有效股票")
+    if price_df.empty:
+        print("  错误: 无有效行情数据")
         return pd.DataFrame()
 
-    close = price_window.set_index(['ts_code', 'trade_date'])['close'].unstack(level=0)
-    grouped = price_window.groupby('ts_code')
+    # 合并turnover_rate到price_df (流动性因子需要)
+    db = data.get('daily_basic')
+    if db is not None and not db.empty:
+        db_subset = db[db['trade_date'] <= td][['ts_code', 'trade_date', 'turnover_rate']].copy()
+        price_df = price_df.merge(db_subset, on=['ts_code', 'trade_date'], how='left')
 
-    results = {}
+    # 准备financial_df: PIT过滤
+    financial_df = data.get('financial', pd.DataFrame())
+    if not financial_df.empty and 'ann_date' in financial_df.columns:
+        financial_df = financial_df[financial_df['ann_date'] <= td].copy()
 
-    for ts_code in valid_stocks:
-        if ts_code not in close.columns:
-            continue
-        c = close[ts_code].dropna()
-        row = {}
-        if len(c) >= 20:
-            row['ret_1m_reversal'] = c.iloc[-1] / c.iloc[-20] - 1
-        if len(c) >= 60:
-            row['ret_3m_skip1'] = c.iloc[-20] / c.iloc[-60] - 1 if c.iloc[-60] != 0 else np.nan
-        if len(c) >= 120:
-            row['ret_6m_skip1'] = c.iloc[-20] / c.iloc[-120] - 1 if c.iloc[-120] != 0 else np.nan
-        results[ts_code] = row
+    # 准备northbound_df
+    northbound_df = data.get('northbound', pd.DataFrame())
 
-    for ts_code, group in grouped:
-        if ts_code not in results:
-            continue
-        group = group.sort_values('trade_date')
-        row = results[ts_code]
+    # 准备money_flow_df
+    money_flow_df = data.get('money_flow', pd.DataFrame())
 
-        close_s = group['close']
-        open_ = group['open']
-        amount = group['amount']
+    # 准备margin_df
+    margin_df = data.get('margin', pd.DataFrame())
 
-        daily_ret = close_s.pct_change().dropna()
-        if len(daily_ret) >= 20:
-            row['vol_20d'] = daily_ret.iloc[-20:].std() * np.sqrt(252)
-        if len(daily_ret) >= 60:
-            row['vol_60d'] = daily_ret.iloc[-60:].std() * np.sqrt(252)
+    # 准备stock_basic_df
+    stock_basic_df = data.get('stock_basic', pd.DataFrame())
+    if not stock_basic_df.empty and 'list_date' in stock_basic_df.columns:
+        stock_basic_df['list_date'] = pd.to_datetime(stock_basic_df['list_date'])
 
-        if len(group) >= 20 and (amount.iloc[-20:] > 0).all():
-            abs_ret = close_s.pct_change().abs()
-            amihud = (abs_ret / amount.replace(0, np.nan)).iloc[-20:].mean()
-            row['amihud_20d'] = amihud if not np.isnan(amihud) else np.nan
-        if len(daily_ret) >= 20:
-            row['zero_return_ratio'] = (daily_ret.iloc[-20:].abs() < 0.001).mean()
+    # 准备stock_status_df (涨跌停)
+    stock_status_df = data.get('stock_status', pd.DataFrame())
 
-        if len(group) >= 20 and (close_s.iloc[:-1] > 0).all():
-            overnight = open_.iloc[1:].values / close_s.iloc[:-1].values - 1
-            row['overnight_return'] = np.mean(overnight[-20:])
+    # 调用FactorCalculator计算全部因子
+    factor_df = calculator.calc_all_factors(
+        financial_df=financial_df,
+        price_df=price_df,
+        neutralize=False,  # 不做行业中性化(截面数据)
+        northbound_df=northbound_df,
+        money_flow_df=money_flow_df,
+        margin_df=margin_df,
+        stock_basic_df=stock_basic_df,
+        stock_status_df=stock_status_df,
+        daily_basic_df=data.get('daily_basic', pd.DataFrame()),
+        trade_date=td,
+    )
 
-        # 财务因子
-        if not fin_latest.empty and ts_code in fin_latest.index:
-            f = fin_latest.loc[ts_code]
-            row['roe'] = f.get('roe')
-            row['roa'] = f.get('roa')
-            row['gross_profit_margin'] = f.get('gross_profit_margin')
-            row['net_profit_margin'] = f.get('net_profit_ratio')
-
-            if pd.notna(f.get('operating_cash_flow')) and pd.notna(f.get('total_assets')) and f.get('total_assets', 0) != 0:
-                np_val = f.get('net_profit', 0)
-                ocf = f.get('operating_cash_flow', 0)
-                ta = f.get('total_assets', 0)
-                row['sloan_accrual'] = (np_val - ocf) / ta
-                if np_val != 0:
-                    row['cfo_to_net_profit'] = np.clip(ocf / np_val, -5, 5)
-
-            if pd.notna(f.get('pe_ttm')) and f.get('pe_ttm', 0) != 0:
-                row['ep_ttm'] = 1 / f.get('pe_ttm')
-            if pd.notna(f.get('pb')) and f.get('pb', 0) != 0:
-                row['bp'] = 1 / f.get('pb')
-            if pd.notna(f.get('ps_ttm')) and f.get('ps_ttm', 0) != 0:
-                row['sp_ttm'] = 1 / f.get('ps_ttm')
-            if pd.notna(f.get('dividend_yield')):
-                row['dp'] = f.get('dividend_yield')
-
-    if not results:
-        print("  错误: 无因子数据")
+    if factor_df.empty:
+        print("  错误: 因子计算结果为空")
         return pd.DataFrame()
 
-    factor_df = pd.DataFrame(results).T
-    factor_df.index.name = 'ts_code'
+    # 设置index为ts_code (FactorCalculator输出security_id列)
+    if 'security_id' in factor_df.columns:
+        factor_df = factor_df.set_index('security_id')
+        factor_df.index.name = 'ts_code'
 
-    # 预处理: MAD去极值 + Z-score标准化 + 方向统一
-    from app.core.factor_preprocess import FactorPreprocessor
-    preprocessor = FactorPreprocessor()
-    factor_cols = [c for c in factor_df.columns if c in FACTOR_DIR]
-
-    for col in factor_cols:
-        series = factor_df[col].dropna()
-        if len(series) < 10:
-            continue
-        factor_df[col] = preprocessor.winsorize_mad(factor_df[col])
-        factor_df[col] = preprocessor.standardize_zscore(factor_df[col])
-        direction = FACTOR_DIR.get(col, 1)
-        if direction < 0:
-            factor_df[col] = -factor_df[col]
-
-    n_factors = len(factor_cols)
+    # 因子覆盖率报告
+    factor_cols = [c for c in factor_df.columns
+                   if c in FACTOR_DIRECTIONS and not c.endswith('_missing')]
+    coverage = factor_df[factor_cols].notna().mean()
+    high_cov = (coverage > 0.5).sum()
     n_stocks = len(factor_df)
-    print(f"  因子数: {n_factors}, 股票数: {n_stocks}")
+
+    print(f"  因子数: {len(factor_cols)}, 股票数: {n_stocks}")
+    print(f"  高覆盖因子(>50%): {high_cov}/{len(factor_cols)}")
+
+    # 按因子组打印
+    for group_name, group_info in FACTOR_GROUPS.items():
+        group_factors = [f for f in group_info['factors'] if f in factor_cols]
+        if not group_factors:
+            continue
+        group_cov = {f: coverage.get(f, 0) for f in group_factors if coverage.get(f, 0) > 0}
+        if group_cov:
+            print(f"  [{group_info['name']}] {len(group_cov)}/{len(group_factors)} 有数据")
+            for f, cov in sorted(group_cov.items(), key=lambda x: -x[1]):
+                print(f"    {f}: {cov:.0%}")
+
     print(f"  因子计算耗时: {time.time()-t0:.1f}s")
     return factor_df
 

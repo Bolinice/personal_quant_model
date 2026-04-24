@@ -1,6 +1,6 @@
 {
   "trade_date": "20260423",
-  "generated_at": "2026-04-23 07:11:15",
+  "generated_at": "2026-04-23 23:02:32",
   "regime": {
     "status": "defensive",
     "confidence": 0.61,
@@ -28,71 +28,71 @@
     "target_exposure": 0.4
   },
   "portfolio": {
-    "n_positions": 131,
-    "max_weight": 0.0213,
+    "n_positions": 141,
+    "max_weight": 0.025,
     "positions": [
       {
-        "ts_code": "600938.SH",
-        "name": "中国海油",
+        "ts_code": "600011.SH",
+        "name": "华能国际",
         "industry": null,
-        "weight": 0.0213,
-        "weight_pct": "2.13%"
+        "weight": 0.025,
+        "weight_pct": "2.50%"
       },
       {
-        "ts_code": "601088.SH",
-        "name": "中国神华",
+        "ts_code": "601919.SH",
+        "name": "中远海控",
         "industry": null,
-        "weight": 0.0212,
-        "weight_pct": "2.12%"
+        "weight": 0.0228,
+        "weight_pct": "2.28%"
       },
       {
-        "ts_code": "601225.SH",
-        "name": "陕西煤业",
+        "ts_code": "000999.SZ",
+        "name": "华润三九",
         "industry": null,
-        "weight": 0.0196,
-        "weight_pct": "1.96%"
+        "weight": 0.0209,
+        "weight_pct": "2.09%"
       },
       {
-        "ts_code": "600989.SH",
-        "name": "宝丰能源",
+        "ts_code": "000651.SZ",
+        "name": "格力电器",
         "industry": null,
-        "weight": 0.0193,
-        "weight_pct": "1.93%"
+        "weight": 0.0183,
+        "weight_pct": "1.83%"
       },
       {
-        "ts_code": "601857.SH",
-        "name": "中国石油",
+        "ts_code": "601117.SH",
+        "name": "中国化学",
         "industry": null,
-        "weight": 0.0186,
-        "weight_pct": "1.86%"
+        "weight": 0.018,
+        "weight_pct": "1.80%"
       },
       {
-        "ts_code": "601868.SH",
-        "name": "中国能建",
+        "ts_code": "600018.SH",
+        "name": "上港集团",
         "industry": null,
-        "weight": 0.0182,
-        "weight_pct": "1.82%"
+        "weight": 0.017,
+        "weight_pct": "1.70%"
       },
       {
-        "ts_code": "600930.SH",
-        "name": "华电新能",
-        "industry": null,
-        "weight": 0.0177,
-        "weight_pct": "1.77%"
-      },
-      {
-        "ts_code": "600028.SH",
-        "name": "中国石化",
-        "industry": null,
-        "weight": 0.0173,
-        "weight_pct": "1.73%"
-      },
-      {
-        "ts_code": "600188.SH",
-        "name": "兖矿能源",
+        "ts_code": "601808.SH",
+        "name": "中海油服",
         "industry": null,
         "weight": 0.0165,
         "weight_pct": "1.65%"
+      },
+      {
+        "ts_code": "601390.SH",
+        "name": "中国中铁",
+        "industry": null,
+        "weight": 0.0163,
+        "weight_pct": "1.63%"
+      },
+      {
+        "ts_code": "600023.SH",
+        "name": "浙能电力",
+        "industry": null,
+        "weight": 0.0157,
+        "weight_pct": "1.57%"
       },
       {
         "ts_code": "601898.SH",
@@ -102,284 +102,284 @@
         "weight_pct": "1.55%"
       },
       {
-        "ts_code": "601919.SH",
-        "name": "中远海控",
+        "ts_code": "601800.SH",
+        "name": "中国交建",
         "industry": null,
-        "weight": 0.0154,
-        "weight_pct": "1.54%"
+        "weight": 0.0155,
+        "weight_pct": "1.55%"
       },
       {
-        "ts_code": "300274.SZ",
-        "name": "阳光电源",
+        "ts_code": "601857.SH",
+        "name": "中国石油",
         "industry": null,
-        "weight": 0.0152,
-        "weight_pct": "1.52%"
+        "weight": 0.0155,
+        "weight_pct": "1.55%"
       },
       {
-        "ts_code": "601877.SH",
-        "name": "正泰电器",
+        "ts_code": "601607.SH",
+        "name": "上海医药",
+        "industry": null,
+        "weight": 0.0153,
+        "weight_pct": "1.53%"
+      },
+      {
+        "ts_code": "000568.SZ",
+        "name": "泸州老窖",
+        "industry": null,
+        "weight": 0.0151,
+        "weight_pct": "1.51%"
+      },
+      {
+        "ts_code": "601298.SH",
+        "name": "青岛港",
         "industry": null,
         "weight": 0.0148,
         "weight_pct": "1.48%"
       },
       {
-        "ts_code": "600905.SH",
-        "name": "三峡能源",
+        "ts_code": "001965.SZ",
+        "name": "招商公路",
         "industry": null,
-        "weight": 0.0145,
-        "weight_pct": "1.45%"
+        "weight": 0.0146,
+        "weight_pct": "1.46%"
       },
       {
-        "ts_code": "600690.SH",
-        "name": "海尔智家",
+        "ts_code": "000708.SZ",
+        "name": "中信特钢",
         "industry": null,
-        "weight": 0.0138,
-        "weight_pct": "1.38%"
-      },
-      {
-        "ts_code": "600900.SH",
-        "name": "长江电力",
-        "industry": null,
-        "weight": 0.0135,
-        "weight_pct": "1.35%"
-      },
-      {
-        "ts_code": "601012.SH",
-        "name": "隆基绿能",
-        "industry": null,
-        "weight": 0.0125,
-        "weight_pct": "1.25%"
-      },
-      {
-        "ts_code": "600027.SH",
-        "name": "华电国际",
-        "industry": null,
-        "weight": 0.0123,
-        "weight_pct": "1.23%"
-      },
-      {
-        "ts_code": "600519.SH",
-        "name": "贵州茅台",
-        "industry": null,
-        "weight": 0.012,
-        "weight_pct": "1.20%"
-      },
-      {
-        "ts_code": "601985.SH",
-        "name": "中国核电",
-        "industry": null,
-        "weight": 0.0118,
-        "weight_pct": "1.18%"
-      },
-      {
-        "ts_code": "600941.SH",
-        "name": "中国移动",
-        "industry": null,
-        "weight": 0.0118,
-        "weight_pct": "1.18%"
-      },
-      {
-        "ts_code": "600887.SH",
-        "name": "伊利股份",
-        "industry": null,
-        "weight": 0.0114,
-        "weight_pct": "1.14%"
-      },
-      {
-        "ts_code": "601398.SH",
-        "name": "工商银行",
-        "industry": null,
-        "weight": 0.0112,
-        "weight_pct": "1.12%"
-      },
-      {
-        "ts_code": "600406.SH",
-        "name": "国电南瑞",
-        "industry": null,
-        "weight": 0.011,
-        "weight_pct": "1.10%"
-      },
-      {
-        "ts_code": "600674.SH",
-        "name": "川投能源",
-        "industry": null,
-        "weight": 0.0107,
-        "weight_pct": "1.07%"
-      },
-      {
-        "ts_code": "000651.SZ",
-        "name": "格力电器",
-        "industry": null,
-        "weight": 0.0106,
-        "weight_pct": "1.06%"
-      },
-      {
-        "ts_code": "600803.SH",
-        "name": "新奥股份",
-        "industry": null,
-        "weight": 0.0106,
-        "weight_pct": "1.06%"
-      },
-      {
-        "ts_code": "601939.SH",
-        "name": "建设银行",
-        "industry": null,
-        "weight": 0.0103,
-        "weight_pct": "1.03%"
-      },
-      {
-        "ts_code": "002714.SZ",
-        "name": "牧原股份",
-        "industry": null,
-        "weight": 0.0102,
-        "weight_pct": "1.02%"
-      },
-      {
-        "ts_code": "600919.SH",
-        "name": "江苏银行",
-        "industry": null,
-        "weight": 0.0102,
-        "weight_pct": "1.02%"
-      },
-      {
-        "ts_code": "600011.SH",
-        "name": "华能国际",
-        "industry": null,
-        "weight": 0.0101,
-        "weight_pct": "1.01%"
-      },
-      {
-        "ts_code": "601818.SH",
-        "name": "光大银行",
-        "industry": null,
-        "weight": 0.0099,
-        "weight_pct": "0.99%"
-      },
-      {
-        "ts_code": "600089.SH",
-        "name": "特变电工",
-        "industry": null,
-        "weight": 0.0098,
-        "weight_pct": "0.98%"
-      },
-      {
-        "ts_code": "600036.SH",
-        "name": "招商银行",
-        "industry": null,
-        "weight": 0.0098,
-        "weight_pct": "0.98%"
-      },
-      {
-        "ts_code": "601669.SH",
-        "name": "中国电建",
-        "industry": null,
-        "weight": 0.0096,
-        "weight_pct": "0.96%"
-      },
-      {
-        "ts_code": "600016.SH",
-        "name": "民生银行",
-        "industry": null,
-        "weight": 0.0096,
-        "weight_pct": "0.96%"
-      },
-      {
-        "ts_code": "600585.SH",
-        "name": "海螺水泥",
-        "industry": null,
-        "weight": 0.0095,
-        "weight_pct": "0.95%"
-      },
-      {
-        "ts_code": "601808.SH",
-        "name": "中海油服",
-        "industry": null,
-        "weight": 0.0095,
-        "weight_pct": "0.95%"
-      },
-      {
-        "ts_code": "601816.SH",
-        "name": "京沪高铁",
-        "industry": null,
-        "weight": 0.0094,
-        "weight_pct": "0.94%"
-      },
-      {
-        "ts_code": "000999.SZ",
-        "name": "华润三九",
-        "industry": null,
-        "weight": 0.0093,
-        "weight_pct": "0.93%"
-      },
-      {
-        "ts_code": "601006.SH",
-        "name": "大秦铁路",
-        "industry": null,
-        "weight": 0.0092,
-        "weight_pct": "0.92%"
-      },
-      {
-        "ts_code": "603986.SH",
-        "name": "兆易创新",
-        "industry": null,
-        "weight": 0.0087,
-        "weight_pct": "0.87%"
-      },
-      {
-        "ts_code": "601166.SH",
-        "name": "兴业银行",
-        "industry": null,
-        "weight": 0.0087,
-        "weight_pct": "0.87%"
-      },
-      {
-        "ts_code": "601328.SH",
-        "name": "交通银行",
-        "industry": null,
-        "weight": 0.0086,
-        "weight_pct": "0.86%"
-      },
-      {
-        "ts_code": "601009.SH",
-        "name": "南京银行",
-        "industry": null,
-        "weight": 0.0085,
-        "weight_pct": "0.85%"
-      },
-      {
-        "ts_code": "600795.SH",
-        "name": "国电电力",
-        "industry": null,
-        "weight": 0.0085,
-        "weight_pct": "0.85%"
-      },
-      {
-        "ts_code": "600025.SH",
-        "name": "华能水电",
-        "industry": null,
-        "weight": 0.0084,
-        "weight_pct": "0.84%"
-      },
-      {
-        "ts_code": "601390.SH",
-        "name": "中国中铁",
-        "industry": null,
-        "weight": 0.0083,
-        "weight_pct": "0.83%"
-      },
-      {
-        "ts_code": "601988.SH",
-        "name": "中国银行",
-        "industry": null,
-        "weight": 0.0082,
-        "weight_pct": "0.82%"
+        "weight": 0.0142,
+        "weight_pct": "1.42%"
       },
       {
         "ts_code": "601668.SH",
         "name": "中国建筑",
         "industry": null,
-        "weight": 0.0082,
-        "weight_pct": "0.82%"
+        "weight": 0.0141,
+        "weight_pct": "1.41%"
+      },
+      {
+        "ts_code": "601186.SH",
+        "name": "中国铁建",
+        "industry": null,
+        "weight": 0.0137,
+        "weight_pct": "1.37%"
+      },
+      {
+        "ts_code": "601225.SH",
+        "name": "陕西煤业",
+        "industry": null,
+        "weight": 0.0136,
+        "weight_pct": "1.36%"
+      },
+      {
+        "ts_code": "603369.SH",
+        "name": "今世缘",
+        "industry": null,
+        "weight": 0.0134,
+        "weight_pct": "1.34%"
+      },
+      {
+        "ts_code": "601877.SH",
+        "name": "正泰电器",
+        "industry": null,
+        "weight": 0.0133,
+        "weight_pct": "1.33%"
+      },
+      {
+        "ts_code": "600803.SH",
+        "name": "新奥股份",
+        "industry": null,
+        "weight": 0.0118,
+        "weight_pct": "1.18%"
+      },
+      {
+        "ts_code": "002001.SZ",
+        "name": "新 和 成",
+        "industry": null,
+        "weight": 0.0118,
+        "weight_pct": "1.18%"
+      },
+      {
+        "ts_code": "600938.SH",
+        "name": "中国海油",
+        "industry": null,
+        "weight": 0.0117,
+        "weight_pct": "1.17%"
+      },
+      {
+        "ts_code": "000596.SZ",
+        "name": "古井贡酒",
+        "industry": null,
+        "weight": 0.0115,
+        "weight_pct": "1.15%"
+      },
+      {
+        "ts_code": "000786.SZ",
+        "name": "北新建材",
+        "industry": null,
+        "weight": 0.0113,
+        "weight_pct": "1.13%"
+      },
+      {
+        "ts_code": "601868.SH",
+        "name": "中国能建",
+        "industry": null,
+        "weight": 0.0112,
+        "weight_pct": "1.12%"
+      },
+      {
+        "ts_code": "600028.SH",
+        "name": "中国石化",
+        "industry": null,
+        "weight": 0.0111,
+        "weight_pct": "1.11%"
+      },
+      {
+        "ts_code": "601669.SH",
+        "name": "中国电建",
+        "industry": null,
+        "weight": 0.011,
+        "weight_pct": "1.10%"
+      },
+      {
+        "ts_code": "600019.SH",
+        "name": "宝钢股份",
+        "industry": null,
+        "weight": 0.0109,
+        "weight_pct": "1.09%"
+      },
+      {
+        "ts_code": "000983.SZ",
+        "name": "山西焦煤",
+        "industry": null,
+        "weight": 0.0107,
+        "weight_pct": "1.07%"
+      },
+      {
+        "ts_code": "600027.SH",
+        "name": "华电国际",
+        "industry": null,
+        "weight": 0.0107,
+        "weight_pct": "1.07%"
+      },
+      {
+        "ts_code": "600025.SH",
+        "name": "华能水电",
+        "industry": null,
+        "weight": 0.0105,
+        "weight_pct": "1.05%"
+      },
+      {
+        "ts_code": "601018.SH",
+        "name": "宁波港",
+        "industry": null,
+        "weight": 0.0104,
+        "weight_pct": "1.04%"
+      },
+      {
+        "ts_code": "600886.SH",
+        "name": "国投电力",
+        "industry": null,
+        "weight": 0.0103,
+        "weight_pct": "1.03%"
+      },
+      {
+        "ts_code": "300760.SZ",
+        "name": "迈瑞医疗",
+        "industry": null,
+        "weight": 0.0096,
+        "weight_pct": "0.96%"
+      },
+      {
+        "ts_code": "000858.SZ",
+        "name": "五 粮 液",
+        "industry": null,
+        "weight": 0.0094,
+        "weight_pct": "0.94%"
+      },
+      {
+        "ts_code": "000895.SZ",
+        "name": "双汇发展",
+        "industry": null,
+        "weight": 0.0094,
+        "weight_pct": "0.94%"
+      },
+      {
+        "ts_code": "600188.SH",
+        "name": "兖矿能源",
+        "industry": null,
+        "weight": 0.0093,
+        "weight_pct": "0.93%"
+      },
+      {
+        "ts_code": "300979.SZ",
+        "name": "华利集团",
+        "industry": null,
+        "weight": 0.0093,
+        "weight_pct": "0.93%"
+      },
+      {
+        "ts_code": "600674.SH",
+        "name": "川投能源",
+        "industry": null,
+        "weight": 0.0092,
+        "weight_pct": "0.92%"
+      },
+      {
+        "ts_code": "300274.SZ",
+        "name": "阳光电源",
+        "industry": null,
+        "weight": 0.0091,
+        "weight_pct": "0.91%"
+      },
+      {
+        "ts_code": "601127.SH",
+        "name": "赛力斯",
+        "industry": null,
+        "weight": 0.0088,
+        "weight_pct": "0.88%"
+      },
+      {
+        "ts_code": "688187.SH",
+        "name": "时代电气",
+        "industry": null,
+        "weight": 0.0088,
+        "weight_pct": "0.88%"
+      },
+      {
+        "ts_code": "300896.SZ",
+        "name": "爱美客",
+        "industry": null,
+        "weight": 0.0086,
+        "weight_pct": "0.86%"
+      },
+      {
+        "ts_code": "600690.SH",
+        "name": "海尔智家",
+        "industry": null,
+        "weight": 0.0086,
+        "weight_pct": "0.86%"
+      },
+      {
+        "ts_code": "600905.SH",
+        "name": "三峡能源",
+        "industry": null,
+        "weight": 0.0086,
+        "weight_pct": "0.86%"
+      },
+      {
+        "ts_code": "601766.SH",
+        "name": "中国中车",
+        "industry": null,
+        "weight": 0.0085,
+        "weight_pct": "0.85%"
+      },
+      {
+        "ts_code": "300832.SZ",
+        "name": "新产业",
+        "industry": null,
+        "weight": 0.0081,
+        "weight_pct": "0.81%"
       }
     ]
   },
@@ -392,39 +392,38 @@
     },
     "diagnostics": {
       "price": {
-        "coverage": 0.5,
+        "coverage": 1.0,
         "available_factors": [
           "ret_1m_reversal",
           "ret_3m_skip1",
           "ret_6m_skip1",
+          "ret_12m_skip1",
           "vol_20d",
           "vol_60d",
-          "overnight_return"
-        ],
-        "missing_factors": [
-          "ret_12m_skip1",
           "rsi_14d",
           "bollinger_position",
           "macd_signal",
+          "overnight_return",
           "intraday_return_ratio",
           "vpin"
-        ]
+        ],
+        "missing_factors": []
       },
       "fundamental": {
-        "coverage": 0.2727272727272727,
+        "coverage": 0.7272727272727273,
         "available_factors": [
-          "roe",
-          "roa",
-          "gross_profit_margin"
-        ],
-        "missing_factors": [
           "ep_ttm",
           "bp",
           "sp_ttm",
           "cfp_ttm",
+          "roe",
+          "roa",
+          "gross_profit_margin",
+          "earnings_stability"
+        ],
+        "missing_factors": [
           "sloan_accrual",
           "cfo_to_net_profit",
-          "earnings_stability",
           "accrual_anomaly"
         ]
       },
@@ -439,16 +438,16 @@
         ]
       },
       "flow_event": {
-        "coverage": 0.16666666666666666,
+        "coverage": 0.6666666666666666,
         "available_factors": [
+          "smart_money_ratio",
+          "large_order_ratio",
+          "turnover_20d",
           "amihud_20d"
         ],
         "missing_factors": [
           "north_net_buy_ratio",
-          "smart_money_ratio",
-          "margin_signal",
-          "large_order_ratio",
-          "turnover_20d"
+          "margin_signal"
         ]
       }
     }

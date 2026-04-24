@@ -454,7 +454,8 @@ class TimingEngine:
         result = pd.Series(MarketRegime.SIDEWAYS, index=features.index)
         valid_indices = features.index[valid_mask]
         for i, state in enumerate(states):
-            result.iloc[valid_indices.get_loc(valid_indices[i]) if i < len(valid_indices) else i] = regime_map.get(state, MarketRegime.SIDEWAYS)
+            if i < len(valid_indices):
+                result.loc[valid_indices[i]] = regime_map.get(state, MarketRegime.SIDEWAYS)
 
         return result
 

@@ -12,6 +12,12 @@ async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     logger.info("Application starting...")
 
+    # 生产环境安全检查
+    safety_warnings = settings.check_production_safety()
+    if safety_warnings:
+        for w in safety_warnings:
+            logger.warning(f"Security: {w}")
+
     # 初始化数据库表
     from app.db.base import Base, engine
     Base.metadata.create_all(bind=engine)

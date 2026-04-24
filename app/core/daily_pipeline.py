@@ -14,7 +14,7 @@ from app.core.ensemble import AlphaEnsemble
 from app.core.factor_monitor import FactorMonitor
 from app.core.labels import LabelBuilder
 from app.core.logging import logger
-from app.core.regime import RegimeDetector
+from app.core.regime import RegimeDetector, REGIME_MEAN_REVERTING
 from app.core.universe import UniverseBuilder
 
 
@@ -218,7 +218,3 @@ class DailyPipeline:
             logger.error(f"Daily pipeline failed: {e}", exc_info=True)
 
         return result
-
-
-# 需要导入regime常量
-from app.core.regime import REGIME_MEAN_REVERTING

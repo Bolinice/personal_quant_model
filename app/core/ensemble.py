@@ -4,6 +4,7 @@
 核心: S_final = Σ w_m * z(S_m), 先横截面标准化再加权
 """
 from typing import Dict, List, Optional, Tuple
+import re
 
 import numpy as np
 import pandas as pd
@@ -280,10 +281,20 @@ class AlphaEnsemble:
 
     @staticmethod
     def _cross_sectional_zscore(series: pd.Series) -> pd.Series:
-        """横截面z-score标准化"""
+        """横截面z-score标准化
+
+        自动检测MultiIndex中日期所在的level:
+        - (ts_code, trade_date) → date在level=1
+        - (trade_date, ts_code) → date在level=0
+        """
         if isinstance(series.index, pd.MultiIndex) and series.index.nlevels >= 2:
-            # 按日期(level=1)分组标准化
-            return series.groupby(level=1).transform(
+            # 检测日期所在level: ts_code格式为 000001.SZ
+            level0_sample = str(series.index.get_level_values(0)[0])
+            if re.match(r'\d{6}\.[A-Z]{2}', level0_sample):
+                date_level = 1  # (ts_code, trade_date)
+            else:
+                date_level = 0  # (trade_date, ts_code)
+            return series.groupby(level=date_level).transform(
                 lambda x: (x - x.mean()) / x.std() if x.std() > 0 else x * 0
             )
         else:

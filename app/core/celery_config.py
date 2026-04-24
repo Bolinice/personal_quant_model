@@ -72,7 +72,7 @@ celery_app.conf.beat_schedule = {
     },
     # 清理过期任务
     "cleanup-old-tasks": {
-        "task": "app.tasks.cleanup_old_tasks",
+        "task": "app.core.celery_config.cleanup_old_tasks",
         "schedule": crontab(hour=2, minute=0),  # 凌晨2点
     },
 }

@@ -178,6 +178,7 @@ class LabelBuilder:
         # 对每个交易日做截面回归取残差
         result_parts = []
         for dt, group in merged.groupby(date_col):
+            group = group.copy()  # 避免SettingWithCopyWarning
             valid = group.dropna(subset=['fwd_return'] + available_cols)
             if len(valid) < len(available_cols) + 10:
                 group['style_adjusted_return'] = group['fwd_return']

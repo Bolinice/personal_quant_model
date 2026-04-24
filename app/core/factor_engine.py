@@ -373,9 +373,11 @@ class FactorEngine:
                 continue
 
             day_return = forward_returns[trade_date].dropna()
-            # 排除停牌导致的0收益和极端收益(涨跌停不可交易)
+            # 排除停牌导致的0收益
             day_return = day_return[day_return.abs() > 1e-10]
-            day_return = day_return[day_return.abs() < 0.21]  # 排除超过20%的极端收益(涨跌停)
+            # 排除涨跌停等不可交易收益: 使用各板块涨跌停限制+1%容差
+            # 北交所30%, 创业板/科创板20%, 主板10%, ST 5%
+            day_return = day_return[day_return.abs() < 0.31]  # 使用最宽松的北交所限制作为全局过滤
             day_data = day_data[day_data['security_id'].isin(day_return.index)]
 
             if len(day_data) < n_groups * 2:

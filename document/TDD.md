@@ -7,8 +7,8 @@
 | 项 | 内容 |
 |---|---|
 | 文档名称 | A股多因子增强策略平台 技术架构与数据库设计文档 |
-| 文档版本 | V2.1 |
-| 关联文档 | PRD V2.2、算法设计说明书 V1.2 |
+| 文档版本 | V2.2 |
+| 关联文档 | PRD V2.3、算法设计说明书 V2.0 |
 | 文档状态 | 评审版 |
 | 适用对象 | 技术负责人、后端研发、数据工程师、量化工程师、运维、测试 |
 | 系统类型 | 中低频量化研究与策略交付平台 |
@@ -55,6 +55,12 @@
    - MVP 阶段可采用模块化单体
    - 后续拆分为独立服务
 
+6. **配置驱动**
+   - 参数不写死代码，YAML配置文件体系
+
+7. **数据分层**
+   - 原始层(raw)/清洗层(clean)/PIT层(pit)/研究特征层(feature)/策略结果层(score)/治理监控层(registry)
+
 ---
 
 ## 2.2 总体架构图（逻辑）
@@ -79,6 +85,11 @@
    - 模拟组合服务
    - 报告服务
    - 订阅与产品服务
+   - 事件中心服务
+   - 风险惩罚服务
+   - 因子元数据与注册服务
+   - 模型注册与实验管理服务
+   - 数据快照服务
 
 3. **任务调度层**
    - 日终数据同步任务
@@ -88,6 +99,10 @@
    - 调仓任务
    - 报告生成任务
    - 风控扫描任务
+   - 事件数据同步任务
+   - 因子健康检查任务
+   - 模型漂移监控任务
+   - 数据快照生成任务
 
 4. **数据存储层**
    - 关系型数据库（PostgreSQL）
@@ -128,6 +143,10 @@
 - PIT前视偏差防护（PITManager）
 - 幸存者偏差处理（SurvivorshipBiasHandler）
 - 数据版本管理
+- 事件数据同步（业绩预告/问询函/立案处罚/减持/股权质押等）
+- 数据快照生成（每日snapshot_id）
+- PIT严格版本管理（预告/快报/正式报表优先级、修订版本号）
+- 分析师与北向资金PIT对齐
 
 ---
 
@@ -138,6 +157,8 @@
 - 股票池快照保存
 - 股票池回放
 - 过滤原因记录
+- 风险事件过滤
+- 黑名单硬过滤
 
 ---
 
@@ -149,6 +170,10 @@
 - 因子预处理
 - 因子分析
 - 因子结果存储
+- 因子元数据管理（因子身份证：名称/逻辑/公式/来源/PIT/方向/覆盖率/状态/版本）
+- 因子研究标准流程与上线闸门
+- 统一预处理流水线（10步固定流程：缺失值处理→去极值(MAD)→标准化(Z-score)→中性化→相关性检查→共线性处理→IC检验→衰减分析→方向确认→上线评审）
+- 因子模块重组（quality_growth/expectation/residual_momentum/flow_confirm/risk_penalty/experimental）
 
 ---
 
@@ -160,17 +185,26 @@
 - 模型打分任务
 - 模型结果查询
 - 模型发布管理
+- 模块状态机（active/watch/degraded/disabled）
+- 动态权重收缩
+- ML增强排序（Ridge+LightGBM+规则fallback三路融合）
+- 预测置信度体系
+- 模型注册表（model_id/feature_set/label_version/snapshot_id/params/oof_metrics/status）
 
 ---
 
 ## 3.6 择时与组合模块
 职责：
-- 择时信号生成
+- 择时信号生成（简化为风险预算，5信号4档仓位）
 - 仓位控制
 - 候选股筛选
 - 权重分配
 - 调仓单生成
 - 调仓记录管理
+- 分层赋权组合构建
+- 风险折扣层
+- 双轨制（研究/实盘）
+- 换手控制
 
 ---
 
@@ -201,6 +235,12 @@
 - 成交失败监控
 - 模型失效监控
 - 风险事件记录与告警
+- 黑名单系统
+- 风险惩罚规则引擎
+- 组合风控（行业集中度/风格偏离/小盘暴露/高beta暴露/拥挤度）
+- 极端情景保护
+- 全链路5类监控（数据/因子/模型/组合/实盘）
+- 自动响应机制
 
 ---
 
@@ -355,19 +395,24 @@ MVP：
 ---
 
 ## 6.1 日终生产数据流
-1. 同步交易日历  
-2. 同步股票日线、指数日线  
-3. 同步停牌/ST/涨跌停状态  
-4. 同步财务和指数成分数据  
-5. 执行数据质量检查  
-6. 生成股票池快照  
-7. 执行因子计算  
-8. 执行模型打分  
-9. 生成择时信号  
-10. 生成目标组合  
-11. 执行风控检查  
-12. 生成调仓建议  
-13. 生成报告并推送订阅用户  
+1. 同步交易日历
+2. 同步股票日线、指数日线
+3. 同步停牌/ST/涨跌停状态
+4. 同步财务和指数成分数据
+5. 同步事件数据（业绩预告/问询函/减持/质押等）
+6. 执行数据质量检查
+7. 生成数据快照
+8. 生成股票池快照（含风险事件过滤）
+9. 执行因子统一预处理流水线
+10. 执行五大模块打分（质量成长/预期修正/残差动量/资金流确认/风险惩罚）
+11. 执行信号融合（动态IC加权+Regime调权+高相关收缩）
+12. 执行ML增强排序（可选）
+13. 生成风险预算择时信号
+14. 生成目标组合（分层赋权+风险折扣+行业约束）
+15. 执行风控检查（黑名单+风险惩罚+组合风控）
+16. 生成调仓建议
+17. 执行因子健康检查与告警
+18. 生成报告并推送订阅用户  
 
 ---
 
@@ -402,6 +447,8 @@ MVP：
 4. **所有关键对象支持 version 字段**
 5. **所有关键结果支持 as_of_date / trade_date**
 6. **所有任务支持 task_id 与 run_id 追踪**
+7. **原始数据与PIT数据分离**（raw_*/pit_*）
+8. **数据快照与版本管理**（所有关键结果绑定snapshot_id）
 
 ---
 
@@ -415,6 +462,8 @@ MVP：
 - `product`：策略产品、订阅、交付
 - `risk`：风险事件、告警、监控
 - `system`：任务、日志、配置
+- `event`：事件中心、风险标签
+- `registry`：因子注册、模型注册、实验注册、快照注册
 
 ---
 
@@ -601,6 +650,60 @@ MVP：
 | level2_name | varchar | 二级行业名称 |
 | effective_date | date | 生效日 |
 | expire_date | date | 失效日 |
+
+### 8.2.9 market_financials_pit
+PIT财务表
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| stock_id | bigint | 股票ID |
+| report_period | date | 报告期 |
+| effective_date | date | 生效日期 |
+| announce_date | date | 公告日 |
+| source_priority | int | 来源优先级（正式>快报>预告） |
+| revision_no | int | 修订版本号 |
+| revenue | numeric | 营收 |
+| net_profit | numeric | 净利润 |
+| total_assets | numeric | 总资产 |
+| total_equity | numeric | 净资产 |
+| operating_cashflow | numeric | 经营现金流 |
+| gross_margin | numeric | 毛利率 |
+| roe | numeric | ROE |
+| roa | numeric | ROA |
+| pe_ttm | numeric | PE |
+| pb | numeric | PB |
+| ps_ttm | numeric | PS |
+| asset_liability_ratio | numeric | 资产负债率 |
+| snapshot_id | varchar | 快照ID |
+
+PK: (stock_id, report_period, effective_date, revision_no)
+
+### 8.2.10 market_analyst_estimates_pit
+分析师PIT表
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| stock_id | bigint | 股票ID |
+| effective_date | date | 生效日期 |
+| consensus_eps_fy0 | numeric | 一致预期EPS(FY0) |
+| consensus_eps_fy1 | numeric | 一致预期EPS(FY1) |
+| analyst_coverage | int | 分析师覆盖数 |
+| rating_mean | numeric | 平均评级 |
+| snapshot_id | varchar | 快照ID |
+
+PK: (stock_id, effective_date)
+
+### 8.2.11 market_northbound_daily
+北向资金表
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| trade_date | date | 交易日 |
+| stock_id | bigint | 股票ID |
+| net_buy | numeric | 净买入 |
+| hold_change | numeric | 持股变化 |
+
+PK: (trade_date, stock_id)
 
 ---
 
@@ -1027,6 +1130,156 @@ MVP：
 
 ---
 
+## 8.11 事件中心相关
+
+### 8.11.1 event_center
+事件中心表
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| event_id | bigint PK | 事件ID |
+| stock_id | bigint | 股票ID |
+| event_type | varchar | 事件类型 |
+| event_subtype | varchar | 事件子类型 |
+| event_date | date | 事件日期 |
+| effective_date | date | 生效日期 |
+| expire_date | date | 失效日期 |
+| severity | varchar | 严重程度 |
+| score | numeric | 事件分数 |
+| title | text | 标题 |
+| content | text | 内容 |
+| source | varchar | 来源 |
+| snapshot_id | varchar | 快照ID |
+
+### 8.11.2 risk_flag_daily
+风险标签日表
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| trade_date | date | 交易日 |
+| stock_id | bigint | 股票ID |
+| blacklist_flag | boolean | 黑名单标记 |
+| audit_issue_flag | boolean | 审计异常 |
+| violation_flag | boolean | 违规标记 |
+| pledge_high_flag | boolean | 高质押 |
+| goodwill_high_flag | boolean | 高商誉 |
+| earnings_warning_flag | boolean | 业绩预警 |
+| reduction_flag | boolean | 减持标记 |
+| cashflow_risk_flag | boolean | 现金流风险 |
+| risk_penalty_score | numeric | 风险惩罚分 |
+
+PK: (trade_date, stock_id)
+
+---
+
+## 8.12 治理与监控相关
+
+### 8.12.1 data_snapshot_registry
+数据快照注册表
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| snapshot_id | varchar PK | 快照ID |
+| snapshot_date | date | 快照日期 |
+| description | text | 描述 |
+| source_version_json | text | 数据源版本 |
+| created_at | timestamp | 创建时间 |
+
+### 8.12.2 factor_metadata
+因子元数据表
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| factor_name | varchar PK | 因子名 |
+| factor_group | varchar | 因子组 |
+| description | text | 描述 |
+| formula | text | 公式 |
+| source_table | varchar | 来源表 |
+| pit_required | boolean | 是否PIT |
+| direction | int | 方向 |
+| frequency | varchar | 频率 |
+| status | varchar | 状态(experimental/candidate/production/deprecated) |
+| version | varchar | 版本 |
+| created_at | timestamp | 创建时间 |
+
+### 8.12.3 model_registry
+模型注册表
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| model_id | varchar PK | 模型ID |
+| model_name | varchar | 模型名 |
+| model_type | varchar | 模型类型 |
+| feature_set_version | varchar | 特征集版本 |
+| label_version | varchar | 标签版本 |
+| train_start | date | 训练开始 |
+| train_end | date | 训练结束 |
+| valid_start | date | 验证开始 |
+| valid_end | date | 验证结束 |
+| params_json | text | 超参数 |
+| oof_metric_json | text | OOF指标 |
+| status | varchar | 状态 |
+| created_at | timestamp | 创建时间 |
+
+### 8.12.4 experiment_registry
+实验注册表
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| experiment_id | varchar PK | 实验ID |
+| experiment_name | varchar | 实验名 |
+| snapshot_id | varchar | 快照ID |
+| config_version | varchar | 配置版本 |
+| code_version | varchar | 代码版本 |
+| result_summary | text | 结果摘要 |
+| status | varchar | 状态 |
+| created_at | timestamp | 创建时间 |
+
+### 8.12.5 monitor_factor_health
+因子健康监控表
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| trade_date | date | 交易日 |
+| factor_name | varchar | 因子名 |
+| coverage_rate | numeric | 覆盖率 |
+| missing_rate | numeric | 缺失率 |
+| ic_rolling | numeric | 滚动IC |
+| psi | numeric | PSI |
+| health_status | varchar | 健康状态 |
+
+PK: (trade_date, factor_name)
+
+### 8.12.6 monitor_model_health
+模型健康监控表
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| trade_date | date | 交易日 |
+| model_id | varchar | 模型ID |
+| prediction_drift | numeric | 预测漂移 |
+| feature_importance_drift | numeric | 特征重要性漂移 |
+| oos_score | numeric | OOS分数 |
+| health_status | varchar | 健康状态 |
+
+PK: (trade_date, model_id)
+
+### 8.12.7 alert_logs
+告警日志表
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| alert_id | bigint PK | 告警ID |
+| alert_time | timestamp | 告警时间 |
+| alert_type | varchar | 告警类型 |
+| severity | varchar | 严重程度 |
+| object_type | varchar | 对象类型 |
+| object_name | varchar | 对象名 |
+| message | text | 消息 |
+| resolved_flag | boolean | 是否已解决 |
+
+---
+
 # 9. 表关系说明
 
 核心关系如下：
@@ -1046,6 +1299,11 @@ MVP：
 - `research_models` 1:N `portfolio_simulated_portfolios`
 - `product_products` N:1 `research_models`
 - `product_products` 1:N `product_reports`
+- `event_center` N:1 `market_stocks`
+- `risk_flag_daily` N:1 `market_stocks`
+- `factor_metadata` 1:N `research_factor_values`
+- `model_registry` 1:N `research_model_scores`
+- `data_snapshot_registry` referenced by all key result tables
 
 ---
 
@@ -1158,18 +1416,24 @@ MVP：
 ## 12.1 日终任务链
 建议顺序：
 
-1. `data_sync_market`
-2. `data_sync_financial`
-3. `data_quality_check`
-4. `stock_pool_snapshot_generate`
-5. `factor_calc_run`
-6. `model_score_run`
-7. `timing_signal_run`
-8. `target_portfolio_generate`
-9. `risk_check_run`
-10. `rebalance_order_generate`
-11. `report_generate`
-12. `notify_push`
+1. `data_sync_calendar`
+2. `data_sync_market`
+3. `data_sync_status`
+4. `data_sync_financial`
+5. `data_sync_event`
+6. `data_quality_check`
+7. `data_snapshot_generate`
+8. `stock_pool_snapshot_generate`
+9. `factor_preprocess_pipeline`
+10. `module_score_run`（quality_growth/expectation/residual_momentum/flow_confirm/risk_penalty）
+11. `signal_fusion_run`（dynamic_IC + regime_adjust + high_corr_shrinkage）
+12. `ml_enhanced_rank`（optional）
+13. `risk_budget_timing_signal`
+14. `target_portfolio_generate`（hierarchical_weight + risk_discount + industry_constraint）
+15. `risk_check_run`（blacklist + risk_penalty + portfolio_risk_control）
+16. `rebalance_order_generate`
+17. `factor_health_check`
+18. `report_generate_and_notify`
 
 ## 12.2 回测任务链
 1. 参数校验
@@ -1229,6 +1493,10 @@ MVP：
 - 回测任务成功率
 - 报告生成耗时
 - 每日任务完成时点
+- 因子健康监控（IC/IR/PSI/覆盖率）
+- 模型漂移监控（预测分布漂移/特征重要性变化）
+- 组合风控监控（行业暴露/风格暴露/拥挤度）
+- 实盘偏差监控（理想vs实际成交）
 
 ## 14.3 告警场景
 - 数据同步失败
@@ -1298,6 +1566,11 @@ MVP：
 - 模拟组合主流程
 - 风险事件表
 - 产品和订阅表
+- 事件中心表
+- 风险标签表
+- 因子元数据表
+- 模型注册表
+- 数据快照注册表
 
 ### P1
 - ClickHouse 分析库
@@ -1306,7 +1579,7 @@ MVP：
 - 更复杂的任务编排
 
 ### P2
-- 机器学习模型服务化
+- 已支持ML增强排序（Ridge+LightGBM+规则fallback）
 - 实时信号推送
 - 更细粒度风控引擎
 
@@ -1331,3 +1604,12 @@ MVP：
 - 保留服务化、机器学习增强、多租户扩展空间
 
 ---
+
+# 19. 版本历史
+
+| 版本 | 日期 | 主要变更 |
+|---|---|---|
+| V1.0 | 2026-03 | 初始版本 |
+| V2.0 | 2026-04 | 新增性能优化（N+1消除、并行化、缓存、连接池）、回测优化、复合索引 |
+| V2.1 | 2026-04 | 完善模块拆分、补充数据流与任务链 |
+| V2.2 | 2026-04 | 新增事件中心/风险标签/因子元数据/模型注册/实验注册/快照注册/因子健康监控/模型健康监控/告警日志等表；新增PIT财务表/分析师PIT表/北向资金表；架构原则增加配置驱动与数据分层；业务服务层增加事件中心/风险惩罚/因子元数据注册/模型注册实验管理/数据快照服务；任务调度层增加事件同步/因子健康检查/模型漂移监控/快照生成任务；数据管理模块增加事件同步/快照/PIT版本管理/分析师北向对齐；股票池模块增加风险事件过滤/黑名单硬过滤；因子模块增加元数据管理/研究流程/统一预处理/模块重组；模型模块增加状态机/动态权重收缩/ML增强排序/置信度/注册表；择时简化为风险预算，组合增加分层赋权/风险折扣/双轨制/换手控制；风控模块增加黑名单/风险惩罚/组合风控/极端保护/全链路监控/自动响应；日终流水线更新为18步；数据库增加event/registry schema；表关系增加新表关联；监控指标增加因子/模型/组合/实盘四类监控；MVP P0增加五张新表；P2更新ML增强排序 |

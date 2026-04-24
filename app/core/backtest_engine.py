@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from sqlalchemy.orm import Session
 from app.core.logging import logger
+from app.core.config import settings
 
 
 # A股交易成本常量 (ADD 11节)
@@ -23,11 +24,19 @@ DEFAULT_SLIPPAGE_RATE = 0.001      # 默认滑点 0.1%
 MIN_COMMISSION = 5.0               # 最低佣金5元
 
 # 涨跌停限制 (ADD 12.4节)
-MAIN_BOARD_LIMIT = 0.10   # 主板 10%
-GEM_LIMIT = 0.20          # 创业板 20%
-STAR_LIMIT = 0.20         # 科创板 20%
-ST_LIMIT = 0.05           # ST 5%
-NORTH_LIMIT = 0.20        # 北交所 20%
+# 注意: pct_chg在数据源中为百分比形式(如10.0表示10%), 以下常量也使用百分比
+MAIN_BOARD_LIMIT_PCT = 10.0   # 主板 10%
+GEM_LIMIT_PCT = 20.0         # 创业板 20%
+STAR_LIMIT_PCT = 20.0        # 科创板 20%
+ST_LIMIT_PCT = 5.0          # ST 5%
+NORTH_LIMIT_PCT = 20.0       # 北交所 20%
+
+# 保留旧常量名(小数形式)以兼容外部引用
+MAIN_BOARD_LIMIT = 0.10
+GEM_LIMIT = 0.20
+STAR_LIMIT = 0.20
+ST_LIMIT = 0.05
+NORTH_LIMIT = 0.20
 
 # 交易单位
 LOT_SIZE = 100  # A股最小交易单位100股
@@ -290,28 +299,32 @@ class ABShareBacktestEngine:
         return 'main'
 
     def get_limit_pct(self, board_type: str, is_st: bool = False) -> float:
-        """获取涨跌停比例"""
+        """获取涨跌停比例(百分比形式, 如10.0表示10%)"""
         if is_st:
-            return ST_LIMIT
+            return ST_LIMIT_PCT
         limits = {
-            'main': MAIN_BOARD_LIMIT,
-            'gem': GEM_LIMIT,
-            'star': STAR_LIMIT,
-            'north': NORTH_LIMIT,
+            'main': MAIN_BOARD_LIMIT_PCT,
+            'gem': GEM_LIMIT_PCT,
+            'star': STAR_LIMIT_PCT,
+            'north': NORTH_LIMIT_PCT,
         }
-        return limits.get(board_type, MAIN_BOARD_LIMIT)
+        return limits.get(board_type, MAIN_BOARD_LIMIT_PCT)
 
     def is_limit_up(self, pct_chg: float, board_type: str = 'main',
                     is_st: bool = False) -> bool:
-        """判断是否涨停 (ADD 12.4节)"""
-        limit = self.get_limit_pct(board_type, is_st)
-        return pct_chg >= (limit * 100 - 0.01)  # 允许0.01%误差
+        """判断是否涨停 (ADD 12.4节)
+        pct_chg为百分比形式(如10.0表示10%)
+        """
+        limit_pct = self.get_limit_pct(board_type, is_st)
+        return pct_chg >= (limit_pct - 0.01)  # 允许0.01%误差
 
     def is_limit_down(self, pct_chg: float, board_type: str = 'main',
                       is_st: bool = False) -> bool:
-        """判断是否跌停"""
-        limit = self.get_limit_pct(board_type, is_st)
-        return pct_chg <= -(limit * 100 - 0.01)
+        """判断是否跌停
+        pct_chg为百分比形式(如-10.0表示-10%)
+        """
+        limit_pct = self.get_limit_pct(board_type, is_st)
+        return pct_chg <= -(limit_pct - 0.01)
 
     def round_lot(self, shares: float) -> int:
         """调整为100股整数倍 (ADD 12.4节)"""
@@ -680,7 +693,8 @@ class ABShareBacktestEngine:
 
         # 成本侵蚀率
         total_cost = sum(t.get('total_cost', 0) for t in trade_records)
-        cost_erosion = total_cost / (nav_df['total_value'].iloc[-1] - nav_df['total_value'].iloc[0]) if nav_df['total_value'].iloc[-1] != nav_df['total_value'].iloc[0] else 0
+        value_change = nav_df['total_value'].iloc[-1] - nav_df['total_value'].iloc[0]
+        cost_erosion = total_cost / abs(value_change) if abs(value_change) > 1e-6 else 0
 
         result = {
             'total_return': round(cum_return, 4),
@@ -714,7 +728,8 @@ class ABShareBacktestEngine:
 
                 # Alpha/Beta
                 beta = aligned_ret.cov(aligned_bm) / aligned_bm.var() if aligned_bm.var() > 0 else 0
-                alpha = annual_return - (0.03 + beta * (bm_annual_return - 0.03))
+                rf = settings.backtest.RISK_FREE_RATE
+                alpha = annual_return - (rf + beta * (bm_annual_return - rf))
 
                 # 信息比率
                 excess_ret = aligned_ret - aligned_bm
@@ -1185,8 +1200,24 @@ class ABShareBacktestEngine:
         prev_weights = pd.Series(dtype=float)  # 上期权重
 
         if trading_days is None:
-            # 简化: 生成工作日
-            trading_days = pd.bdate_range(start_date, end_date).date.tolist()
+            # 尝试从数据库获取交易日历
+            try:
+                from app.db.base import SessionLocal
+                from app.models.market import TradingCalendar
+                db = SessionLocal()
+                cal = db.query(TradingCalendar).filter(
+                    TradingCalendar.cal_date >= start_date.strftime('%Y%m%d'),
+                    TradingCalendar.cal_date <= end_date.strftime('%Y%m%d'),
+                    TradingCalendar.is_open == 1,
+                ).order_by(TradingCalendar.cal_date).all()
+                db.close()
+                if cal:
+                    trading_days = [pd.Timestamp(c.cal_date).date() for c in cal]
+                else:
+                    raise ValueError("No trading calendar data")
+            except Exception:
+                logger.warning("Trading calendar unavailable, using business days (may include non-A-share holidays)")
+                trading_days = pd.bdate_range(start_date, end_date).date.tolist()
 
         # 构建交易日索引映射，用于查找下一交易日
         trading_day_to_idx = {td: i for i, td in enumerate(trading_days)}

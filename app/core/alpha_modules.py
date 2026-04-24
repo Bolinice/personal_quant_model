@@ -90,11 +90,14 @@ class AlphaModule(ABC):
                         ic_series = aligned.groupby(level=1 if aligned.index.nlevels > 1 else 0).apply(
                             lambda x: x['factor'].corr(x['return'], method='spearman')
                         )
+                        ic_clean = ic_series.dropna()
+                        ic_mean = float(ic_clean.mean()) if len(ic_clean) > 0 else 0
+                        ic_std = float(ic_clean.std()) if len(ic_clean) > 0 else 0
                         ic_stats[factor_name] = {
-                            'mean_ic': float(ic_series.mean()),
-                            'ir': float(ic_series.mean() / ic_vals.std()) if (ic_vals := ic_series.dropna()).std() > 0 else 0,
-                            'ic_ir': float(ic_series.mean() / ic_series.std()) if ic_series.std() > 0 else 0,
-                            'win_rate': float((ic_series > 0).mean()),
+                            'mean_ic': ic_mean,
+                            'ir': ic_mean / ic_std if ic_std > 0 else 0,
+                            'ic_ir': ic_mean / ic_std if ic_std > 0 else 0,
+                            'win_rate': float((ic_clean > 0).mean()) if len(ic_clean) > 0 else 0,
                         }
             result['ic_stats'] = ic_stats
 

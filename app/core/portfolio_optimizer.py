@@ -1126,3 +1126,57 @@ class PortfolioOptimizer:
         except Exception as e:
             logger.warning(f"HRP failed: {e}, falling back to equal weight")
             return pd.Series(1.0 / n, index=index)
+
+    def _hrp_recursive_split(self, cluster_node, cov_matrix: np.ndarray) -> np.ndarray:
+        """
+        HRP递归二分分配 (Lopez de Prado 2016)
+        按聚类树拓扑结构递归分配权重:
+        1. 将当前节点分为左右子树
+        2. 按逆方差比例分配权重给左右子树
+        3. 递归到叶节点
+
+        Args:
+            cluster_node: scipy聚类树节点
+            cov_matrix: 协方差矩阵
+
+        Returns:
+            权重向量 (n,)
+        """
+        from scipy.cluster.hierarchy import ClusterNode
+
+        # 叶节点: 返回1(后续归一化)
+        if not cluster_node.left and not cluster_node.right:
+            weights = np.zeros(cov_matrix.shape[0])
+            weights[cluster_node.id] = 1.0
+            return weights
+
+        # 获取左右子树的叶子索引
+        left_items = self._get_cluster_items(cluster_node.left)
+        right_items = self._get_cluster_items(cluster_node.right)
+
+        # 逆方差比例分配
+        left_var = np.mean(np.diag(cov_matrix)[left_items]) if len(left_items) > 0 else 1e10
+        right_var = np.mean(np.diag(cov_matrix)[right_items]) if len(right_items) > 0 else 1e10
+
+        # 权重与方差成反比
+        alpha = 1.0 - left_var / (left_var + right_var) if (left_var + right_var) > 0 else 0.5
+
+        # 递归
+        left_weights = self._hrp_recursive_split(cluster_node.left, cov_matrix)
+        right_weights = self._hrp_recursive_split(cluster_node.right, cov_matrix)
+
+        return alpha * left_weights + (1 - alpha) * right_weights
+
+    @staticmethod
+    def _get_cluster_items(cluster_node) -> List[int]:
+        """获取聚类节点下所有叶节点的索引列表"""
+        if cluster_node is None:
+            return []
+        if cluster_node.left is None and cluster_node.right is None:
+            return [cluster_node.id]
+        items = []
+        if cluster_node.left:
+            items.extend(PortfolioOptimizer._get_cluster_items(cluster_node.left))
+        if cluster_node.right:
+            items.extend(PortfolioOptimizer._get_cluster_items(cluster_node.right))
+        return items

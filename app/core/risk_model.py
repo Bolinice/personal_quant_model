@@ -472,12 +472,14 @@ class RiskModel:
 
         # EWMA协方差
         decay = 1 - np.exp(-np.log(2) / halflife)
-        ewma_cov = factor_returns_df.ewm(alpha=decay).cov().iloc[-len(factor_returns_df.columns):]
+        ewm_result = factor_returns_df.ewm(alpha=decay).cov()
 
-        if isinstance(ewma_cov, pd.DataFrame):
-            cov = ewma_cov.values
+        # pandas ewm().cov()返回MultiIndex (date, asset), 取最后一个时间截面
+        if isinstance(ewm_result.index, pd.MultiIndex):
+            last_date = ewm_result.index.get_level_values(0)[-1]
+            cov = ewm_result.loc[last_date].values
         else:
-            cov = factor_returns_df.cov().values
+            cov = ewm_result.values
 
         # 特征值裁剪
         try:

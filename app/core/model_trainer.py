@@ -549,10 +549,14 @@ class ModelTrainer:
                     model = lgb.Booster(model_file=lgbm_path)
                 else:
                     booster = lgb.Booster(model_file=lgbm_path)
-                    # 包装为LGBMRegressor以支持predict
+                    # 使用sklearn兼容方式加载: 先创建空模型再注入Booster
                     model = lgb.LGBMRegressor()
-                    model._Booster = booster
+                    model.booster_ = booster  # 公开API
+                    model._Booster = booster  # 兼容旧版本
                     model.fitted_ = True
+                    # 设置n_features_in_避免sklearn check_is_fitted失败
+                    if 'factor_cols' in save_data:
+                        model.n_features_in_ = len(save_data['factor_cols'])
             except Exception as e:
                 logger.warning(f"Failed to load LightGBM model: {e}")
         elif 'model_pickle' in save_data:

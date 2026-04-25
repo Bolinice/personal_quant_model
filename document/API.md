@@ -1,7 +1,7 @@
 # 一、《A股多因子增强策略平台 API 接口文档》
 
-**文档版本**：V1.1
-**产品文档版本**：V2.2  
+**文档版本**：V1.3
+**关联文档**：PRD V2.4、算法设计说明书 V2.1、技术架构与数据库设计 V2.3
 **适用范围**：MVP / V2.0  
 **接口风格**：RESTful JSON API  
 **鉴权方式**：JWT Bearer Token  
@@ -414,6 +414,36 @@ X-Request-Id: <uuid>
 |---|---|---|
 | category | string | quality/valuation/momentum |
 | status | string | active/inactive |
+| preprocess_pipeline | string | 预处理管线（standard=10步管线：缺失值处理→去极值MAD→标准化Z-score→中性化→…） |
+
+#### 响应示例
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "items": [
+      {
+        "id": 1,
+        "factor_code": "roe",
+        "factor_name": "净资产收益率",
+        "category": "quality",
+        "direction": "desc",
+        "status": "active",
+        "factor_group": "quality",
+        "coverage_rate": 0.95,
+        "ic_mean": 0.032,
+        "ic_std": 0.045,
+        "ir": 0.71,
+        "last_updated": "2026-04-22"
+      }
+    ],
+    "page": 1,
+    "page_size": 20,
+    "total": 1
+  }
+}
+```
 
 ---
 
@@ -592,7 +622,7 @@ P1 再扩展 IC、分层收益。
 
 ---
 
-# 7. 择时接口
+# 7. 择时与市场状态接口
 
 ---
 
@@ -603,6 +633,32 @@ P1 再扩展 IC、分层收益。
 ```json
 {
   "trade_date": "2026-03-31"
+}
+```
+
+#### 响应示例
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "model_id": 1,
+    "trade_date": "2026-03-31",
+    "signal": "bullish",
+    "target_position": 1.0,
+    "position_tier": "full",
+    "position_options": {
+      "defensive": 0.3,
+      "neutral": 0.6,
+      "offensive": 0.8,
+      "full": 1.0
+    },
+    "drawdown_protection": {
+      "current_drawdown": -0.02,
+      "protection_active": false,
+      "protection_threshold": -0.05
+    }
+  }
 }
 ```
 
@@ -620,6 +676,77 @@ P1 再扩展 IC、分层收益。
 
 ---
 
+## 7.3 查询市场状态 (Regime)
+
+### GET `/api/v1/monitor/regime`
+
+#### 查询参数
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| trade_date | string | 否 | 交易日（默认最近交易日） |
+
+#### 响应示例
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "trade_date": "2026-04-24",
+    "regime": "trending",
+    "regime_detail": {
+      "trend_strength": 0.65,
+      "breadth": 0.58,
+      "volatility_level": "medium",
+      "size_gap": 0.02
+    },
+    "module_weight_adjustment": {
+      "quality_growth": 0.30,
+      "expectation": 0.25,
+      "residual_momentum": 0.30,
+      "flow_confirm": 0.15
+    }
+  }
+}
+```
+
+---
+
+## 7.4 查询日终流水线存档
+
+### GET `/api/v1/models/{model_id}/daily-archive`
+
+#### 查询参数
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| trade_date | string | 是 | 交易日 |
+
+#### 响应示例
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "trade_date": "2026-04-24",
+    "target_weights": [],
+    "final_score": {},
+    "module_scores": {
+      "quality_growth": {},
+      "expectation": {},
+      "residual_momentum": {},
+      "flow_confirm": {},
+      "risk_penalty": {}
+    },
+    "regime": "trending",
+    "risk_exposure": {
+      "industry_deviation": {},
+      "style_exposure": {}
+    }
+  }
+}
+```
+
+---
+
 # 8. 组合与调仓接口
 
 ---
@@ -630,9 +757,18 @@ P1 再扩展 IC、分层收益。
 
 ```json
 {
-  "trade_date": "2026-03-31"
+  "trade_date": "2026-03-31",
+  "method": "layered",
+  "risk_discount": true
 }
 ```
+
+#### 请求参数
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| trade_date | string | 是 | 交易日 |
+| method | string | 否 | 赋权模式：equal_weight（等权）/ layered（分层赋权）/ optimize（优化赋权），默认 equal_weight |
+| risk_discount | bool | 否 | 是否启用风险折价（基于波动率/相关性调整权重），默认 false |
 
 #### 响应示例
 ```json
@@ -708,9 +844,28 @@ P1 再扩展 IC、分层收益。
   "initial_capital": 1000000,
   "commission_rate": 0.0003,
   "stamp_tax_rate": 0.001,
-  "slippage_rate": 0.0005
+  "slippage_rate": 0.0005,
+  "robustness_test": true,
+  "stress_test": true,
+  "attribution": "module"
 }
 ```
+
+#### 请求参数
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| model_id | int | 是 | 模型ID |
+| job_name | string | 是 | 任务名称 |
+| benchmark_code | string | 是 | 基准指数代码 |
+| start_date | string | 是 | 回测开始日期 |
+| end_date | string | 是 | 回测结束日期 |
+| initial_capital | float | 是 | 初始资金 |
+| commission_rate | float | 否 | 佣金费率 |
+| stamp_tax_rate | float | 否 | 印花税费率 |
+| slippage_rate | float | 否 | 滑点费率 |
+| robustness_test | bool | 否 | 是否执行鲁棒性检验（多期滚动/参数敏感性/子样本稳定性），默认 false |
+| stress_test | bool | 否 | 是否执行压力测试（极端行情/流动性危机/黑天鹅场景），默认 false |
+| attribution | string | 否 | 归因分析维度：module（模块归因）/ industry（行业归因）/ style（风格归因）/ timing（择时归因），支持多选以逗号分隔 |
 
 #### 响应
 ```json
@@ -765,6 +920,9 @@ P1 再扩展 IC、分层收益。
     "calmar": 0.86,
     "information_ratio": 0.65,
     "turnover_rate": 1.8,
+    "win_rate": 0.55,
+    "profit_loss_ratio": 1.2,
+    "cost_erosion_rate": 0.02,
     "report_path": "/reports/backtest_1001.pdf"
   }
 }
@@ -1073,12 +1231,369 @@ P1 再扩展 IC、分层收益。
 
 ---
 
-# 16. 权限建议
+# 16. 事件中心接口
 
-## 16.1 管理员
+---
+
+## 16.1 查询事件列表
+
+### GET `/api/v1/events`
+
+#### 查询参数
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| stock_id | int | 否 | 股票ID |
+| event_type | string | 否 | 事件类型（earnings/regulatory/corporate/macro等） |
+| severity | string | 否 | 严重程度（info/warning/critical） |
+| start_date | string | 否 | 开始日期 |
+| end_date | string | 否 | 结束日期 |
+| page | int | 否 | 页码 |
+| page_size | int | 否 | 每页数量 |
+
+---
+
+## 16.2 获取事件详情
+
+### GET `/api/v1/events/{event_id}`
+
+---
+
+## 16.3 查询风险标签
+
+### GET `/api/v1/risk-flags`
+
+#### 查询参数
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| trade_date | string | 是 | 交易日 |
+| stock_id | int | 否 | 股票ID |
+
+---
+
+## 16.4 查询当前黑名单列表
+
+### GET `/api/v1/risk-flags/blacklist`
+
+---
+
+# 17. 因子元数据接口
+
+---
+
+## 17.1 查询因子元数据列表
+
+### GET `/api/v1/factor-metadata`
+
+#### 查询参数
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| factor_group | string | 否 | 因子分组（price/fundamental/revision/capital_flow等） |
+| status | string | 否 | 状态（active/inactive/candidate） |
+| page | int | 否 | 页码 |
+| page_size | int | 否 | 每页数量 |
+
+---
+
+## 17.2 获取因子详情
+
+### GET `/api/v1/factor-metadata/{factor_name}`
+
+#### 说明
+返回因子完整元数据，包含：
+- 因子逻辑与公式
+- 数据覆盖率
+- IC统计（IC均值/IC标准差/IR/IC胜率）
+- 预处理管线配置
+- 分层回测收益
+
+---
+
+## 17.3 提交因子研究任务
+
+### POST `/api/v1/factor-research`
+
+```json
+{
+  "factor_name": "momentum_20d",
+  "factor_expression": "close / close.shift(20) - 1",
+  "factor_group": "price",
+  "universe": "CSI500",
+  "start_date": "2020-01-01",
+  "end_date": "2025-12-31"
+}
+```
+
+#### 说明
+提交因子研究任务，系统执行7关闸门检查：
+1. 数据覆盖率检查（>80%）
+2. IC显著性检验（t值>2）
+3. IC稳定性检验（IR>0.5）
+4. 换手率检查（<50%）
+5. 单调性检验（分层收益单调）
+6. 正交性检验（与已有因子相关性<0.6）
+7. 样本外检验（OOS IC衰减<30%）
+
+#### 响应
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "task_id": "fr_20260424_001",
+    "status": "pending"
+  }
+}
+```
+
+---
+
+## 17.4 查询因子研究结果
+
+### GET `/api/v1/factor-research/{task_id}`
+
+---
+
+# 18. 模型注册接口
+
+---
+
+## 18.1 查询模型列表
+
+### GET `/api/v1/model-registry`
+
+#### 查询参数
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| model_type | string | 否 | 模型类型（linear/tree/nn/ensemble等） |
+| status | string | 否 | 状态（candidate/champion/retired） |
+| page | int | 否 | 页码 |
+| page_size | int | 否 | 每页数量 |
+
+---
+
+## 18.2 获取模型详情
+
+### GET `/api/v1/model-registry/{model_id}`
+
+#### 说明
+返回模型完整信息，包含：
+- 模型参数配置
+- OOF（Out-of-Fold）指标
+- 特征集与特征重要性
+- 训练样本区间
+- 版本历史
+
+---
+
+## 18.3 注册新模型
+
+### POST `/api/v1/model-registry`
+
+```json
+{
+  "model_name": "XGB_CSI500_V2",
+  "model_type": "tree",
+  "hyperparameters": {
+    "n_estimators": 500,
+    "max_depth": 6,
+    "learning_rate": 0.05
+  },
+  "feature_set": ["roe", "ep", "momentum_20d", "volatility_20d"],
+  "training_period": {
+    "start_date": "2018-01-01",
+    "end_date": "2025-12-31"
+  },
+  "oof_metrics": {
+    "ic": 0.045,
+    "ir": 0.82,
+    "rank_ic": 0.052
+  }
+}
+```
+
+---
+
+## 18.4 查询实验列表
+
+### GET `/api/v1/experiments`
+
+#### 查询参数
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| model_type | string | 否 | 模型类型筛选 |
+| status | string | 否 | 状态筛选 |
+| page | int | 否 | 页码 |
+| page_size | int | 否 | 每页数量 |
+
+---
+
+## 18.5 获取实验详情
+
+### GET `/api/v1/experiments/{experiment_id}`
+
+---
+
+# 19. 数据快照接口
+
+---
+
+## 19.1 查询快照列表
+
+### GET `/api/v1/snapshots`
+
+#### 查询参数
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| start_date | string | 否 | 开始日期 |
+| end_date | string | 否 | 结束日期 |
+| page | int | 否 | 页码 |
+| page_size | int | 否 | 每页数量 |
+
+---
+
+## 19.2 获取快照详情
+
+### GET `/api/v1/snapshots/{snapshot_id}`
+
+#### 说明
+返回快照完整信息，包含：
+- 数据源版本（Tushare/AKShare数据时间戳）
+- 代码版本（Git commit hash）
+- 配置版本（因子配置/模型参数快照）
+- 生成时间与耗时
+
+---
+
+## 19.3 手动触发快照生成
+
+### POST `/api/v1/snapshots`
+
+```json
+{
+  "snapshot_type": "daily",
+  "description": "手动触发的日终快照"
+}
+```
+
+#### 响应
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "snapshot_id": "snap_20260424_001",
+    "status": "pending"
+  }
+}
+```
+
+---
+
+# 20. 监控告警接口
+
+---
+
+## 20.1 查询因子健康状态
+
+### GET `/api/v1/monitor/factor-health`
+
+#### 查询参数
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| trade_date | string | 否 | 交易日（默认最近交易日） |
+| factor_group | string | 否 | 因子分组筛选 |
+
+#### 说明
+返回因子健康指标：IC、IR、PSI（群体稳定性指数）、覆盖率。
+
+---
+
+## 20.2 查询模型健康状态
+
+### GET `/api/v1/monitor/model-health`
+
+#### 查询参数
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| model_id | int | 否 | 模型ID |
+| trade_date | string | 否 | 交易日 |
+
+#### 说明
+返回模型健康指标：预测漂移、特征重要性变化、OOS偏差。
+
+---
+
+## 20.3 查询组合监控
+
+### GET `/api/v1/monitor/portfolio`
+
+#### 查询参数
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| model_id | int | 否 | 模型ID |
+| trade_date | string | 否 | 交易日 |
+
+#### 说明
+返回组合监控指标：行业暴露、风格暴露、拥挤度、换手率。
+
+---
+
+## 20.4 查询实盘偏差监控
+
+### GET `/api/v1/monitor/live-tracking`
+
+#### 查询参数
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| model_id | int | 否 | 模型ID |
+| start_date | string | 否 | 开始日期 |
+| end_date | string | 否 | 结束日期 |
+
+#### 说明
+返回实盘偏差监控指标：成交偏差、成本偏差、回撤。
+
+---
+
+## 20.5 查询告警列表
+
+### GET `/api/v1/monitor/alerts`
+
+#### 查询参数
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| severity | string | 否 | 严重程度（info/warning/critical） |
+| type | string | 否 | 告警类型（factor/model/portfolio/data） |
+| resolved | bool | 否 | 是否已解决 |
+| page | int | 否 | 页码 |
+| page_size | int | 否 | 每页数量 |
+
+---
+
+## 20.6 标记告警已解决
+
+### PUT `/api/v1/monitor/alerts/{alert_id}/resolve`
+
+#### 响应示例
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "alert_id": 101,
+    "resolved": true,
+    "resolved_at": "2026-04-24T10:30:00"
+  }
+}
+```
+
+---
+
+# 21. 权限建议
+
+## 21.1 管理员
 - 全部接口
 
-## 16.2 研究员
+## 21.2 研究员
 - 数据查询
 - 因子
 - 模型
@@ -1086,7 +1601,7 @@ P1 再扩展 IC、分层收益。
 - 模拟组合
 - 报告生成
 
-## 16.3 客户
+## 21.3 客户
 - 我的订阅
 - 产品详情
 - 当前组合
@@ -1095,7 +1610,7 @@ P1 再扩展 IC、分层收益。
 
 ---
 
-# 17. API 开发优先级
+# 22. API 开发优先级
 
 ## P0
 - 认证

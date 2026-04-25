@@ -481,3 +481,127 @@ class TushareDataSource(BaseDataSource):
         except Exception as e:
             logger.error(f"Error getting limit price: {e}")
             return pd.DataFrame()
+
+    # ==================== 股权质押 ====================
+
+    def get_share_pledge(self, ts_code: str = None, start_date: str = None,
+                         end_date: str = None) -> pd.DataFrame:
+        """获取股权质押数据"""
+        if not self._connected:
+            return pd.DataFrame()
+        try:
+            params = {}
+            if ts_code:
+                params['ts_code'] = ts_code
+            if start_date:
+                params['start_date'] = self._format_date(start_date)
+            if end_date:
+                params['end_date'] = self._format_date(end_date)
+            df = self._pro.share_pledge(**params)
+            if df is None or df.empty:
+                return pd.DataFrame()
+            if 'end_date' in df.columns:
+                df['end_date'] = df['end_date'].apply(self._format_date_back)
+            return df
+        except Exception as e:
+            logger.error(f"Error getting share pledge: {e}")
+            return pd.DataFrame()
+
+    # ==================== 前十大股东 ====================
+
+    def get_top10_holders(self, ts_code: str, period: str = None) -> pd.DataFrame:
+        """获取前十大股东数据"""
+        if not self._connected:
+            return pd.DataFrame()
+        try:
+            params = {'ts_code': ts_code}
+            if period:
+                params['period'] = self._format_date(period)
+            df = self._pro.top10_holders(**params)
+            if df is None or df.empty:
+                return pd.DataFrame()
+            if 'ann_date' in df.columns:
+                df['ann_date'] = df['ann_date'].apply(self._format_date_back)
+            if 'end_date' in df.columns:
+                df['end_date'] = df['end_date'].apply(self._format_date_back)
+            return df
+        except Exception as e:
+            logger.error(f"Error getting top10 holders: {e}")
+            return pd.DataFrame()
+
+    # ==================== 机构持仓 ====================
+
+    def get_institutional_holding(self, ts_code: str, start_date: str = None,
+                                   end_date: str = None) -> pd.DataFrame:
+        """获取机构持仓数据 (stk_holdernumber)"""
+        if not self._connected:
+            return pd.DataFrame()
+        try:
+            params = {'ts_code': ts_code}
+            if start_date:
+                params['start_date'] = self._format_date(start_date)
+            if end_date:
+                params['end_date'] = self._format_date(end_date)
+            df = self._pro.stk_holdernumber(**params)
+            if df is None or df.empty:
+                return pd.DataFrame()
+            if 'ann_date' in df.columns:
+                df['ann_date'] = df['ann_date'].apply(self._format_date_back)
+            if 'end_date' in df.columns:
+                df['end_date'] = df['end_date'].apply(self._format_date_back)
+            return df
+        except Exception as e:
+            logger.error(f"Error getting institutional holding: {e}")
+            return pd.DataFrame()
+
+    # ==================== 分析师一致预期 ====================
+
+    def get_analyst_consensus(self, ts_code: str = None, start_date: str = None,
+                               end_date: str = None) -> pd.DataFrame:
+        """获取分析师一致预期数据"""
+        if not self._connected:
+            return pd.DataFrame()
+        try:
+            params = {}
+            if ts_code:
+                params['ts_code'] = ts_code
+            if start_date:
+                params['start_date'] = self._format_date(start_date)
+            if end_date:
+                params['end_date'] = self._format_date(end_date)
+            df = self._pro.consensus_data(**params)
+            if df is None or df.empty:
+                return pd.DataFrame()
+            if 'ann_date' in df.columns:
+                df['ann_date'] = df['ann_date'].apply(self._format_date_back)
+            if 'end_date' in df.columns:
+                df['end_date'] = df['end_date'].apply(self._format_date_back)
+            return df
+        except Exception as e:
+            logger.error(f"Error getting analyst consensus: {e}")
+            return pd.DataFrame()
+
+    # ==================== 资产负债表(含商誉) ====================
+
+    def get_balance_sheet_with_goodwill(self, ts_code: str, period: str = None) -> pd.DataFrame:
+        """获取资产负债表关键字段(含商誉)"""
+        if not self._connected:
+            return pd.DataFrame()
+        try:
+            params = {'ts_code': ts_code}
+            if period:
+                params['period'] = self._format_date(period)
+            df = self._pro.balancesheet(
+                fields='ts_code,ann_date,f_ann_date,end_date,goodwill,total_assets,total_hldr_eqy_exc_min_int',
+                **params
+            )
+            if df is None or df.empty:
+                return pd.DataFrame()
+            if 'ann_date' in df.columns:
+                df['ann_date'] = df['ann_date'].apply(self._format_date_back)
+            if 'end_date' in df.columns:
+                df['end_date'] = df['end_date'].apply(self._format_date_back)
+            return df
+        except Exception as e:
+            logger.error(f"Error getting balance sheet with goodwill: {e}")
+            return pd.DataFrame()

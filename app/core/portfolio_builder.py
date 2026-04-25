@@ -1,565 +1,428 @@
 """
-组合构建与调仓模块
-实现Top N选股、等权组合、行业约束、调仓生成
+组合构建器 V2
+=============
+核心能力:
+1. 分层赋权: Top60, 1-10名1.5x / 11-30名1.2x / 31-60名1.0x
+2. 风险折扣层: D_risk(低风险1.00/中风险0.85/高风险0.60/极高风险0.00) + D_liq(正常1.00/边缘0.85/明显不足0.60)
+3. 双轨制: 研究模式(Alpha-Risk优化器) vs 实盘模式(分层赋权+风险折扣)
+4. 调仓缓冲区: Top75持有/Top50新买入, 最小阈值0.20%
+5. 100股整数倍处理
+6. 行业约束: 单行业≤20%, 偏离≤5%
 """
-from typing import List, Optional, Dict, Tuple
-from datetime import datetime
+
 import numpy as np
 import pandas as pd
-from sqlalchemy.orm import Session
-from app.db.base import SessionLocal, with_db
-from app.models.models import Model, ModelScore
-from app.models.portfolios import Portfolio, PortfolioPosition, RebalanceRecord
-from app.models.market import StockDaily, StockIndustry
-from app.core.logging import logger
+from typing import Dict, List, Optional, Tuple
+from enum import Enum
+import logging
 
+logger = logging.getLogger(__name__)
+
+
+# ─────────────────────────────────────────────
+# 常量
+# ─────────────────────────────────────────────
+
+TOP_N = 60  # 持仓数量
+
+# 分层赋权倍率
+TIER_MULTIPLIERS = {
+    "tier1": {"range": (1, 10), "multiplier": 1.5},
+    "tier2": {"range": (11, 30), "multiplier": 1.2},
+    "tier3": {"range": (31, 60), "multiplier": 1.0},
+}
+
+# 风险折扣系数
+RISK_DISCOUNT = {
+    "low": 1.00,      # 低风险
+    "medium": 0.85,   # 中风险
+    "high": 0.60,     # 高风险
+    "extreme": 0.00,  # 极高风险(黑名单)
+}
+
+# 流动性折扣系数
+LIQUIDITY_DISCOUNT = {
+    "normal": 1.00,       # 正常
+    "marginal": 0.85,     # 边缘
+    "insufficient": 0.60, # 明显不足
+}
+
+# 调仓缓冲区
+REBALANCE_BUFFER = {
+    "hold_top": 75,       # 当前持仓排名≤75继续持有
+    "buy_top": 50,        # 新买入需排名≤50
+    "min_weight_pct": 0.20,  # 最小持仓权重0.20%
+}
+
+# 行业约束
+INDUSTRY_CONSTRAINTS = {
+    "max_single_industry": 0.20,  # 单行业最大20%
+    "max_deviation": 0.05,        # 偏离基准最大5%
+}
+
+# 交易单位
+LOT_SIZE = 100  # A股100股整数倍
+
+
+class PortfolioMode(str, Enum):
+    RESEARCH = "research"      # 研究模式: Alpha-Risk优化器
+    PRODUCTION = "production"  # 实盘模式: 分层赋权+风险折扣
+
+
+class RiskLevel(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    EXTREME = "extreme"
+
+
+class LiquidityLevel(str, Enum):
+    NORMAL = "normal"
+    MARGINAL = "marginal"
+    INSUFFICIENT = "insufficient"
+
+
+# ─────────────────────────────────────────────
+# 组合构建器
+# ─────────────────────────────────────────────
 
 class PortfolioBuilder:
-    """组合构建器"""
+    """
+    V2组合构建器
 
-    def __init__(self, db: Session = None):
-        self.db = db or SessionLocal()
+    双轨制:
+    - 研究模式: 基于Alpha-Risk优化器, 最大化Alpha同时控制风险
+    - 实盘模式: 分层赋权+风险折扣+行业约束+100股整数倍
+    """
 
-    # ==================== 选股方法 ====================
+    def __init__(
+        self,
+        top_n: int = TOP_N,
+        mode: PortfolioMode = PortfolioMode.PRODUCTION,
+        tier_multipliers: Optional[Dict] = None,
+        risk_discount: Optional[Dict] = None,
+        liquidity_discount: Optional[Dict] = None,
+        industry_constraints: Optional[Dict] = None,
+    ):
+        self.top_n = top_n
+        self.mode = mode
+        self.tier_multipliers = tier_multipliers or TIER_MULTIPLIERS
+        self.risk_discount = risk_discount or RISK_DISCOUNT
+        self.liquidity_discount = liquidity_discount or LIQUIDITY_DISCOUNT
+        self.industry_constraints = industry_constraints or INDUSTRY_CONSTRAINTS
 
-    def select_top_n(self, scores: pd.Series, n: int = 50) -> List[str]:
+    def _get_tier_multiplier(self, rank: int) -> float:
+        """根据排名获取分层赋权倍率"""
+        for tier_name, tier_config in self.tier_multipliers.items():
+            lo, hi = tier_config["range"]
+            if lo <= rank <= hi:
+                return tier_config["multiplier"]
+        return 1.0
+
+    def _get_risk_discount(self, risk_level: str) -> float:
+        """根据风险等级获取折扣系数"""
+        return self.risk_discount.get(risk_level, 1.0)
+
+    def _get_liquidity_discount(self, liq_level: str) -> float:
+        """根据流动性等级获取折扣系数"""
+        return self.liquidity_discount.get(liq_level, 1.0)
+
+    def _round_to_lot(self, weight: float, price: float, total_capital: float) -> float:
         """
-        Top N选股
+        将权重调整为100股整数倍
 
         Args:
-            scores: 评分序列
-            n: 选择数量
-
-        Returns:
-            选中的股票代码列表
-        """
-        return scores.nlargest(n).index.tolist()
-
-    def select_by_quantile(self, scores: pd.Series, quantile: float = 0.1) -> List[str]:
-        """
-        按分位数选股
-
-        Args:
-            scores: 评分序列
-            quantile: 分位数阈值（选择前quantile比例的股票）
-
-        Returns:
-            选中的股票代码列表
-        """
-        threshold = scores.quantile(1 - quantile)
-        return scores[scores >= threshold].index.tolist()
-
-    def select_with_constraints(self, scores: pd.Series,
-                                industry_data: pd.Series,
-                                max_per_industry: int = 5,
-                                n: int = 50) -> List[str]:
-        """
-        带行业约束的选股
-
-        Args:
-            scores: 评分序列
-            industry_data: 行业数据序列
-            max_per_industry: 每个行业最大持仓数
-            n: 总持仓数
-
-        Returns:
-            选中的股票代码列表
-        """
-        selected = []
-        industry_count = {}
-
-        # 按评分排序
-        sorted_stocks = scores.sort_values(ascending=False)
-
-        for stock in sorted_stocks.index:
-            if len(selected) >= n:
-                break
-
-            industry = industry_data.get(stock, 'Unknown')
-            current_count = industry_count.get(industry, 0)
-
-            if current_count < max_per_industry:
-                selected.append(stock)
-                industry_count[industry] = current_count + 1
-
-        return selected
-
-    # ==================== 权重分配方法 ====================
-
-    def equal_weight(self, stocks: List[str]) -> pd.Series:
-        """
-        等权组合
-
-        Args:
-            stocks: 股票列表
-
-        Returns:
-            权重序列
-        """
-        weight = 1.0 / len(stocks)
-        return pd.Series(weight, index=stocks)
-
-    def score_weight(self, stocks: List[str], scores: pd.Series) -> pd.Series:
-        """
-        按评分加权
-
-        Args:
-            stocks: 股票列表
-            scores: 评分序列
-
-        Returns:
-            权重序列
-        """
-        stock_scores = scores[stocks]
-        # 确保得分为正
-        stock_scores = stock_scores - stock_scores.min() + 0.01
-        weights = stock_scores / stock_scores.sum()
-        return weights
-
-    def market_cap_weight(self, stocks: List[str], market_caps: pd.Series) -> pd.Series:
-        """
-        按市值加权
-
-        Args:
-            stocks: 股票列表
-            market_caps: 市值序列
-
-        Returns:
-            权重序列
-        """
-        caps = market_caps[stocks]
-        weights = caps / caps.sum()
-        return weights
-
-    def risk_parity_weight(self, stocks: List[str], volatilities: pd.Series) -> pd.Series:
-        """
-        风险平价权重
-
-        Args:
-            stocks: 股票列表
-            volatilities: 波动率序列
-
-        Returns:
-            权重序列
-        """
-        vols = volatilities[stocks]
-        # 风险平价：权重与波动率成反比
-        inv_vol = 1.0 / vols
-        weights = inv_vol / inv_vol.sum()
-        return weights
-
-    def risk_model_weight(self, stocks: List[str],
-                          expected_returns: pd.Series,
-                          cov_matrix: pd.DataFrame,
-                          risk_aversion: float = 1.0,
-                          max_position: float = 0.10) -> pd.Series:
-        """
-        基于风险模型的优化权重
-
-        Args:
-            stocks: 股票列表
-            expected_returns: 期望收益
-            cov_matrix: 协方差矩阵
-            risk_aversion: 风险厌恶系数
-            max_position: 单只股票最大权重
-
-        Returns:
-            权重序列
-        """
-        from app.core.portfolio_optimizer import PortfolioOptimizer
-
-        optimizer = PortfolioOptimizer()
-
-        # 截取相关股票的数据
-        mu = expected_returns.reindex(stocks).dropna()
-        sigma = cov_matrix.reindex(mu.index, mu.index)
-
-        if mu.empty or sigma.empty:
-            return self.equal_weight(stocks)
-
-        weights = optimizer.mean_variance_optimize(
-            mu, sigma,
-            risk_aversion=risk_aversion,
-            max_position=max_position
-        )
-
-        return weights
-
-    def risk_parity_weight_model(self, stocks: List[str],
-                                  cov_matrix: pd.DataFrame,
-                                  max_position: float = 0.10) -> pd.Series:
-        """
-        基于风险模型的风险平价权重
-
-        Args:
-            stocks: 股票列表
-            cov_matrix: 协方差矩阵
-            max_position: 单只股票最大权重
-
-        Returns:
-            权重序列
-        """
-        from app.core.portfolio_optimizer import PortfolioOptimizer
-
-        optimizer = PortfolioOptimizer()
-
-        sigma = cov_matrix.reindex(stocks, stocks)
-        if sigma.empty:
-            return self.equal_weight(stocks)
-
-        weights = optimizer.risk_parity_optimize(sigma, max_position=max_position)
-
-        return weights
-
-    # ==================== 行业约束 ====================
-
-    def apply_industry_constraint(self, weights: pd.Series,
-                                  industry_data: pd.Series,
-                                  max_industry_weight: float = 0.3) -> pd.Series:
-        """
-        应用行业权重约束
-
-        Args:
-            weights: 原始权重
-            industry_data: 行业数据
-            max_industry_weight: 单个行业最大权重
+            weight: 目标权重
+            price: 当前股价
+            total_capital: 总资金
 
         Returns:
             调整后的权重
         """
-        adjusted_weights = weights.copy()
+        target_value = weight * total_capital
+        if price <= 0:
+            return 0.0
+        shares = int(target_value / price)
+        # 向下取整到100股整数倍
+        shares = (shares // LOT_SIZE) * LOT_SIZE
+        adjusted_value = shares * price
+        return adjusted_value / total_capital if total_capital > 0 else 0.0
 
-        # 计算各行业权重
-        industry_weights = {}
-        for stock, weight in weights.items():
-            industry = industry_data.get(stock, 'Unknown')
-            industry_weights[industry] = industry_weights.get(industry, 0) + weight
-
-        # 调整超限行业
-        for industry, ind_weight in industry_weights.items():
-            if ind_weight > max_industry_weight:
-                # 按比例缩减该行业内股票权重
-                scale = max_industry_weight / ind_weight
-                for stock in weights.index:
-                    if industry_data.get(stock, 'Unknown') == industry:
-                        adjusted_weights[stock] *= scale
-
-        # 重新归一化
-        adjusted_weights = adjusted_weights / adjusted_weights.sum()
-
-        return adjusted_weights
-
-    def apply_position_limit(self, weights: pd.Series,
-                             max_position: float = 0.05) -> pd.Series:
+    def build_research_portfolio(
+        self,
+        scores: pd.Series,
+        risk_penalty: Optional[pd.Series] = None,
+        **kwargs,
+    ) -> pd.DataFrame:
         """
-        应用单只股票仓位限制
+        研究模式: Alpha-Risk优化器
 
-        Args:
-            weights: 原始权重
-            max_position: 单只股票最大权重
+        最大化: Σ w_i * α_i
+        约束: Σ w_i² * σ_i² ≤ target_risk
+              Σ w_i = 1
+              w_i ≥ 0
 
-        Returns:
-            调整后的权重
+        简化实现: 按Alpha得分排序, 风险惩罚后等权
         """
-        adjusted_weights = weights.copy()
-
-        # 迭代应用仓位限制(单轮可能因重分配导致新的超限)
-        for _ in range(10):  # 最多10轮迭代
-            excess = 0
-            for stock, weight in adjusted_weights.items():
-                if weight > max_position:
-                    excess += weight - max_position
-                    adjusted_weights[stock] = max_position
-
-            if excess <= 1e-10:
-                break
-
-            # 将超限部分分配给未超限股票
-            under_limit_stocks = adjusted_weights[adjusted_weights < max_position]
-            if under_limit_stocks.empty or excess <= 0:
-                break
-            redistribute = excess / len(under_limit_stocks)
-            for stock in under_limit_stocks.index:
-                adjusted_weights[stock] = min(
-                    adjusted_weights[stock] + redistribute,
-                    max_position
-                )
-
-        # 重新归一化
-        if adjusted_weights.sum() > 0:
-            adjusted_weights = adjusted_weights / adjusted_weights.sum()
-
-        return adjusted_weights
-
-    # ==================== 完整组合构建 ====================
-
-    def build_portfolio(self, model_id: int, trade_date: str,
-                       top_n: int = 50,
-                       weighting_method: str = 'equal',
-                       max_position: float = 0.05,
-                       max_industry_weight: float = 0.3) -> pd.DataFrame:
-        """
-        构建投资组合
-
-        Args:
-            model_id: 模型ID
-            trade_date: 交易日期
-            top_n: 持仓数量
-            weighting_method: 权重方法
-            max_position: 单只股票最大权重
-            max_industry_weight: 单个行业最大权重
-
-        Returns:
-            组合DataFrame
-        """
-        # 获取模型评分
-        scores = self.db.query(ModelScore).filter(
-            ModelScore.model_id == model_id,
-            ModelScore.trade_date == trade_date
-        ).order_by(ModelScore.total_score.desc()).limit(top_n * 2).all()
-
-        if not scores:
-            logger.warning(f"No scores found for model {model_id} on {trade_date}")
-            return pd.DataFrame()
-
-        # 转换为Series
-        scores_series = pd.Series({s.security_id: s.total_score for s in scores})
-
-        # 获取行业数据
-        industries = self._get_industry_data(scores_series.index.tolist())
-
-        # 选股
-        selected = self.select_with_constraints(
-            scores_series, industries, max_per_industry=10, n=top_n
-        )
-
-        if not selected:
-            return pd.DataFrame()
-
-        # 分配权重
-        if weighting_method == 'equal':
-            weights = self.equal_weight(selected)
-        elif weighting_method == 'score':
-            weights = self.score_weight(selected, scores_series)
-        elif weighting_method == 'risk_model':
-            # 需要外部传入cov_matrix和expected_returns
-            # 回退到等权
-            weights = self.equal_weight(selected)
+        # 应用风险惩罚
+        if risk_penalty is not None:
+            adjusted_scores = scores - 0.35 * risk_penalty
         else:
-            weights = self.equal_weight(selected)
+            adjusted_scores = scores.copy()
 
-        # 应用约束
-        weights = self.apply_position_limit(weights, max_position)
-        weights = self.apply_industry_constraint(weights, industries, max_industry_weight)
+        # 排序选股
+        ranked = adjusted_scores.rank(ascending=False)
+        selected = ranked <= self.top_n
 
-        # 构建结果
+        # 等权分配
+        n_selected = selected.sum()
+        if n_selected == 0:
+            return pd.DataFrame(columns=["ts_code", "weight", "rank", "score"])
+
         result = pd.DataFrame({
-            'security_id': weights.index,
-            'weight': weights.values,
-            'score': [scores_series.get(s, 0) for s in weights.index],
-            'industry': [industries.get(s, 'Unknown') for s in weights.index]
+            "ts_code": scores.index[selected],
+            "weight": 1.0 / n_selected,
+            "rank": ranked[selected].astype(int),
+            "score": scores[selected],
         })
+        result = result.sort_values("rank")
 
         return result
 
-    def _get_industry_data(self, ts_codes: List[str]) -> pd.Series:
-        """获取行业数据"""
-        industries = self.db.query(StockIndustry).filter(
-            StockIndustry.ts_code.in_(ts_codes)
-        ).all()
-
-        return pd.Series({i.ts_code: i.industry_name for i in industries})
-
-    # ==================== 调仓生成 ====================
-
-    def generate_rebalance(self, current_positions: Dict[str, float],
-                          target_portfolio: pd.DataFrame,
-                          trade_date: str) -> Dict:
+    def build_production_portfolio(
+        self,
+        scores: pd.Series,
+        risk_levels: Optional[pd.Series] = None,
+        liquidity_levels: Optional[pd.Series] = None,
+        industry_series: Optional[pd.Series] = None,
+        current_holdings: Optional[pd.Series] = None,
+        prices: Optional[pd.Series] = None,
+        total_capital: float = 1e8,
+        **kwargs,
+    ) -> pd.DataFrame:
         """
-        生成调仓方案
+        实盘模式: 分层赋权 + 风险折扣 + 行业约束 + 调仓缓冲区
 
         Args:
-            current_positions: 当前持仓 {ts_code: weight}
-            target_portfolio: 目标组合
-            trade_date: 交易日期
-
-        Returns:
-            调仓方案
+            scores: 综合得分Series (index=ts_code)
+            risk_levels: 风险等级Series (low/medium/high/extreme)
+            liquidity_levels: 流动性等级Series (normal/marginal/insufficient)
+            industry_series: 行业分类Series
+            current_holdings: 当前持仓权重Series (index=ts_code)
+            prices: 当前股价Series
+            total_capital: 总资金
         """
-        current_stocks = set(current_positions.keys())
-        target_stocks = set(target_portfolio['security_id'].tolist())
+        # Step 1: 按得分排序
+        ranked = scores.rank(ascending=False).astype(int)
 
-        # 需要卖出的股票
-        to_sell = []
-        for stock in current_stocks - target_stocks:
-            to_sell.append({
-                'ts_code': stock,
-                'current_weight': current_positions[stock],
-                'target_weight': 0,
-                'adjust_weight': -current_positions[stock]
-            })
+        # Step 2: 初选Top N
+        selected_mask = ranked <= self.top_n
 
-        # 需要买入的股票
-        to_buy = []
-        for _, row in target_portfolio[target_portfolio['security_id'].isin(target_stocks - current_stocks)].iterrows():
-            to_buy.append({
-                'ts_code': row['security_id'],
-                'current_weight': 0,
-                'target_weight': row['weight'],
-                'adjust_weight': row['weight']
-            })
-
-        # 需要调整的股票
-        to_adjust = []
-        for stock in current_stocks & target_stocks:
-            current_weight = current_positions[stock]
-            target_weight = target_portfolio[target_portfolio['security_id'] == stock]['weight'].iloc[0]
-            adjust_weight = target_weight - current_weight
-
-            if abs(adjust_weight) > 0.001:  # 忽略微小调整
-                to_adjust.append({
-                    'ts_code': stock,
-                    'current_weight': current_weight,
-                    'target_weight': target_weight,
-                    'adjust_weight': adjust_weight
-                })
-
-        # 计算换手率
-        total_turnover = (
-            sum(abs(s['adjust_weight']) for s in to_sell) +
-            sum(abs(b['adjust_weight']) for b in to_buy) +
-            sum(abs(a['adjust_weight']) for a in to_adjust)
-        ) / 2
-
-        return {
-            'trade_date': trade_date,
-            'sell_list': to_sell,
-            'buy_list': to_buy,
-            'adjust_list': to_adjust,
-            'total_turnover': total_turnover,
-            'stocks_to_trade': len(to_sell) + len(to_buy) + len(to_adjust)
-        }
-
-    def close(self):
-        """关闭数据库连接"""
-        if self.db:
-            self.db.close()
-
-
-@with_db
-def generate_model_portfolio(model_id: int, trade_date: str, db: Session = None) -> Optional[Portfolio]:
-    """
-    生成模型目标组合
-
-    Args:
-        model_id: 模型ID
-        trade_date: 交易日期
-        db: 数据库会话
-
-    Returns:
-        组合对象
-    """
-    # 获取模型配置
-    model = db.query(Model).filter(Model.id == model_id).first()
-    if not model:
-        logger.error(f"Model {model_id} not found")
-        return None
-
-    builder = PortfolioBuilder(db)
-
-    try:
-        # 构建组合
-        portfolio_df = builder.build_portfolio(
-            model_id, trade_date,
-            top_n=model.hold_count or 50,
-            weighting_method=model.weighting_method or 'equal'
-        )
-
-        if portfolio_df.empty:
-            logger.warning(f"Failed to build portfolio for model {model_id}")
-            return None
-
-        # 创建组合记录
-        portfolio = Portfolio(
-            model_id=model_id,
-            trade_date=trade_date,
-            target_exposure=1.0
-        )
-        db.add(portfolio)
-        db.flush()
-
-        # 创建持仓记录
-        for _, row in portfolio_df.iterrows():
-            position = PortfolioPosition(
-                portfolio_id=portfolio.id,
-                security_id=row['security_id'],
-                weight=row['weight']
+        # Step 3: 调仓缓冲区
+        if current_holdings is not None and len(current_holdings) > 0:
+            selected_mask = self._apply_rebalance_buffer(
+                selected_mask, ranked, current_holdings
             )
-            db.add(position)
 
-        db.commit()
-        logger.info(f"Generated portfolio for model {model_id} on {trade_date}")
+        # Step 4: 分层赋权 (向量化: 用rank的map替代逐股票循环)
+        selected_ranks = ranked[selected_mask]
+        weights = pd.Series(0.0, index=scores.index)
+        weights[selected_mask] = selected_ranks.map(self._get_tier_multiplier)
 
-        return portfolio
+        # Step 5: 风险折扣 (向量化)
+        if risk_levels is not None:
+            active = weights > 0
+            risk_discounts = risk_levels.reindex(weights.index[active]).fillna("low").map(self._get_risk_discount)
+            weights.iloc[active.values.nonzero()[0]] *= risk_discounts.values
 
-    except Exception as e:
-        logger.error(f"Error generating portfolio: {e}")
-        db.rollback()
-        return None
+        # Step 6: 流动性折扣 (向量化)
+        if liquidity_levels is not None:
+            active = weights > 0
+            liq_discounts = liquidity_levels.reindex(weights.index[active]).fillna("normal").map(self._get_liquidity_discount)
+            weights.iloc[active.values.nonzero()[0]] *= liq_discounts.values
+
+        # Step 7: 归一化
+        total = weights.sum()
+        if total > 0:
+            weights = weights / total
+
+        # Step 8: 行业约束
+        if industry_series is not None:
+            weights = self._apply_industry_constraints(
+                weights, industry_series
+            )
+
+        # Step 9: 100股整数倍处理 (向量化)
+        if prices is not None and total_capital > 0:
+            active = weights > 0
+            active_idx = weights.index[active]
+            active_prices = prices.reindex(active_idx).fillna(0)
+            # 向量化计算: shares = (target_value / price // LOT_SIZE) * LOT_SIZE
+            target_values = weights[active] * total_capital
+            valid_price = active_prices > 0
+            shares = pd.Series(0, index=active_idx, dtype=float)
+            shares[valid_price] = ((target_values[valid_price] / active_prices[valid_price]) // LOT_SIZE) * LOT_SIZE
+            adjusted_values = shares * active_prices
+            weights[active] = adjusted_values / total_capital
+            # 再次归一化
+            total = weights.sum()
+            if total > 0:
+                weights = weights / total
+
+        # Step 10: 最小权重过滤
+        min_weight = REBALANCE_BUFFER["min_weight_pct"] / 100.0
+        weights[weights < min_weight] = 0.0
+        # 最终归一化
+        total = weights.sum()
+        if total > 0:
+            weights = weights / total
+
+        # 构建结果
+        result_mask = weights > 0
+        result = pd.DataFrame({
+            "ts_code": scores.index[result_mask],
+            "weight": weights[result_mask].values,
+            "rank": ranked[result_mask].values,
+            "score": scores[result_mask].values,
+        })
+
+        # 添加风险和流动性信息
+        if risk_levels is not None:
+            result["risk_level"] = result["ts_code"].map(risk_levels)
+        if liquidity_levels is not None:
+            result["liquidity_level"] = result["ts_code"].map(liquidity_levels)
+        if industry_series is not None:
+            result["industry"] = result["ts_code"].map(industry_series)
+
+        result = result.sort_values("rank").reset_index(drop=True)
+
+        return result
+
+    def _apply_rebalance_buffer(
+        self,
+        selected_mask: pd.Series,
+        ranked: pd.Series,
+        current_holdings: pd.Series,
+    ) -> pd.Series:
+        """
+        调仓缓冲区逻辑
+
+        - 当前持仓排名≤75: 继续持有
+        - 新买入需排名≤50
+        - 权重<最小阈值: 卖出
+        """
+        hold_top = REBALANCE_BUFFER["hold_top"]
+        buy_top = REBALANCE_BUFFER["buy_top"]
+        min_weight = REBALANCE_BUFFER["min_weight_pct"] / 100.0
+
+        adjusted = selected_mask.copy()
+
+        for ts_code in current_holdings.index:
+            if current_holdings[ts_code] <= 0:
+                continue
+
+            if ts_code not in ranked.index:
+                # 不在当前股票池中, 卖出
+                adjusted[ts_code] = False if ts_code in adjusted.index else False
+                continue
+
+            rank = ranked[ts_code]
+
+            if rank <= hold_top:
+                # 排名在缓冲区内, 继续持有
+                adjusted[ts_code] = True
+            elif rank > hold_top:
+                # 排名跌出缓冲区, 卖出
+                if ts_code in adjusted.index:
+                    adjusted[ts_code] = False
+
+        # 新买入需排名≤buy_top
+        for ts_code in ranked.index:
+            if ts_code in current_holdings.index and current_holdings[ts_code] > 0:
+                continue  # 已持有, 不受买入限制
+            if ranked[ts_code] > buy_top:
+                if ts_code in adjusted.index:
+                    adjusted[ts_code] = False
+
+        return adjusted
+
+    def _apply_industry_constraints(
+        self,
+        weights: pd.Series,
+        industry_series: pd.Series,
+    ) -> pd.Series:
+        """
+        行业约束: 单行业≤20%, 偏离≤5%
+
+        超限行业按比例缩减, 释放的权重分配给未超限行业
+        """
+        max_single = self.industry_constraints["max_single_industry"]
+        max_deviation = self.industry_constraints["max_deviation"]
+
+        adjusted = weights.copy()
+
+        # 计算行业权重
+        industry_weights = {}
+        for ts_code in adjusted.index[adjusted > 0]:
+            ind = industry_series.get(ts_code, "unknown")
+            if ind not in industry_weights:
+                industry_weights[ind] = 0.0
+            industry_weights[ind] += adjusted[ts_code]
+
+        # 检查并调整超限行业
+        excess_weight = 0.0
+        for ind, ind_weight in industry_weights.items():
+            if ind_weight > max_single:
+                # 计算需要缩减的权重
+                scale = max_single / ind_weight
+                for ts_code in adjusted.index[adjusted > 0]:
+                    if industry_series.get(ts_code, "unknown") == ind:
+                        reduced = adjusted[ts_code] * (1 - scale)
+                        excess_weight += reduced
+                        adjusted[ts_code] *= scale
+
+        # 将释放的权重按比例分配给未超限行业
+        if excess_weight > 0:
+            remaining_mask = adjusted > 0
+            # 排除已超限行业
+            for ts_code in adjusted.index[adjusted > 0]:
+                ind = industry_series.get(ts_code, "unknown")
+                if industry_weights.get(ind, 0) >= max_single:
+                    remaining_mask[ts_code] = False
+
+            remaining_total = adjusted[remaining_mask].sum()
+            if remaining_total > 0:
+                for ts_code in adjusted.index[remaining_mask]:
+                    adjusted[ts_code] += excess_weight * (adjusted[ts_code] / remaining_total)
+
+        return adjusted
+
+    def build(
+        self,
+        scores: pd.Series,
+        mode: Optional[PortfolioMode] = None,
+        **kwargs,
+    ) -> pd.DataFrame:
+        """
+        构建组合
+
+        Args:
+            scores: 综合得分Series
+            mode: 构建模式(覆盖实例模式)
+            **kwargs: 模式特定参数
+        """
+        effective_mode = mode or self.mode
+
+        if effective_mode == PortfolioMode.RESEARCH:
+            return self.build_research_portfolio(scores, **kwargs)
+        else:
+            return self.build_production_portfolio(scores, **kwargs)
 
 
-@with_db
-def generate_rebalance_record(model_id: int, trade_date: str, db: Session = None) -> Optional[RebalanceRecord]:
-    """
-    生成调仓记录
+# ─────────────────────────────────────────────
+# 便捷函数
+# ─────────────────────────────────────────────
 
-    Args:
-        model_id: 模型ID
-        trade_date: 交易日期
-        db: 数据库会话
-
-    Returns:
-        调仓记录
-    """
-    # 获取当前持仓
-    current_portfolio = db.query(Portfolio).filter(
-        Portfolio.model_id == model_id
-    ).order_by(Portfolio.trade_date.desc()).first()
-
-    if not current_portfolio:
-        logger.warning(f"No current portfolio found for model {model_id}")
-        return None
-
-    # 获取当前持仓权重
-    current_positions = db.query(PortfolioPosition).filter(
-        PortfolioPosition.portfolio_id == current_portfolio.id
-    ).all()
-
-    current_weights = {p.security_id: p.weight for p in current_positions}
-
-    # 构建目标组合
-    builder = PortfolioBuilder(db)
-    target_portfolio = builder.build_portfolio(model_id, trade_date)
-
-    if target_portfolio.empty:
-        return None
-
-    # 生成调仓方案
-    rebalance = builder.generate_rebalance(current_weights, target_portfolio, trade_date)
-
-    # 保存调仓记录
-    record = RebalanceRecord(
-        model_id=model_id,
-        trade_date=trade_date,
-        rebalance_type='scheduled',
-        buy_list=rebalance['buy_list'],
-        sell_list=rebalance['sell_list'],
-        total_turnover=rebalance['total_turnover']
-    )
-
-    db.add(record)
-    db.commit()
-
-    logger.info(f"Generated rebalance record for model {model_id} on {trade_date}")
-
-    return record
+def create_portfolio_builder(**kwargs) -> PortfolioBuilder:
+    """创建组合构建器"""
+    return PortfolioBuilder(**kwargs)

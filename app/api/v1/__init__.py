@@ -5,6 +5,8 @@ from app.api.v1 import (
     models, timing, portfolios, backtests, simulated_portfolios,
     products, subscriptions, reports, task_logs, alert_logs, performance,
     strategies, notifications, content,
+    # V2新增路由
+    events, factor_metadata, model_registry, experiments, snapshots, monitor,
 )
 
 api_router = APIRouter()
@@ -29,3 +31,10 @@ api_router.include_router(performance.router, prefix="/performance", tags=["绩�
 api_router.include_router(strategies.router, prefix="/strategies", tags=["策略管理"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["通知管理"])
 api_router.include_router(content.router, prefix="/content", tags=["内容管理"])
+# V2新增路由
+api_router.include_router(events.router, tags=["事件中心"])
+api_router.include_router(factor_metadata.router, tags=["因子元数据"])
+api_router.include_router(model_registry.router, tags=["模型注册"])
+api_router.include_router(experiments.router, tags=["实验管理"])
+api_router.include_router(snapshots.router, tags=["数据快照"])
+api_router.include_router(monitor.router, tags=["监控告警"])

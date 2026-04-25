@@ -6,7 +6,7 @@ import hashlib
 import json
 import time
 import logging
-from typing import Callable, Optional, Any, List
+from typing import Callable, Dict, Optional, Any, List
 from collections import OrderedDict
 from datetime import date
 from functools import wraps
@@ -22,6 +22,8 @@ class CacheService:
         self._default_ttl = default_ttl
         self._hits = 0
         self._misses = 0
+        # trade_date → set of cache keys 反向索引, 加速按日期失效
+        self._trade_date_index: Dict[str, set] = {}
 
     def get(self, key: str) -> Optional[Any]:
         """获取缓存"""
@@ -36,8 +38,9 @@ class CacheService:
         self._misses += 1
         return None
 
-    def set(self, key: str, value: Any, ttl: int = None):
-        """设置缓存"""
+    def set(self, key: str, value: Any, ttl: int = None,
+            trade_date: Optional[str] = None):
+        """设置缓存, 可选关联trade_date用于批量失效"""
         if ttl is None:
             ttl = self._default_ttl
         expiry = time.time() + ttl
@@ -47,6 +50,11 @@ class CacheService:
 
         self._cache[key] = (value, expiry)
         self._cache.move_to_end(key)
+        # 维护trade_date反向索引
+        if trade_date:
+            if trade_date not in self._trade_date_index:
+                self._trade_date_index[trade_date] = set()
+            self._trade_date_index[trade_date].add(key)
 
     def delete(self, key: str):
         """删除缓存"""
@@ -101,8 +109,18 @@ class CacheService:
         return len(keys_to_delete)
 
     def invalidate_by_trade_date(self, trade_date: date) -> int:
-        """按交易日失效缓存 (新交易日→因子缓存失效)"""
+        """按交易日失效缓存 (使用反向索引, O(K)而非O(N))"""
         date_str = str(trade_date)
+        # 优先使用反向索引
+        keys_to_remove = self._trade_date_index.pop(date_str, None)
+        if keys_to_remove is not None:
+            count = 0
+            for key in keys_to_remove:
+                if key in self._cache:
+                    del self._cache[key]
+                    count += 1
+            return count
+        # 回退: 无索引时线性扫描
         keys_to_delete = [k for k in self._cache if date_str in k]
         for k in keys_to_delete:
             del self._cache[k]

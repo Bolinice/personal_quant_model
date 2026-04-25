@@ -19,6 +19,11 @@ celery_app = Celery(
         "app.tasks.model_score",
         "app.tasks.risk_check",
         "app.tasks.report_generate",
+        # V2新增任务
+        "app.tasks.event_sync",
+        "app.tasks.snapshot_generate",
+        "app.tasks.factor_health_check",
+        "app.tasks.model_drift_monitor",
     ],
 )
 

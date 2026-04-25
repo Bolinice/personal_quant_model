@@ -1,344 +1,324 @@
 """
-Alpha模块化架构
-实现GPT设计7.1-7.4节: 不同收益来源分模块建模
-- PriceAlphaModule: 价格行为Alpha (5-10日行业中性超额)
-- FundamentalAlphaModule: 价值质量Alpha (10-20日超额)
-- RevisionAlphaModule: 预期修正Alpha (5-20日超额)
-- FlowEventAlphaModule: 资金流/事件Alpha (3-10日超额)
+Alpha模块化架构 V2
+===================
+五大Alpha模块 + 一大风险惩罚模块:
+1. QualityGrowthModule  — 质量成长 (权重35%)
+2. ExpectationModule    — 预期修正 (权重30%)
+3. ResidualMomentumModule — 残差动量 (权重25%)
+4. FlowConfirmModule    — 资金流确认 (权重10%)
+5. RiskPenaltyModule    — 风险惩罚 (独立扣分, λ=0.35)
 
-每个模块: 独立打分、独立监控、独立训练
-第一版: 线性加权(IC加权或等权)
+V2变更:
+- 从4模块(price/fundamental/revision/flow_event)升级为5+1模块
+- 质量成长模块整合了原price+fundamental的核心因子
+- 预期修正模块整合了原revision的修正信号
+- 残差动量模块替代原price中的简单动量
+- 资金流确认模块替代原flow_event
+- 新增风险惩罚模块作为独立扣分层
 """
-from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+from abc import ABC, abstractmethod
+from typing import Dict, List, Optional, Tuple
+import logging
 
-from app.core.logging import logger
+logger = logging.getLogger(__name__)
 
 
-class AlphaModule(ABC):
-    """Alpha模块基类 - 统一接口"""
+# ─────────────────────────────────────────────
+# 基类
+# ─────────────────────────────────────────────
+
+class AlphaModuleBase(ABC):
+    """Alpha模块基类"""
 
     name: str = ""
+    display_name: str = ""
     description: str = ""
-    prediction_horizon: int = 10
-    factors: List[str] = []
-
-    def __init__(self, weights: Optional[Dict[str, float]] = None):
-        """
-        Args:
-            weights: 因子权重字典 {factor_name: weight}, None=等权
-        """
-        self._weights = weights or {}
-        self._ic_cache: Dict[str, pd.Series] = {}
 
     @abstractmethod
-    def score(self, factor_df: pd.DataFrame) -> pd.Series:
-        """
-        计算模块alpha分数
+    def get_factor_names(self) -> List[str]:
+        """返回模块包含的因子名称列表"""
+        ...
 
-        Args:
-            factor_df: 因子数据, index=(ts_code, trade_date)或ts_code,
-                       columns包含该模块的因子
+    def compute_scores(self, df: pd.DataFrame, **kwargs) -> pd.Series:
+        """计算模块得分 — 默认实现: 遍历FACTOR_CONFIG加权融合"""
+        scores = pd.Series(0.0, index=df.index)
+        active_weight = 0.0
 
-        Returns:
-            模块分数, 同factor_df的index
-        """
+        for factor_name, config in self.FACTOR_CONFIG.items():
+            if factor_name not in df.columns:
+                logger.warning(f"[{self.name}] 因子 {factor_name} 缺失, 跳过")
+                continue
 
-    def diagnostics(self, factor_df: pd.DataFrame,
-                    forward_returns: Optional[pd.Series] = None,
-                    window: int = 60) -> Dict:
-        """
-        模块诊断: IC/IR/decay/coverage
+            raw = df[factor_name].copy()
+            if config["direction"] == -1:
+                raw = -raw
+            processed = self.preprocess_factor(raw)
+            scores += config["weight"] * processed
+            active_weight += config["weight"]
 
-        Args:
-            factor_df: 因子数据
-            forward_returns: 未来收益 (可选, 用于计算IC)
-            window: 滚动窗口
+        # 按实际可用权重归一化
+        if active_weight > 0 and active_weight < 0.99:
+            scores = scores / active_weight
 
-        Returns:
-            诊断结果字典
-        """
-        result = {
-            'module': self.name,
-            'n_factors': len(self.factors),
-            'factors': self.factors,
-            'prediction_horizon': self.prediction_horizon,
-        }
+        return scores
 
-        # 因子覆盖率
-        available = [f for f in self.factors if f in factor_df.columns]
-        result['coverage'] = len(available) / len(self.factors) if self.factors else 0
-        result['available_factors'] = available
-        result['missing_factors'] = [f for f in self.factors if f not in factor_df.columns]
-
-        # IC统计 (如果提供了forward_returns)
-        if forward_returns is not None and not forward_returns.empty:
-            ic_stats = {}
-            for factor_name in available:
-                factor_vals = factor_df[factor_name]
-                if isinstance(factor_df.index, pd.MultiIndex):
-                    # (ts_code, trade_date) index
-                    aligned = pd.DataFrame({
-                        'factor': factor_vals,
-                        'return': forward_returns
-                    }).dropna()
-                    if len(aligned) > 30:
-                        # 按日期计算截面IC
-                        ic_series = aligned.groupby(level=1 if aligned.index.nlevels > 1 else 0).apply(
-                            lambda x: x['factor'].corr(x['return'], method='spearman')
-                        )
-                        ic_clean = ic_series.dropna()
-                        ic_mean = float(ic_clean.mean()) if len(ic_clean) > 0 else 0
-                        ic_std = float(ic_clean.std()) if len(ic_clean) > 0 else 0
-                        ic_stats[factor_name] = {
-                            'mean_ic': ic_mean,
-                            'ir': ic_mean / ic_std if ic_std > 0 else 0,
-                            'ic_ir': ic_mean / ic_std if ic_std > 0 else 0,
-                            'win_rate': float((ic_clean > 0).mean()) if len(ic_clean) > 0 else 0,
-                        }
-            result['ic_stats'] = ic_stats
-
+    def preprocess_factor(
+        self,
+        series: pd.Series,
+        mad_threshold: float = 3.0,
+        zscore: bool = True,
+    ) -> pd.Series:
+        """因子预处理: 去极值(MAD) → 标准化(Z-score) — 委托给FactorPreprocessor"""
+        from app.core.factor_preprocess import FactorPreprocessor
+        fp = FactorPreprocessor()
+        result = fp.winsorize_mad(series, mad_threshold)
+        if zscore:
+            result = fp.standardize_zscore(result)
         return result
 
-    def _compute_weighted_score(self, factor_df: pd.DataFrame) -> pd.Series:
+
+# ─────────────────────────────────────────────
+# 1. 质量成长模块 (权重35%)
+# ─────────────────────────────────────────────
+
+class QualityGrowthModule(AlphaModuleBase):
+    """
+    质量成长模块 — 权重35%
+
+    核心逻辑: 筛选盈利能力强、成长性高且财务质量好的公司
+    因子组:
+      - ROE_ttm: 净资产收益率TTM (方向+)
+      - ROE_delta: ROE同比变化 (方向+)
+      - gross_margin: 毛利率 (方向+)
+      - revenue_growth_yoy: 营收同比增长率 (方向+)
+      - profit_growth_yoy: 净利润同比增长率 (方向+)
+      - operating_cashflow_ratio: 经营现金流/净利润 (方向+)
+      - accrual_ratio: 应计利润比率 (方向-)
+    """
+
+    name = "quality_growth"
+    display_name = "质量成长"
+    description = "盈利能力强、成长性高且财务质量好的公司"
+
+    FACTOR_CONFIG = {
+        "roe_ttm": {"direction": 1, "weight": 0.20},
+        "roe_delta": {"direction": 1, "weight": 0.15},
+        "gross_margin": {"direction": 1, "weight": 0.10},
+        "revenue_growth_yoy": {"direction": 1, "weight": 0.15},
+        "profit_growth_yoy": {"direction": 1, "weight": 0.15},
+        "operating_cashflow_ratio": {"direction": 1, "weight": 0.15},
+        "accrual_ratio": {"direction": -1, "weight": 0.10},
+    }
+
+    def get_factor_names(self) -> List[str]:
+        return list(self.FACTOR_CONFIG.keys())
+
+
+# ─────────────────────────────────────────────
+# 2. 预期修正模块 (权重30%)
+# ─────────────────────────────────────────────
+
+class ExpectationModule(AlphaModuleBase):
+    """
+    预期修正模块 — 权重30%
+
+    核心逻辑: 捕捉分析师预期上修和业绩预告超预期信号
+    因子组:
+      - eps_revision_fy0: FY0 EPS修正幅度 (方向+)
+      - eps_revision_fy1: FY1 EPS修正幅度 (方向+)
+      - analyst_coverage: 分析师覆盖数 (方向+)
+      - rating_upgrade_ratio: 评级上调比例 (方向+)
+      - earnings_surprise: 业绩超预期幅度 (方向+)
+      - guidance_up_ratio: 业绩预告上修比例 (方向+)
+    """
+
+    name = "expectation"
+    display_name = "预期修正"
+    description = "分析师预期上修和业绩预告超预期信号"
+
+    FACTOR_CONFIG = {
+        "eps_revision_fy0": {"direction": 1, "weight": 0.25},
+        "eps_revision_fy1": {"direction": 1, "weight": 0.20},
+        "analyst_coverage": {"direction": 1, "weight": 0.10},
+        "rating_upgrade_ratio": {"direction": 1, "weight": 0.15},
+        "earnings_surprise": {"direction": 1, "weight": 0.20},
+        "guidance_up_ratio": {"direction": 1, "weight": 0.10},
+    }
+
+    def get_factor_names(self) -> List[str]:
+        return list(self.FACTOR_CONFIG.keys())
+
+
+# ─────────────────────────────────────────────
+# 3. 残差动量模块 (权重25%)
+# ─────────────────────────────────────────────
+
+class ResidualMomentumModule(AlphaModuleBase):
+    """
+    残差动量模块 — 权重25%
+
+    核心逻辑: 剥离风格因子后的残差收益动量, 比原始动量更稳健
+    因子组:
+      - residual_return_20d: 20日残差收益率 (方向+)
+      - residual_return_60d: 60日残差收益率 (方向+)
+      - residual_return_120d: 120日残差收益率 (方向+)
+      - residual_sharpe: 残差夏普比率 (方向+)
+      - turnover_ratio_20d: 20日换手率 (方向-, 高换手削弱动量)
+      - max_drawdown_20d: 20日最大回撤 (方向-)
+    """
+
+    name = "residual_momentum"
+    display_name = "残差动量"
+    description = "剥离风格因子后的残差收益动量"
+
+    FACTOR_CONFIG = {
+        "residual_return_20d": {"direction": 1, "weight": 0.25},
+        "residual_return_60d": {"direction": 1, "weight": 0.30},
+        "residual_return_120d": {"direction": 1, "weight": 0.15},
+        "residual_sharpe": {"direction": 1, "weight": 0.15},
+        "turnover_ratio_20d": {"direction": -1, "weight": 0.10},
+        "max_drawdown_20d": {"direction": -1, "weight": 0.05},
+    }
+
+    def get_factor_names(self) -> List[str]:
+        return list(self.FACTOR_CONFIG.keys())
+
+
+# ─────────────────────────────────────────────
+# 4. 资金流确认模块 (权重10%)
+# ─────────────────────────────────────────────
+
+class FlowConfirmModule(AlphaModuleBase):
+    """
+    资金流确认模块 — 权重10%
+
+    核心逻辑: 确认价格趋势是否有资金面支撑
+    因子组:
+      - north_net_inflow_5d: 5日北向净流入 (方向+)
+      - north_net_inflow_20d: 20日北向净流入 (方向+)
+      - main_force_net_inflow: 主力净流入 (方向+)
+      - large_order_net_ratio: 大单净占比 (方向+)
+      - margin_balance_change: 融资余额变化率 (方向+)
+      - institutional_holding_change: 机构持仓变化 (方向+)
+    """
+
+    name = "flow_confirm"
+    display_name = "资金流确认"
+    description = "确认价格趋势是否有资金面支撑"
+
+    FACTOR_CONFIG = {
+        "north_net_inflow_5d": {"direction": 1, "weight": 0.20},
+        "north_net_inflow_20d": {"direction": 1, "weight": 0.15},
+        "main_force_net_inflow": {"direction": 1, "weight": 0.20},
+        "large_order_net_ratio": {"direction": 1, "weight": 0.20},
+        "margin_balance_change": {"direction": 1, "weight": 0.10},
+        "institutional_holding_change": {"direction": 1, "weight": 0.15},
+    }
+
+    def get_factor_names(self) -> List[str]:
+        return list(self.FACTOR_CONFIG.keys())
+
+
+# ─────────────────────────────────────────────
+# 5. 风险惩罚模块 (独立扣分, λ=0.35)
+# ─────────────────────────────────────────────
+
+class RiskPenaltyModule(AlphaModuleBase):
+    """
+    风险惩罚模块 — 独立扣分层, λ=0.35
+
+    核心逻辑: 不参与加权融合, 而是作为独立扣分层
+    S_final = S_raw - λ * P_risk
+
+    风险因子组:
+      - volatility_20d: 20日波动率 (方向-, 高波动惩罚)
+      - idiosyncratic_vol: 特质波动率 (方向-)
+      - max_drawdown_60d: 60日最大回撤 (方向-)
+      - illiquidity: 非流动性 (方向-, Amihud比率)
+      - concentration_top10: 前十大股东集中度 (方向-)
+      - pledge_ratio: 股权质押比例 (方向-)
+      - goodwill_ratio: 商誉/净资产 (方向-)
+    """
+
+    name = "risk_penalty"
+    display_name = "风险惩罚"
+    description = "独立风险扣分层, 不参与加权融合"
+
+    LAMBDA = 0.35  # 风险惩罚系数
+
+    FACTOR_CONFIG = {
+        "volatility_20d": {"direction": -1, "weight": 0.20},
+        "idiosyncratic_vol": {"direction": -1, "weight": 0.20},
+        "max_drawdown_60d": {"direction": -1, "weight": 0.15},
+        "illiquidity": {"direction": -1, "weight": 0.15},
+        "concentration_top10": {"direction": -1, "weight": 0.10},
+        "pledge_ratio": {"direction": -1, "weight": 0.10},
+        "goodwill_ratio": {"direction": -1, "weight": 0.10},
+    }
+
+    def get_factor_names(self) -> List[str]:
+        return list(self.FACTOR_CONFIG.keys())
+
+    def compute_scores(self, df: pd.DataFrame, **kwargs) -> pd.Series:
         """
-        加权计算模块分数
-
-        1. 每个因子横截面标准化(z-score)
-        2. 按权重加权求和
-        3. 结果再标准化
+        计算风险惩罚得分 P_risk ∈ [0, 1]
+        注意: 返回的是风险惩罚分, 需要在外部做 S_final = S_raw - λ * P_risk
         """
-        available = [f for f in self.factors if f in factor_df.columns]
-        if not available:
-            logger.warning(f"Module {self.name}: no available factors")
-            return pd.Series(0.0, index=factor_df.index)
+        scores = pd.Series(0.0, index=df.index)
+        active_weight = 0.0
 
-        # 标准化每个因子
-        standardized = pd.DataFrame(index=factor_df.index)
-        for f in available:
-            vals = factor_df[f].copy()
-            # 横截面标准化: 按日期分组z-score
-            if isinstance(factor_df.index, pd.MultiIndex) and factor_df.index.nlevels >= 2:
-                # index level 1 = trade_date
-                standardized[f] = vals.groupby(level=1).apply(
-                    lambda x: (x - x.mean()) / x.std() if x.std() > 0 else x * 0
-                )
-            else:
-                standardized[f] = (vals - vals.mean()) / vals.std() if vals.std() > 0 else vals * 0
+        for factor_name, config in self.FACTOR_CONFIG.items():
+            if factor_name not in df.columns:
+                logger.warning(f"[RiskPenalty] 因子 {factor_name} 缺失, 跳过")
+                continue
 
-        # 权重
-        if self._weights:
-            w = {f: self._weights.get(f, 0) for f in available}
-            total_w = sum(w.values())
-            if total_w == 0:
-                w = {f: 1.0 / len(available) for f in available}
-            else:
-                w = {f: v / total_w for f, v in w.items()}
-        else:
-            w = {f: 1.0 / len(available) for f in available}
+            raw = df[factor_name].copy()
+            # 风险因子方向为负(高风险→高惩罚), 取反后正值表示风险
+            if config["direction"] == -1:
+                raw = -raw
+            processed = self.preprocess_factor(raw)
+            scores += config["weight"] * processed
+            active_weight += config["weight"]
 
-        # 加权求和
-        score = pd.Series(0.0, index=factor_df.index)
-        for f in available:
-            score += standardized[f] * w[f]
+        if active_weight > 0 and active_weight < 0.99:
+            scores = scores / active_weight
 
-        # 结果标准化
-        if isinstance(factor_df.index, pd.MultiIndex) and factor_df.index.nlevels >= 2:
-            score = score.groupby(level=1).apply(
-                lambda x: (x - x.mean()) / x.std() if x.std() > 0 else x * 0
-            )
-        else:
-            score = (score - score.mean()) / score.std() if score.std() > 0 else score * 0
-
-        return score
+        # 将惩罚分映射到 [0, 1] 区间 (sigmoid压缩)
+        penalty = 1.0 / (1.0 + np.exp(-scores))
+        return penalty
 
 
-class PriceAlphaModule(AlphaModule):
-    """
-    价格行为Alpha模块 (GPT设计7.1节)
-    预测周期: 5-10日行业中性超额
-    核心逻辑: 动量/反转/波动率/技术形态
-    """
-    name = "price"
-    description = "价格行为Alpha: 动量/反转/波动率/技术形态"
-    prediction_horizon = 5
-    factors = [
-        # 反转因子
-        'ret_1m_reversal',      # 1月反转
-        'ret_3m_skip1',         # 3月动量(跳过近1月)
-        'ret_6m_skip1',         # 6月动量(跳过近1月)
-        'ret_12m_skip1',        # 12月动量(跳过近1月)
-        # 波动率因子
-        'vol_20d',              # 20日波动率
-        'vol_60d',              # 60日波动率
-        # 技术因子
-        'rsi_14d',              # RSI
-        'bollinger_position',   # 布林带位置
-        'macd_signal',          # MACD信号
-        # 日内/隔夜
-        'overnight_return',     # 隔夜收益
-        'intraday_return_ratio', # 日内收益占比
-        'vpin',                 # VPIN
-    ]
+# ─────────────────────────────────────────────
+# 模块注册表
+# ─────────────────────────────────────────────
 
-    def __init__(self, weights: Optional[Dict[str, float]] = None):
-        # GPT设计建议: 反转在A股最重要
-        default_weights = {
-            'ret_1m_reversal': 0.20,
-            'ret_3m_skip1': 0.10,
-            'ret_6m_skip1': 0.10,
-            'ret_12m_skip1': 0.05,
-            'vol_20d': 0.10,
-            'vol_60d': 0.05,
-            'rsi_14d': 0.10,
-            'bollinger_position': 0.08,
-            'macd_signal': 0.07,
-            'overnight_return': 0.08,
-            'intraday_return_ratio': 0.05,
-            'vpin': 0.02,
-        }
-        if weights:
-            default_weights.update(weights)
-        super().__init__(weights=default_weights)
-
-    def score(self, factor_df: pd.DataFrame) -> pd.Series:
-        return self._compute_weighted_score(factor_df)
-
-
-class FundamentalAlphaModule(AlphaModule):
-    """
-    价值质量Alpha模块 (GPT设计7.2节)
-    预测周期: 10-20日超额
-    核心逻辑: 价值/质量/应计异常
-    """
-    name = "fundamental"
-    description = "价值质量Alpha: 价值/质量/应计异常"
-    prediction_horizon = 10
-    factors = [
-        # 价值因子
-        'ep_ttm',               # E/P (TTM)
-        'bp',                   # B/P
-        'sp_ttm',               # S/P (TTM)
-        'cfp_ttm',              # CF/P (TTM)
-        # 质量因子
-        'roe',                  # ROE
-        'roa',                  # ROA
-        'gross_profit_margin',  # 毛利率
-        # 应计异常
-        'sloan_accrual',        # Sloan应计
-        'cfo_to_net_profit',    # 经营现金流/净利润
-        'earnings_stability',   # 盈利稳定性
-        'accrual_anomaly',      # 应计异常
-    ]
-
-    def __init__(self, weights: Optional[Dict[str, float]] = None):
-        default_weights = {
-            'ep_ttm': 0.15,
-            'bp': 0.15,
-            'sp_ttm': 0.08,
-            'cfp_ttm': 0.10,
-            'roe': 0.12,
-            'roa': 0.08,
-            'gross_profit_margin': 0.08,
-            'sloan_accrual': 0.08,
-            'cfo_to_net_profit': 0.06,
-            'earnings_stability': 0.05,
-            'accrual_anomaly': 0.05,
-        }
-        if weights:
-            default_weights.update(weights)
-        super().__init__(weights=default_weights)
-
-    def score(self, factor_df: pd.DataFrame) -> pd.Series:
-        return self._compute_weighted_score(factor_df)
-
-
-class RevisionAlphaModule(AlphaModule):
-    """
-    预期修正Alpha模块 (GPT设计7.3节)
-    预测周期: 5-20日超额
-    核心逻辑: 分析师修正/SUE/盈利惊喜
-    """
-    name = "revision"
-    description = "预期修正Alpha: 分析师修正/SUE/盈利惊喜"
-    prediction_horizon = 10
-    factors = [
-        'sue',                  # 标准化未预期盈利
-        'analyst_revision_1m',  # 分析师1月修正
-        'analyst_coverage',     # 分析师覆盖度
-        'earnings_surprise',    # 盈利惊喜
-    ]
-
-    def __init__(self, weights: Optional[Dict[str, float]] = None):
-        default_weights = {
-            'sue': 0.30,
-            'analyst_revision_1m': 0.30,
-            'analyst_coverage': 0.15,
-            'earnings_surprise': 0.25,
-        }
-        if weights:
-            default_weights.update(weights)
-        super().__init__(weights=default_weights)
-
-    def score(self, factor_df: pd.DataFrame) -> pd.Series:
-        return self._compute_weighted_score(factor_df)
-
-
-class FlowEventAlphaModule(AlphaModule):
-    """
-    资金流/事件Alpha模块 (GPT设计7.4节)
-    预测周期: 3-10日超额
-    核心逻辑: 北向/聪明钱/融资融券/大单/流动性
-    """
-    name = "flow_event"
-    description = "资金流/事件Alpha: 北向/聪明钱/融资融券/大单/流动性"
-    prediction_horizon = 5
-    factors = [
-        'north_net_buy_ratio',  # 北向净买入占比
-        'smart_money_ratio',    # 聪明钱占比
-        'margin_signal',        # 融资融券信号
-        'large_order_ratio',    # 大单占比
-        'turnover_20d',         # 20日换手率
-        'amihud_20d',           # Amihud非流动性
-    ]
-
-    def __init__(self, weights: Optional[Dict[str, float]] = None):
-        default_weights = {
-            'north_net_buy_ratio': 0.25,
-            'smart_money_ratio': 0.20,
-            'margin_signal': 0.15,
-            'large_order_ratio': 0.15,
-            'turnover_20d': 0.15,
-            'amihud_20d': 0.10,
-        }
-        if weights:
-            default_weights.update(weights)
-        super().__init__(weights=default_weights)
-
-    def score(self, factor_df: pd.DataFrame) -> pd.Series:
-        return self._compute_weighted_score(factor_df)
-
-
-# ==================== 模块注册 ====================
-
-MODULE_REGISTRY: Dict[str, type] = {
-    'price': PriceAlphaModule,
-    'fundamental': FundamentalAlphaModule,
-    'revision': RevisionAlphaModule,
-    'flow_event': FlowEventAlphaModule,
+MODULE_REGISTRY: Dict[str, AlphaModuleBase] = {
+    "quality_growth": QualityGrowthModule(),
+    "expectation": ExpectationModule(),
+    "residual_momentum": ResidualMomentumModule(),
+    "flow_confirm": FlowConfirmModule(),
+    "risk_penalty": RiskPenaltyModule(),
 }
 
 
-def get_module(name: str, **kwargs) -> AlphaModule:
-    """获取Alpha模块实例"""
-    if name not in MODULE_REGISTRY:
-        raise ValueError(f"Unknown module: {name}, available: {list(MODULE_REGISTRY.keys())}")
-    return MODULE_REGISTRY[name](**kwargs)
+def get_module(name: str) -> Optional[AlphaModuleBase]:
+    """获取指定模块"""
+    return MODULE_REGISTRY.get(name)
 
 
-def get_all_modules(**kwargs) -> List[AlphaModule]:
-    """获取所有Alpha模块实例"""
-    return [cls(**kwargs) for cls in MODULE_REGISTRY.values()]
+def get_alpha_modules() -> Dict[str, AlphaModuleBase]:
+    """获取所有Alpha模块(不含风险惩罚)"""
+    return {k: v for k, v in MODULE_REGISTRY.items() if k != "risk_penalty"}
+
+
+def get_risk_penalty_module() -> RiskPenaltyModule:
+    """获取风险惩罚模块"""
+    return MODULE_REGISTRY["risk_penalty"]
+
+
+def get_all_modules() -> Dict[str, AlphaModuleBase]:
+    """获取所有模块"""
+    return MODULE_REGISTRY.copy()

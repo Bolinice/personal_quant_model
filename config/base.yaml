@@ -1,0 +1,18 @@
+# 基础配置
+environment: development
+log_level: INFO
+log_path: /data/logs/
+
+# 数据路径
+data_path: /data/
+snapshot_path: /data/snapshots/
+analysis_db_path: /data/analysis.duckdb
+
+# API服务
+api_host: 0.0.0.0
+api_port: 8000
+
+# Celery
+celery_broker_url: redis://localhost:6379/1
+celery_result_backend: redis://localhost:6379/2
+worker_concurrency: 8

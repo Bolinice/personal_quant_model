@@ -44,6 +44,7 @@ class StockFinancial(Base):
     debt_to_assets = Column(Float, nullable=True, comment='资产负债率(%)')
     equity_multiplier = Column(Float, nullable=True, comment='权益乘数')
 
+    goodwill = Column(Float, nullable=True, comment='商誉')
     # === 估值快照字段 ===
     total_market_cap = Column(Float, nullable=True, comment='总市值(万元)')
     circ_market_cap = Column(Float, nullable=True, comment='流通市值(万元)')

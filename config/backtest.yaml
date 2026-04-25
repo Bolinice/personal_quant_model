@@ -1,0 +1,22 @@
+# 回测配置 V2
+backtest:
+  # 交易成本
+  costs:
+    commission_rate: 0.00025
+    stamp_tax_rate: 0.001
+    transfer_fee_rate: 0.00001
+    slippage_rate: 0.0005
+
+  # 稳健性测试参数
+  robustness:
+    stock_pool_threshold_perturbation: 0.20
+    rebalance_frequency_variants: [weekly, biweekly, monthly]
+    weight_perturbation_pct: 5
+    single_stock_max_variants: [0.02, 0.03, 0.05]
+    industry_constraint_variants: [0.03, 0.05, 0.08]
+
+  # 压力测试参数
+  stress:
+    slippage_multiplier: [2, 3]
+    commission_multiplier: [2, 3]
+    execution_delay: [1, 2]

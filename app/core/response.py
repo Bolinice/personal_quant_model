@@ -36,6 +36,9 @@ def success(data: Any = None, message: str = "success") -> dict:
     """成功响应"""
     return {"code": 0, "message": message, "data": data}
 
+# 别名: 兼容API路由中的success_response引用
+success_response = success
+
 
 def error(code: int = -1, message: str = "error", data: Any = None) -> dict:
     """错误响应"""

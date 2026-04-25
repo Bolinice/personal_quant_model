@@ -1,6 +1,27 @@
 """
-风险预算与风险-优化闭环引擎
-机构级核心: 风险预算分配、实时风险分解、风险约束优化、尾部风险控制、风险信号反馈
+风险预算与择时引擎 V2
+=====================
+V2核心: 5信号4档仓位 + 回撤保护规则
+
+5择时信号:
+1. 指数中期趋势 (MA20>MA60:+1, MA60>MA120:+1)
+2. 市场宽度 (上涨占比>60%:正面, 45%-60%:中性, <45%:负面)
+3. 市场波动率 (低波动:正面, 中波动:中性, 高波动:负面)
+4. 北向资金趋势 (20日净流入均值>0:+1, <0:-1)
+5. 组合自身回撤 (回撤保护触发信号)
+
+4档仓位映射:
+- 强正面 → 100%
+- 正面 → 80%
+- 中性 → 60%
+- 负面 → 30%
+
+回撤保护(优先于择时):
+- 回撤>5% → 降一档
+- 回撤>8% → 再降一档
+- 回撤>12% → 最低30%
+
+保留原V1功能: 风险预算分配、实时风险分解、风险约束优化、尾部风险控制
 """
 from typing import Dict, List, Optional, Tuple, Any
 from enum import Enum
@@ -204,7 +225,7 @@ class RiskBudgetEngine:
         n = len(common)
         alpha = alpha_signals.reindex(common).fillna(0).values
         X = factor_exposures.reindex(common).fillna(0).values
-        F = factor_cov.reindex(factor_exposures.columns, factor_exposures.columns).fillna(0).values
+        F = factor_cov.reindex(columns=factor_exposures.columns, index=factor_exposures.columns).fillna(0).values
 
         # 完整协方差: Σ = X*F*X' + D
         Sigma = X @ F @ X.T
@@ -224,12 +245,16 @@ class RiskBudgetEngine:
         constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1.0}]
 
         # 因子风险约束: |portfolio_exposure_k| <= budget_k
+        # 用两个线性约束替代abs()非线性约束, 提升SLSQP收敛性
         for i, factor_name in enumerate(factor_exposures.columns):
             budget = risk_budget.get(factor_name, 0.5)
-            # 近似: |w'*X_k| / sigma_p <= budget
             constraints.append({
                 'type': 'ineq',
-                'fun': lambda w, idx=i, b=budget: b - abs(w @ X[:, idx]),
+                'fun': lambda w, idx=i, b=budget: b - w @ X[:, idx],
+            })
+            constraints.append({
+                'type': 'ineq',
+                'fun': lambda w, idx=i, b=budget: b + w @ X[:, idx],
             })
 
         # 权重边界
@@ -478,3 +503,258 @@ class RiskBudgetEngine:
             'risk_action': action.value,
             'risk_metrics': {k: round(v, 6) for k, v in risk_metrics.items()},
         }
+
+    # ==================== V2: 5信号4档择时 ====================
+
+    # 4档仓位映射
+    POSITION_TIERS = {
+        'strong_positive': 1.00,   # 强正面 → 100%
+        'positive': 0.80,          # 正面 → 80%
+        'neutral': 0.60,           # 中性 → 60%
+        'negative': 0.30,          # 负面 → 30%
+    }
+
+    # 回撤保护阈值
+    DRAWDOWN_THRESHOLDS = {
+        'level1': 0.05,   # >5% 降一档
+        'level2': 0.08,   # >8% 再降一档
+        'level3': 0.12,   # >12% 最低30%
+    }
+
+    def timing_signal_trend(self, index_data: pd.DataFrame,
+                            price_col: str = 'close') -> int:
+        """
+        信号1: 指数中期趋势
+
+        - MA20 > MA60: +1
+        - MA60 > MA120: +1
+        - 否则: 0
+        得分范围: 0~2
+        """
+        if index_data.empty or price_col not in index_data.columns:
+            return 0
+
+        close = index_data[price_col].values
+        if len(close) < 120:
+            if len(close) >= 60:
+                ma20 = np.mean(close[-20:])
+                ma60 = np.mean(close[-60:])
+                return 1 if ma20 > ma60 else 0
+            return 0
+
+        ma20 = np.mean(close[-20:])
+        ma60 = np.mean(close[-60:])
+        ma120 = np.mean(close[-120:])
+
+        score = 0
+        if ma20 > ma60:
+            score += 1
+        if ma60 > ma120:
+            score += 1
+        return score
+
+    def timing_signal_breadth(self, stock_data: pd.DataFrame,
+                                pct_col: str = 'pct_chg') -> int:
+        """
+        信号2: 市场宽度
+
+        - 上涨占比 > 60%: +1 (正面)
+        - 45% ~ 60%: 0 (中性)
+        - < 45%: -1 (负面)
+        """
+        if stock_data.empty or pct_col not in stock_data.columns:
+            return 0
+
+        pct = stock_data[pct_col].dropna()
+        if len(pct) < 100:
+            return 0
+
+        up_ratio = (pct > 0).mean()
+        if up_ratio > 0.60:
+            return 1
+        elif up_ratio < 0.45:
+            return -1
+        return 0
+
+    def timing_signal_volatility(self, index_data: pd.DataFrame,
+                                  price_col: str = 'close',
+                                  window: int = 60) -> int:
+        """
+        信号3: 市场波动率
+
+        - 低波动(<25%分位): +1 (正面)
+        - 中波动(25%~75%分位): 0 (中性)
+        - 高波动(>75%分位): -1 (负面)
+        """
+        if index_data.empty or price_col not in index_data.columns:
+            return 0
+
+        returns = index_data[price_col].pct_change().dropna()
+        if len(returns) < window:
+            return 0
+
+        recent_vol = returns.tail(20).std() * np.sqrt(252)
+        hist_vol = returns.tail(window).std() * np.sqrt(252)
+
+        # 分位数判断
+        vol_series = returns.rolling(20).std().dropna() * np.sqrt(252)
+        if len(vol_series) < 60:
+            return 0
+
+        q25 = vol_series.quantile(0.25)
+        q75 = vol_series.quantile(0.75)
+
+        if recent_vol < q25:
+            return 1
+        elif recent_vol > q75:
+            return -1
+        return 0
+
+    def timing_signal_northbound(self, northbound_data: pd.DataFrame,
+                                  amount_col: str = 'net_amount',
+                                  date_col: str = 'trade_date',
+                                  window: int = 20) -> int:
+        """
+        信号4: 北向资金趋势
+
+        - 近20日净流入均值显著为正: +1
+        - 显著为负: -1
+        - 否则: 0
+        """
+        if northbound_data.empty:
+            return 0
+
+        if date_col in northbound_data.columns and amount_col in northbound_data.columns:
+            recent = northbound_data.sort_values(date_col).tail(window)
+            if len(recent) < 10:
+                return 0
+            mean_flow = recent[amount_col].mean()
+            std_flow = recent[amount_col].std()
+            if std_flow > 0 and abs(mean_flow) > 0.5 * std_flow:
+                return 1 if mean_flow > 0 else -1
+        return 0
+
+    def timing_signal_drawdown(self, current_drawdown: float) -> int:
+        """
+        信号5: 组合自身回撤 (回撤保护触发信号)
+
+        回撤保护规则(优先于择时):
+        - 回撤 > 5%: 降一档
+        - 回撤 > 8%: 再降一档
+        - 回撤 > 12%: 最低30%
+
+        Args:
+            current_drawdown: 当前回撤(负数, 如-0.06表示6%回撤)
+
+        Returns:
+            降档数 (0/1/2/3)
+        """
+        dd = abs(current_drawdown)
+        if dd > self.DRAWDOWN_THRESHOLDS['level3']:
+            return 3  # 最低30%
+        elif dd > self.DRAWDOWN_THRESHOLDS['level2']:
+            return 2  # 再降一档
+        elif dd > self.DRAWDOWN_THRESHOLDS['level1']:
+            return 1  # 降一档
+        return 0
+
+    def compute_timing_position(
+        self,
+        index_data: pd.DataFrame = None,
+        stock_data: pd.DataFrame = None,
+        northbound_data: pd.DataFrame = None,
+        current_drawdown: float = 0.0,
+        price_col: str = 'close',
+        pct_col: str = 'pct_chg',
+    ) -> Dict[str, Any]:
+        """
+        V2: 5信号4档仓位计算
+
+        Returns:
+            {
+                'position': float,          # 目标仓位 (0.30~1.00)
+                'tier': str,                # 仓位档位
+                'signals': Dict[str, int],   # 各信号得分
+                'drawdown_protection': Dict, # 回撤保护信息
+            }
+        """
+        # 计算各信号
+        signals = {}
+
+        # 信号1: 指数中期趋势 (0~2)
+        if index_data is not None and not index_data.empty:
+            signals['trend'] = self.timing_signal_trend(index_data, price_col)
+        else:
+            signals['trend'] = 0
+
+        # 信号2: 市场宽度 (-1~+1)
+        if stock_data is not None and not stock_data.empty:
+            signals['breadth'] = self.timing_signal_breadth(stock_data, pct_col)
+        else:
+            signals['breadth'] = 0
+
+        # 信号3: 市场波动率 (-1~+1)
+        if index_data is not None and not index_data.empty:
+            signals['volatility'] = self.timing_signal_volatility(index_data, price_col)
+        else:
+            signals['volatility'] = 0
+
+        # 信号4: 北向资金趋势 (-1~+1)
+        if northbound_data is not None and not northbound_data.empty:
+            signals['northbound'] = self.timing_signal_northbound(northbound_data)
+        else:
+            signals['northbound'] = 0
+
+        # 综合信号得分
+        total_score = sum(signals.values())
+
+        # 映射到4档仓位
+        if total_score >= 3:
+            tier = 'strong_positive'
+        elif total_score >= 1:
+            tier = 'positive'
+        elif total_score >= -1:
+            tier = 'neutral'
+        else:
+            tier = 'negative'
+
+        position = self.POSITION_TIERS[tier]
+
+        # 回撤保护(优先于择时)
+        drawdown_drops = self.timing_signal_drawdown(current_drawdown)
+        drawdown_info = {
+            'current_drawdown': round(current_drawdown, 4),
+            'drawdown_drops': drawdown_drops,
+            'protection_active': drawdown_drops > 0,
+        }
+
+        if drawdown_drops > 0:
+            # 按降档数降低仓位
+            tier_list = ['strong_positive', 'positive', 'neutral', 'negative']
+            current_idx = tier_list.index(tier)
+            new_idx = min(current_idx + drawdown_drops, len(tier_list) - 1)
+            tier = tier_list[new_idx]
+            position = self.POSITION_TIERS[tier]
+            drawdown_info['original_tier'] = tier_list[current_idx]
+            drawdown_info['adjusted_tier'] = tier
+
+        result = {
+            'position': position,
+            'tier': tier,
+            'signals': signals,
+            'total_score': total_score,
+            'drawdown_protection': drawdown_info,
+        }
+
+        logger.info(
+            "V2 timing position computed",
+            extra={
+                "position": position,
+                "tier": tier,
+                "signals": signals,
+                "total_score": total_score,
+                "drawdown_drops": drawdown_drops,
+            },
+        )
+
+        return result

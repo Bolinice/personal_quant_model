@@ -537,3 +537,58 @@ class AKShareDataSource(BaseDataSource):
         except Exception as e:
             logger.error(f"Error getting stock info: {e}")
             return {}
+
+    # ==================== 股权质押 ====================
+
+    def get_share_pledge(self, ts_code: str = None) -> pd.DataFrame:
+        """获取股权质押数据 (东方财富)"""
+        try:
+            df = self._ak.stock_share_pledge_em(symbol=ts_code.split('.')[0] if ts_code else None)
+            if df is not None and not df.empty:
+                logger.info(f"获取股权质押数据: {len(df)} 条")
+            return df if df is not None else pd.DataFrame()
+        except Exception as e:
+            logger.error(f"获取股权质押数据失败: {e}")
+            return pd.DataFrame()
+
+    # ==================== 前十大股东 ====================
+
+    def get_top10_holders(self, ts_code: str, date: str = None) -> pd.DataFrame:
+        """获取前十大股东数据 (东方财富)"""
+        try:
+            code = ts_code.split('.')[0]
+            df = self._ak.stock_gdfx_top_10_em(symbol=code, date=date)
+            if df is not None and not df.empty:
+                logger.info(f"获取前十大股东 {ts_code}: {len(df)} 条")
+            return df if df is not None else pd.DataFrame()
+        except Exception as e:
+            logger.error(f"获取前十大股东 {ts_code} 失败: {e}")
+            return pd.DataFrame()
+
+    # ==================== 机构持仓 ====================
+
+    def get_institutional_holding(self, ts_code: str, quarter: str = None) -> pd.DataFrame:
+        """获取机构持仓数据 (东方财富)"""
+        try:
+            code = ts_code.split('.')[0]
+            df = self._ak.stock_institute_hold_detail_em(symbol=code, quarter=quarter)
+            if df is not None and not df.empty:
+                logger.info(f"获取机构持仓 {ts_code}: {len(df)} 条")
+            return df if df is not None else pd.DataFrame()
+        except Exception as e:
+            logger.error(f"获取机构持仓 {ts_code} 失败: {e}")
+            return pd.DataFrame()
+
+    # ==================== 分析师一致预期 ====================
+
+    def get_analyst_consensus(self, ts_code: str) -> pd.DataFrame:
+        """获取分析师一致预期数据 (东方财富)"""
+        try:
+            code = ts_code.split('.')[0]
+            df = self._ak.stock_analyst_detail_em(symbol=code)
+            if df is not None and not df.empty:
+                logger.info(f"获取分析师一致预期 {ts_code}: {len(df)} 条")
+            return df if df is not None else pd.DataFrame()
+        except Exception as e:
+            logger.error(f"获取分析师一致预期 {ts_code} 失败: {e}")
+            return pd.DataFrame()

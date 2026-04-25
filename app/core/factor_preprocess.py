@@ -775,26 +775,6 @@ class FactorPreprocessor:
         }
 
 
-class FactorNormalizer:
-    """因子方向统一化"""
-
-    def __init__(self):
-        pass
-
-    def align_direction(self, series: pd.Series, direction: int = 1) -> pd.Series:
-        """统一因子方向: direction=1越大越好, direction=-1越小越好"""
-        if direction == -1:
-            return -series
-        return series
-
-    def align_to_benchmark(self, factor_values: pd.Series, benchmark_values: pd.Series) -> pd.Series:
-        """对齐到基准方向: 确保因子与基准收益正相关"""
-        correlation = factor_values.corr(benchmark_values)
-        if correlation < 0:
-            return -factor_values
-        return factor_values
-
-
 # 便捷函数
 def preprocess_factor_values(factor_values: pd.Series,
                             fill_method: str = 'median',

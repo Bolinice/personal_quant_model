@@ -1,0 +1,34 @@
+# 监控配置 V2
+monitoring:
+  # 健康检查间隔
+  health_check_interval_minutes: 5
+
+  # 告警阈值
+  alert_thresholds:
+    ic_mean_min: 0.02
+    ir_min: 0.5
+    ic_t_stat_min: 2.0
+    psi_max: 0.25
+    ks_p_value_min: 0.05
+    module_correlation_max: 0.85
+    coverage_min: 0.50
+
+  # 自动响应规则
+  auto_response:
+    factor_failure:
+      action: reduce_weight
+      watch_to_degraded: 4_weeks
+      degraded_to_disabled: 8_weeks
+    coverage_cliff:
+      threshold_pct: 20
+      action: pause_factor
+    risk_threshold_breach:
+      action: reduce_position
+    data_anomaly:
+      pit_failure_rate_pct: 5
+      action: halt_signal_production
+
+  # 告警推送
+  notification:
+    methods: [websocket, email]
+    alert_retention_days: 180

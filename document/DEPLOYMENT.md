@@ -1,7 +1,8 @@
 # A股多因子增强策略平台 - 部署指南
 
-**文档版本**：V1.2
-**最后更新**：2026-04-22
+**文档版本**：V1.4
+**最后更新**：2026-04-24
+**关联文档**：PRD V2.4、技术架构与数据库设计 V2.3
 
 ---
 
@@ -249,6 +250,23 @@ docker-compose up -d --force-recreate  # 重新创建服务
 - 设置任务超时（回测 30min，因子计算 10min）
 - 实现任务重试机制
 
+#### Celery 任务清单
+
+| 任务名 | 说明 | 触发时机 |
+|--------|------|---------|
+| sync_stock_daily | 日线数据同步 | 每日收盘后 |
+| sync_stock_financial | 财务数据同步 | 每日收盘后 |
+| sync_index_daily | 指数数据同步 | 每日收盘后 |
+| sync_event_data | 事件数据同步 | 每日收盘后 |
+| compute_factors | 因子计算 | 每日数据同步后 |
+| compute_scores | 评分计算 | 每日因子计算后 |
+| check_factor_health | 因子健康检查 | 每日评分后 |
+| check_model_drift | 模型漂移检查 | 每日评分后 |
+| generate_snapshot | 数据快照生成 | 每日数据同步后 |
+| build_portfolio | 组合构建 | 每日评分后 |
+| check_portfolio_risk | 组合风控检查 | 每日组合生成后 |
+| run_backtest | 回测任务 | 用户触发 |
+
 ### 应用
 - 启用 Gzip 压缩
 - 配置 API 限流
@@ -292,3 +310,56 @@ worker_concurrency=8,  # 原4，充分利用多核
 - 数据同步：`ThreadPoolExecutor(max_workers=4)` IO密集并行
 - IC计算：`ProcessPoolExecutor` CPU密集并行
 - 批量写入：`bulk_save_objects` 替代逐行 `db.add()`
+
+---
+
+## 7. 配置文件部署
+
+### 7.1 配置文件体系
+
+V2采用YAML配置驱动，参数不写死代码：
+
+| 配置文件 | 路径 | 说明 |
+|---------|------|------|
+| base.yaml | config/base.yaml | 基础配置（环境/日志/路径） |
+| db.yaml | config/db.yaml | 数据库连接配置 |
+| data.yaml | config/data.yaml | 数据源配置 |
+| universe.yaml | config/universe.yaml | 股票池参数（上市天数180/成交额8000万/市值80亿/股价3元） |
+| factors.yaml | config/factors.yaml | 因子模块配置（5模块权重/因子列表/预处理参数） |
+| labels.yaml | config/labels.yaml | 标签配置（主标签/辅标签/截尾参数） |
+| model.yaml | config/model.yaml | 模型配置（ML参数/融合权重/状态机阈值） |
+| timing.yaml | config/timing.yaml | 择时配置（5信号权重/4档仓位/回撤保护阈值） |
+| portfolio.yaml | config/portfolio.yaml | 组合配置（Top60/分层赋权/风险折扣/行业约束） |
+| risk.yaml | config/risk.yaml | 风控配置（黑名单规则/风险惩罚规则/组合风控阈值） |
+| backtest.yaml | config/backtest.yaml | 回测配置（滑点/手续费/稳健性测试参数） |
+| monitoring.yaml | config/monitoring.yaml | 监控配置（告警阈值/自动响应规则） |
+| production.yaml | config/production.yaml | 生产环境覆盖配置 |
+
+### 7.2 数据快照存储配置
+
+| 配置项 | 值 | 说明 |
+|--------|-----|------|
+| 快照存储路径 | /data/snapshots/ | 每日快照Parquet文件 |
+| 快照保留天数 | 90 | 超过90天的快照自动清理 |
+| 快照格式 | Parquet | 列式存储，支持DuckDB分析 |
+| DuckDB路径 | /data/analysis.duckdb | 本地分析数据库 |
+
+### 7.3 监控告警服务配置
+
+| 配置项 | 值 | 说明 |
+|--------|-----|------|
+| 健康检查间隔 | 5min | 因子/模型健康检查频率 |
+| 告警推送方式 | WebSocket + Email | 实时推送 + 邮件通知 |
+| 自动响应开关 | true | 生产环境开启自动响应 |
+| 告警保留天数 | 180 | 告警日志保留 |
+
+---
+
+## 8. 版本历史
+
+| 版本 | 日期 | 变更说明 |
+|------|------|---------|
+| V1.3 | 2026-04-24 | 新增配置文件体系、数据快照存储配置、监控告警服务配置；新增Celery任务（事件同步/因子健康检查/模型漂移检查/快照生成/组合风控检查） |
+| V1.2 | 2026-04-22 | 新增性能优化章节（复合索引/连接池/Worker并发/缓存/并行化） |
+| V1.1 | 2026-04-20 | 新增Docker Compose部署、Nginx反向代理、SSL证书配置 |
+| V1.0 | 2026-04-18 | 初始版本 |

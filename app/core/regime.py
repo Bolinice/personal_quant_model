@@ -18,31 +18,32 @@ REGIME_MEAN_REVERTING = 'mean_reverting'  # 震荡市: 反转/价值权重更高
 REGIME_DEFENSIVE = 'defensive'       # 防御市: 质量/低波动权重更高
 REGIME_RISK_ON = 'risk_on'           # 进攻市: 资金/事件权重更高
 
-# Regime对应的模块权重调整 (GPT设计9.3节)
+# Regime对应的模块权重调整 (V2: 与EnsembleEngine一致, 使用增量而非乘数)
 REGIME_WEIGHT_ADJUSTMENTS = {
-    REGIME_TRENDING: {
-        'price': 1.2,        # 趋势市: 价格行为更有效
-        'fundamental': 0.9,
-        'revision': 1.1,     # 趋势市: 修正信号更有效
-        'flow_event': 1.0,
+    REGIME_RISK_ON: {
+        'quality_growth': -0.05,  # 进攻: 质量↓
+        'expectation': 0.00,
+        'residual_momentum': +0.08,  # 动量↑
+        'flow_confirm': +0.05,  # 资金流↑
     },
-    REGIME_MEAN_REVERTING: {
-        'price': 1.0,
-        'fundamental': 1.2,  # 震荡市: 价值更有效
-        'revision': 0.9,
-        'flow_event': 0.9,
+    REGIME_TRENDING: {
+        # 趨势: 均衡
+        'quality_growth': 0.00,
+        'expectation': 0.00,
+        'residual_momentum': 0.00,
+        'flow_confirm': 0.00,
     },
     REGIME_DEFENSIVE: {
-        'price': 0.8,        # 防御市: 降低价格行为权重
-        'fundamental': 1.3,  # 质量/价值更有效
-        'revision': 0.9,
-        'flow_event': 0.7,
+        'quality_growth': +0.08,  # 防御: 质量↑
+        'expectation': +0.02,
+        'residual_momentum': -0.08,  # 动量↓
+        'flow_confirm': -0.02,
     },
-    REGIME_RISK_ON: {
-        'price': 1.0,
-        'fundamental': 0.8,
-        'revision': 1.0,
-        'flow_event': 1.3,   # 进攻市: 资金/事件更有效
+    REGIME_MEAN_REVERTING: {
+        'quality_growth': +0.02,
+        'expectation': +0.06,  # 震荡: 修正↑
+        'residual_momentum': -0.06,  # 动量↓
+        'flow_confirm': -0.02,
     },
 }
 
@@ -272,7 +273,7 @@ class RegimeDetector:
     def get_weight_adjustments(self, regime: str,
                                 base_weights: Dict[str, float]) -> Dict[str, float]:
         """
-        根据regime调整模块权重 (GPT设计9.3节)
+        根据regime调整模块权重 (V2: 使用增量调整, 与EnsembleEngine一致)
 
         Args:
             regime: 当前市场状态
@@ -285,8 +286,8 @@ class RegimeDetector:
 
         adjusted = {}
         for module, weight in base_weights.items():
-            adj_factor = adjustments.get(module, 1.0)
-            adjusted[module] = weight * adj_factor
+            adj_delta = adjustments.get(module, 0.0)
+            adjusted[module] = weight + adj_delta
 
         # 归一化
         total = sum(adjusted.values())
@@ -319,7 +320,7 @@ class RegimeDetector:
         )
         confidence = max(confidence, 0.3)  # 最低30%置信度
 
-        base_weights = {'price': 0.30, 'fundamental': 0.25, 'revision': 0.25, 'flow_event': 0.20}
+        base_weights = {'quality_growth': 0.35, 'expectation': 0.30, 'residual_momentum': 0.25, 'flow_confirm': 0.10}
         adjusted_weights = self.get_weight_adjustments(regime, base_weights)
 
         return {

@@ -139,6 +139,11 @@ FACTOR_GROUPS = {
         'name': '聪明钱因子',
         'factors': ['smart_money_ratio', 'north_momentum_20d', 'margin_signal', 'institutional_holding_chg'],
     },
+    'risk_penalty': {
+        'name': '风险惩罚因子',
+        'factors': ['volatility_20d', 'idiosyncratic_vol', 'max_drawdown_60d',
+                    'illiquidity', 'concentration_top10', 'pledge_ratio', 'goodwill_ratio'],
+    },
     'technical': {
         'name': '技术形态因子',
         'factors': ['rsi_14d', 'bollinger_position', 'macd_signal', 'obv_ratio'],
@@ -180,6 +185,10 @@ FACTOR_DIRECTIONS = {
     'industry_momentum_1m': 1, 'industry_fund_flow': 1, 'industry_valuation_deviation': -1,
     # 另类数据因子
     'news_sentiment': 1, 'supply_chain_momentum': 1, 'patent_growth': 1,
+    # 风险惩罚因子
+    'concentration_top10': -1, 'pledge_ratio': -1, 'goodwill_ratio': -1,
+    # 预期修正因子
+    'eps_revision_fy0': 1, 'eps_revision_fy1': 1, 'rating_upgrade_ratio': 1, 'guidance_up_ratio': 1,
 }
 
 
@@ -434,9 +443,71 @@ class FactorCalculator:
             result['north_holding_pct'] = northbound_df['north_holding_pct']
         return result
 
-    def calc_analyst_factors(self, analyst_df: pd.DataFrame) -> pd.DataFrame:
-        """分析师预期因子 (SUE, 分析师修正)"""
+    def calc_analyst_factors(self, analyst_df: pd.DataFrame,
+                            consensus_df: pd.DataFrame = None) -> pd.DataFrame:
+        """分析师预期因子 (SUE, 分析师修正, EPS修正, 业绩超预期)
+
+        Args:
+            analyst_df: 原始分析师数据 (含 actual_eps, expected_eps, num_analysts 等)
+            consensus_df: 一致预期数据 (含 ts_code, effective_date, consensus_eps_fy0/fy1,
+                           analyst_coverage, rating_mean 等)
+        """
         result = pd.DataFrame()
+
+        # 优先从 consensus_df 计算新因子
+        if consensus_df is not None and not consensus_df.empty:
+            result['security_id'] = consensus_df['ts_code']
+
+            # analyst_coverage: 分析师覆盖数
+            if 'analyst_coverage' in consensus_df.columns:
+                result['analyst_coverage'] = consensus_df['analyst_coverage']
+
+            # eps_revision_fy0/fy1: EPS修正幅度
+            if 'consensus_eps_fy0' in consensus_df.columns and 'ts_code' in consensus_df.columns:
+                # 计算EPS修正: 当前EPS vs 1个月前EPS
+                grouped = consensus_df.sort_values('effective_date').groupby('ts_code')
+                eps_fy0_shift = grouped['consensus_eps_fy0'].shift(20)
+                result['eps_revision_fy0'] = np.where(
+                    eps_fy0_shift.notna() & (eps_fy0_shift != 0),
+                    (consensus_df['consensus_eps_fy0'] - eps_fy0_shift) / eps_fy0_shift.abs(),
+                    np.nan
+                )
+
+            if 'consensus_eps_fy1' in consensus_df.columns and 'ts_code' in consensus_df.columns:
+                grouped = consensus_df.sort_values('effective_date').groupby('ts_code')
+                eps_fy1_shift = grouped['consensus_eps_fy1'].shift(20)
+                result['eps_revision_fy1'] = np.where(
+                    eps_fy1_shift.notna() & (eps_fy1_shift != 0),
+                    (consensus_df['consensus_eps_fy1'] - eps_fy1_shift) / eps_fy1_shift.abs(),
+                    np.nan
+                )
+
+            # rating_upgrade_ratio: 评级上调比例 (从rating_mean变化推断)
+            if 'rating_mean' in consensus_df.columns and 'ts_code' in consensus_df.columns:
+                grouped = consensus_df.sort_values('effective_date').groupby('ts_code')
+                rating_shift = grouped['rating_mean'].shift(20)
+                # 评级越低越好(1=强烈推荐, 5=卖出), 所以rating下降=上调
+                result['rating_upgrade_ratio'] = np.where(
+                    rating_shift.notna(),
+                    (rating_shift - consensus_df['rating_mean']) / rating_shift.abs().replace(0, np.nan),
+                    np.nan
+                )
+
+            # earnings_surprise: 业绩超预期幅度
+            if all(c in consensus_df.columns for c in ['consensus_eps_fy0']):
+                # 需要实际EPS来计算超预期, 如果没有则用最近EPS变化近似
+                result['earnings_surprise'] = consensus_df.get('earnings_surprise', np.nan)
+
+            # guidance_up_ratio: 业绩预告上修比例 (从EPS修正方向推断)
+            if 'eps_revision_fy0' in result.columns:
+                result['guidance_up_ratio'] = np.where(
+                    result['eps_revision_fy0'] > 0, 1.0,
+                    np.where(result['eps_revision_fy0'] < 0, -1.0, 0.0)
+                )
+
+            return result
+
+        # 回退到原始 analyst_df
         result['security_id'] = analyst_df['ts_code']
 
         if all(c in analyst_df.columns for c in ['actual_eps', 'expected_eps']):
@@ -702,6 +773,7 @@ class FactorCalculator:
                          neutralize: bool = True,
                          northbound_df: pd.DataFrame = None,
                          analyst_df: pd.DataFrame = None,
+                         consensus_df: pd.DataFrame = None,
                          policy_df: pd.DataFrame = None,
                          supply_chain_df: pd.DataFrame = None,
                          sentiment_df: pd.DataFrame = None,
@@ -710,6 +782,9 @@ class FactorCalculator:
                          money_flow_df: pd.DataFrame = None,
                          margin_df: pd.DataFrame = None,
                          daily_basic_df: pd.DataFrame = None,
+                         pledge_df: pd.DataFrame = None,
+                         holders_df: pd.DataFrame = None,
+                         institutional_df: pd.DataFrame = None,
                          trade_date: Optional[date] = None) -> pd.DataFrame:
         """
         计算所有因子并预处理 (向量化批处理合并)
@@ -730,7 +805,7 @@ class FactorCalculator:
         if northbound_df is not None and not northbound_df.empty:
             factor_dfs.append(self.calc_northbound_factors(northbound_df))
         if analyst_df is not None and not analyst_df.empty:
-            factor_dfs.append(self.calc_analyst_factors(analyst_df))
+            factor_dfs.append(self.calc_analyst_factors(analyst_df, consensus_df=consensus_df))
         if policy_df is not None and not policy_df.empty:
             factor_dfs.append(self.calc_policy_factors(policy_df))
         if supply_chain_df is not None and not supply_chain_df.empty:
@@ -887,11 +962,69 @@ class FactorCalculator:
 
         return result
 
+    # ==================== 风险惩罚因子 ====================
+
+    def calc_risk_penalty_factors(self, daily_df: pd.DataFrame,
+                                   pledge_df: pd.DataFrame = None,
+                                   holders_df: pd.DataFrame = None,
+                                   financial_df: pd.DataFrame = None) -> pd.DataFrame:
+        """计算风险惩罚因子: concentration_top10, pledge_ratio, goodwill_ratio
+
+        Args:
+            daily_df: 日线数据 (含 ts_code, trade_date, close, amount 等)
+            pledge_df: 股权质押数据 (含 ts_code, trade_date, pledge_ratio)
+            holders_df: 前十大股东数据 (含 ts_code, end_date, hold_ratio, rank)
+            financial_df: 财务数据 (含 ts_code, end_date, goodwill, total_equity)
+        """
+        result = daily_df[['ts_code', 'trade_date']].copy()
+
+        # concentration_top10: 前十大股东持股比例之和
+        if holders_df is not None and not holders_df.empty:
+            top10_sum = (holders_df[holders_df['rank'] <= 10]
+                         .groupby(['ts_code', 'end_date'])['hold_ratio']
+                         .sum()
+                         .reset_index()
+                         .rename(columns={'hold_ratio': 'concentration_top10'}))
+            top10_sum = top10_sum.sort_values('end_date').groupby('ts_code').last().reset_index()
+            result = result.merge(top10_sum[['ts_code', 'concentration_top10']], on='ts_code', how='left')
+        else:
+            result['concentration_top10'] = np.nan
+
+        # pledge_ratio: 质押比例
+        if pledge_df is not None and not pledge_df.empty:
+            latest_pledge = (pledge_df.sort_values('trade_date')
+                             .groupby('ts_code').last()
+                             .reset_index()[['ts_code', 'pledge_ratio']])
+            result = result.merge(latest_pledge, on='ts_code', how='left')
+        else:
+            result['pledge_ratio'] = np.nan
+
+        # goodwill_ratio: 商誉/净资产
+        if financial_df is not None and not financial_df.empty:
+            fin = financial_df.copy()
+            if 'goodwill' in fin.columns and 'total_equity' in fin.columns:
+                fin['goodwill_ratio'] = np.where(
+                    fin['total_equity'].notna() & (fin['total_equity'] != 0),
+                    fin['goodwill'] / fin['total_equity'].replace(0, np.nan),
+                    np.nan
+                )
+                latest_gw = (fin.sort_values('end_date')
+                             .groupby('ts_code').last()
+                             .reset_index()[['ts_code', 'goodwill_ratio']])
+                result = result.merge(latest_gw, on='ts_code', how='left')
+            else:
+                result['goodwill_ratio'] = np.nan
+        else:
+            result['goodwill_ratio'] = np.nan
+
+        return result
+
     # ==================== 聪明钱因子 ====================
 
     def calc_smart_money_factors(self, price_df: pd.DataFrame,
                                   northbound_df: Optional[pd.DataFrame] = None,
-                                  margin_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+                                  margin_df: Optional[pd.DataFrame] = None,
+                                  institutional_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
         """
         聪明钱因子
         - smart_money_ratio: 聪明钱比率 (大单净买入/总成交)
@@ -921,7 +1054,13 @@ class FactorCalculator:
             result['margin_signal'] = price_df['margin_balance'].pct_change(5)
 
         # 机构持仓变化
-        if 'institutional_holding_pct' in price_df.columns:
+        if institutional_df is not None and not institutional_df.empty:
+            if 'hold_ratio' in institutional_df.columns:
+                inst_result = pd.DataFrame()
+                inst_result['security_id'] = institutional_df['ts_code']
+                inst_result['institutional_holding_chg'] = institutional_df['hold_ratio'].pct_change(20)
+                return result  # institutional handled separately below
+        elif 'institutional_holding_pct' in price_df.columns:
             result['institutional_holding_chg'] = price_df['institutional_holding_pct'].pct_change(20)
 
         return result

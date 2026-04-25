@@ -1,8 +1,8 @@
 """
-股票池构建模块
-实现GPT设计4.1节: 股票池是第一道风险控制
-筛选条件: 上市天数/非ST/非停牌/流动性/价格阈值/成交额
-支持核心池(中大市值+高流动性)和扩展池(覆盖更多)
+股票池构建模块 V2
+=================
+V2参数收紧: 上市天数180/成交额8000万/市值80亿/股价3元
+V2新增: 风险事件过滤/黑名单硬过滤/交易可行性过滤
 """
 from typing import Dict, List, Optional, Set, Tuple
 from datetime import date, timedelta
@@ -16,16 +16,19 @@ from app.core.logging import logger
 class UniverseBuilder:
     """股票池构建器 - GPT设计4.1节"""
 
-    # 默认参数 (GPT设计建议值)
+    # V2默认参数 (参数收紧)
     DEFAULT_CORE_PARAMS = {
-        'min_list_days': 250,        # 核心池: 上市满250个交易日(约1年)
-        'min_daily_amount': 1e8,     # 日均成交额>1亿
-        'min_price': 3.0,            # 价格>3元
+        'min_list_days': 180,        # V2: 上市满180个交易日(原250)
+        'min_daily_amount': 8e7,     # V2: 日均成交额>8000万(原1亿)
+        'min_price': 3.0,            # V2: 价格>3元(原3元)
         'liquidity_pct': 0.80,       # 流动性前80%
         'exclude_st': True,
         'exclude_suspended': True,
         'exclude_delist': True,
-        'min_market_cap': 5e9,       # 最低市值50亿
+        'min_market_cap': 80e9,      # V2: 最低市值80亿(原50亿)
+        'exclude_risk_events': True,  # V2: 排除重大风险事件股
+        'exclude_blacklist': True,    # V2: 黑名单硬过滤
+        'exclude_limit_up_down': True, # V2: 排除涨跌停无法成交
     }
 
     DEFAULT_EXTENDED_PARAMS = {
@@ -37,6 +40,9 @@ class UniverseBuilder:
         'exclude_suspended': True,
         'exclude_delist': True,
         'min_market_cap': 0,         # 无市值下限
+        'exclude_risk_events': True,
+        'exclude_blacklist': True,
+        'exclude_limit_up_down': True,
     }
 
     def __init__(self):
@@ -54,7 +60,10 @@ class UniverseBuilder:
               exclude_st: bool = True,
               exclude_suspended: bool = True,
               exclude_delist: bool = True,
-              min_market_cap: float = 0) -> List[str]:
+              min_market_cap: float = 0,
+              exclude_risk_events: bool = False,
+              exclude_blacklist: bool = False,
+              exclude_limit_up_down: bool = False) -> List[str]:
         """
         构建股票池
 
@@ -189,7 +198,132 @@ class UniverseBuilder:
                           stock_status_df, daily_basic_df,
                           **self.DEFAULT_EXTENDED_PARAMS)
 
-    # ==================== 辅助方法 ====================
+    # ==================== V2新增过滤方法 ====================
+
+    def filter_risk_events(self, candidates: set, risk_events_df: pd.DataFrame,
+                            trade_date: date, lookback_days: int = 60) -> Tuple[set, Dict[str, int]]:
+        """
+        V2: 风险事件过滤
+
+        剔除近60日存在重大立案/处罚/严重审计问题的股票
+
+        Args:
+            candidates: 当前候选股票集合
+            risk_events_df: 风险事件DataFrame, 需含 ts_code/event_date/event_type/severity
+            trade_date: 交易日期
+            lookback_days: 回溯天数
+
+        Returns:
+            (过滤后集合, 剔除原因统计)
+        """
+        excluded_reasons = {}
+
+        if risk_events_df is None or risk_events_df.empty:
+            return candidates, excluded_reasons
+
+        # 筛选近lookback_days的重大风险事件
+        if 'event_date' in risk_events_df.columns:
+            event_dates = pd.to_datetime(risk_events_df['event_date'], errors='coerce')
+            cutoff = pd.Timestamp(trade_date) - pd.Timedelta(days=lookback_days)
+            recent_events = risk_events_df[
+                (event_dates >= cutoff) & (event_dates <= pd.Timestamp(trade_date))
+            ]
+        else:
+            recent_events = risk_events_df
+
+        if recent_events.empty:
+            return candidates, excluded_reasons
+
+        # 筛选严重事件 (立案/处罚/严重审计问题)
+        severe_types = {'investigation', 'penalty', 'audit_issue', 'delist_risk'}
+        if 'event_type' in recent_events.columns:
+            severe_events = recent_events[
+                recent_events['event_type'].isin(severe_types)
+            ]
+        elif 'severity' in recent_events.columns:
+            severe_events = recent_events[
+                recent_events['severity'].isin(['critical', 'high'])
+            ]
+        else:
+            severe_events = recent_events
+
+        if 'ts_code' in severe_events.columns:
+            risk_stocks = set(severe_events['ts_code'].dropna().unique())
+            excluded_reasons['risk_events'] = len(candidates & risk_stocks)
+            candidates -= risk_stocks
+
+        return candidates, excluded_reasons
+
+    def filter_blacklist(self, candidates: set, blacklist_df: pd.DataFrame,
+                         trade_date: date) -> Tuple[set, Dict[str, int]]:
+        """
+        V2: 黑名单硬过滤
+
+        剔除: ST/退市整理/重大立案/严重审计非标
+
+        Args:
+            candidates: 当前候选股票集合
+            blacklist_df: 黑名单DataFrame, 需含 ts_code/reason
+            trade_date: 交易日期
+
+        Returns:
+            (过滤后集合, 剔除原因统计)
+        """
+        excluded_reasons = {}
+
+        if blacklist_df is None or blacklist_df.empty:
+            return candidates, excluded_reasons
+
+        if 'ts_code' in blacklist_df.columns:
+            blacklisted = set(blacklist_df['ts_code'].dropna().unique())
+            excluded_reasons['blacklist'] = len(candidates & blacklisted)
+            candidates -= blacklisted
+
+        return candidates, excluded_reasons
+
+    def filter_limit_up_down(self, candidates: set, price_df: pd.DataFrame,
+                              trade_date: date) -> Tuple[set, Dict[str, int]]:
+        """
+        V2: 交易可行性过滤
+
+        剔除: 一字涨停/一字跌停/长期停牌刚复牌且流动性异常
+
+        Args:
+            candidates: 当前候选股票集合
+            price_df: 行情DataFrame, 需含 ts_code/trade_date/open/close/high/low
+            trade_date: 交易日期
+
+        Returns:
+            (过滤后集合, 剔除原因统计)
+        """
+        excluded_reasons = {}
+
+        if price_df.empty:
+            return candidates, excluded_reasons
+
+        # 获取当日行情
+        daily = self._filter_by_date(price_df, trade_date)
+        if daily.empty:
+            return candidates, excluded_reasons
+
+        required_cols = {'ts_code', 'open', 'close', 'high', 'low'}
+        if not required_cols.issubset(daily.columns):
+            return candidates, excluded_reasons
+
+        # 一字涨停/跌停: open=high=close=low (向量化替代iterrows)
+        candidate_mask = daily['ts_code'].isin(candidates)
+        is_one_price = (
+            (daily['open'] > 0) &
+            (abs(daily['open'] - daily['high']) < 0.01) &
+            (abs(daily['high'] - daily['close']) < 0.01) &
+            (abs(daily['close'] - daily['low']) < 0.01)
+        )
+        limit_stocks = set(daily.loc[candidate_mask & is_one_price, 'ts_code'])
+
+        excluded_reasons['limit_up_down'] = len(candidates & limit_stocks)
+        candidates -= limit_stocks
+
+        return candidates, excluded_reasons
 
     @staticmethod
     def _filter_by_date(df: pd.DataFrame, trade_date: date) -> pd.DataFrame:

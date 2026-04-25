@@ -1,302 +1,379 @@
 """
-信号融合层
-实现GPT设计9.1-9.4节: 模块分数融合、动态IC加权、Regime调权、高相关模块权重收缩
-核心: S_final = Σ w_m * z(S_m), 先横截面标准化再加权
+信号融合层 V2
+=============
+融合五大Alpha模块信号 + 风险惩罚独立扣分
+
+V2融合5步流程:
+1. 基础权重 → 2. 动态IC加权 → 3. Regime调权 → 4. 高相关收缩 → 5. 归一化
+
+V2权重基线:
+- quality_growth: 0.35 (质量成长)
+- expectation: 0.30 (预期修正)
+- residual_momentum: 0.25 (残差动量)
+- flow_confirm: 0.10 (资金流确认)
+
+V2 Regime映射:
+- risk_on (进攻): 质量成长↓ 动量↑ 资金流↑
+- trending (趋势): 均衡
+- defensive (防御): 质量↑ 动量↓
+- mean_reverting (震荡): 修正↑ 动量↓
+
+风险惩罚独立扣分: S_final = S_raw - 0.35 * P_risk
+
+动态权重收缩: w = 0.7 * w_base + 0.3 * w_dynamic_shrunk, 限制10%-45%
 """
-from typing import Dict, List, Optional, Tuple
-import re
 
 import numpy as np
 import pandas as pd
+from typing import Dict, List, Optional, Tuple
+import logging
 
-from app.core.alpha_modules import AlphaModule, get_all_modules
-from app.core.logging import logger
+from app.core.alpha_modules import (
+    get_alpha_modules,
+    get_risk_penalty_module,
+    MODULE_REGISTRY,
+)
+
+logger = logging.getLogger(__name__)
 
 
-class AlphaEnsemble:
-    """信号融合层 - GPT设计9.1-9.4节"""
+# ─────────────────────────────────────────────
+# V2 基线权重
+# ─────────────────────────────────────────────
 
-    # GPT设计9.2节初始权重建议
-    DEFAULT_WEIGHTS = {
-        'price': 0.30,
-        'fundamental': 0.25,
-        'revision': 0.25,
-        'flow_event': 0.20,
-    }
+DEFAULT_WEIGHTS: Dict[str, float] = {
+    "quality_growth": 0.35,
+    "expectation": 0.30,
+    "residual_momentum": 0.25,
+    "flow_confirm": 0.10,
+}
 
-    # GPT设计9.3节: Regime调权映射
-    REGIME_WEIGHT_ADJUSTMENTS = {
-        'trending': {
-            # 趋势市: 价格/修正权重更高
-            'price': 1.3, 'fundamental': 0.8, 'revision': 1.2, 'flow_event': 0.9,
-        },
-        'mean_reverting': {
-            # 震荡市: 反转/价值权重更高
-            'price': 1.2, 'fundamental': 1.3, 'revision': 0.8, 'flow_event': 0.9,
-        },
-        'defensive': {
-            # 防御市: 质量权重更高
-            'price': 0.7, 'fundamental': 1.4, 'revision': 0.8, 'flow_event': 0.6,
-        },
-        'risk_on': {
-            # 风险偏好高: 资金/事件更高
-            'price': 1.1, 'fundamental': 0.7, 'revision': 1.0, 'flow_event': 1.3,
-        },
-    }
+# 权重边界: 单模块权重 ∈ [MIN_WEIGHT, MAX_WEIGHT]
+MIN_WEIGHT = 0.10
+MAX_WEIGHT = 0.45
 
-    def __init__(self, modules: Optional[List[AlphaModule]] = None,
-                 weights: Optional[Dict[str, float]] = None):
-        """
-        Args:
-            modules: Alpha模块列表, None则使用全部默认模块
-            weights: 模块权重, None则使用DEFAULT_WEIGHTS
-        """
-        self.modules = modules or get_all_modules()
-        self.weights = weights or self.DEFAULT_WEIGHTS.copy()
-        self._ic_history: Dict[str, List[float]] = {m.name: [] for m in self.modules}
+# 动态收缩系数: w = SHRINK_BASE * w_base + (1 - SHRINK_BASE) * w_dynamic
+SHRINK_BASE = 0.70
 
-    def fuse(self, factor_df: pd.DataFrame,
-             regime: Optional[str] = None,
-             ic_history: Optional[pd.DataFrame] = None) -> Tuple[pd.Series, Dict[str, pd.Series]]:
-        """
-        融合各模块分数: S_final = Σ w_m * z(S_m)
+# 风险惩罚系数
+RISK_LAMBDA = 0.35
 
-        Args:
-            factor_df: 因子数据
-            regime: 当前市场状态 (可选, 用于调权)
-            ic_history: 模块IC历史 (可选, 用于动态加权)
 
-        Returns:
-            (final_score, module_scores): 最终分数 + 各模块分数
-        """
-        # 1. 计算各模块分数
+# ─────────────────────────────────────────────
+# V2 Regime权重调整映射
+# ─────────────────────────────────────────────
+
+REGIME_WEIGHT_ADJUSTMENTS: Dict[str, Dict[str, float]] = {
+    "risk_on": {
+        # 进攻: 质量成长↓ 动量↑ 资金流↑
+        "quality_growth": -0.05,
+        "expectation": 0.00,
+        "residual_momentum": +0.08,
+        "flow_confirm": +0.05,
+    },
+    "trending": {
+        # 趋势: 均衡
+        "quality_growth": 0.00,
+        "expectation": 0.00,
+        "residual_momentum": 0.00,
+        "flow_confirm": 0.00,
+    },
+    "defensive": {
+        # 防御: 质量↑ 动量↓
+        "quality_growth": +0.08,
+        "expectation": +0.02,
+        "residual_momentum": -0.08,
+        "flow_confirm": -0.02,
+    },
+    "mean_reverting": {
+        # 震荡: 修正↑ 动量↓
+        "quality_growth": +0.02,
+        "expectation": +0.06,
+        "residual_momentum": -0.06,
+        "flow_confirm": -0.02,
+    },
+}
+
+
+# ─────────────────────────────────────────────
+# 融合引擎
+# ─────────────────────────────────────────────
+
+class EnsembleEngine:
+    """
+    V2信号融合引擎
+
+    5步融合流程:
+    1. 基础权重初始化
+    2. 动态IC加权 (基于滚动IC)
+    3. Regime调权
+    4. 高相关收缩 (模块间高相关时向基线收缩)
+    5. 归一化
+
+    最终: S_final = S_raw - λ * P_risk
+    """
+
+    def __init__(
+        self,
+        base_weights: Optional[Dict[str, float]] = None,
+        risk_lambda: float = RISK_LAMBDA,
+        shrink_base: float = SHRINK_BASE,
+        min_weight: float = MIN_WEIGHT,
+        max_weight: float = MAX_WEIGHT,
+    ):
+        self.base_weights = base_weights or DEFAULT_WEIGHTS.copy()
+        self.risk_lambda = risk_lambda
+        self.shrink_base = shrink_base
+        self.min_weight = min_weight
+        self.max_weight = max_weight
+
+        # Alpha模块
+        self.alpha_modules = get_alpha_modules()
+        self.risk_module = get_risk_penalty_module()
+
+    def compute_module_scores(
+        self, df: pd.DataFrame, **kwargs
+    ) -> Dict[str, pd.Series]:
+        """计算所有Alpha模块得分"""
         module_scores = {}
-        for module in self.modules:
+        for name, module in self.alpha_modules.items():
             try:
-                score = module.score(factor_df)
-                if not score.empty:
-                    # 横截面标准化
-                    score = self._cross_sectional_zscore(score)
-                    module_scores[module.name] = score
+                scores = module.compute_scores(df, **kwargs)
+                module_scores[name] = scores
             except Exception as e:
-                logger.warning(f"Module {module.name} scoring failed: {e}")
+                logger.error(f"[Ensemble] 模块 {name} 计算失败: {e}")
+                module_scores[name] = pd.Series(0.0, index=df.index)
+        return module_scores
 
-        if not module_scores:
-            logger.warning("No module scores available for fusion")
-            return pd.Series(0.0, index=factor_df.index), {}
+    def compute_risk_penalty(self, df: pd.DataFrame, **kwargs) -> pd.Series:
+        """计算风险惩罚得分"""
+        try:
+            return self.risk_module.compute_scores(df, **kwargs)
+        except Exception as e:
+            logger.error(f"[Ensemble] 风险惩罚模块计算失败: {e}")
+            return pd.Series(0.0, index=df.index)
 
-        # 2. 确定权重
-        current_weights = self.weights.copy()
+    def step1_base_weights(self) -> Dict[str, float]:
+        """Step 1: 基础权重"""
+        return self.base_weights.copy()
 
-        # 2a. 动态IC加权
-        if ic_history is not None and not ic_history.empty:
-            dynamic_w = self.dynamic_weights(ic_history)
-            # 混合: 70%基础权重 + 30%动态权重 (避免过度切换)
-            for name in current_weights:
-                if name in dynamic_w:
-                    current_weights[name] = 0.7 * current_weights[name] + 0.3 * dynamic_w[name]
-
-        # 2b. Regime调权
-        if regime is not None:
-            current_weights = self.regime_adjust_weights(regime, current_weights)
-
-        # 2c. 高相关模块权重收缩
-        if len(module_scores) > 1:
-            scores_df = pd.DataFrame(module_scores)
-            current_weights = self.correlation_shrink(scores_df, current_weights)
-
-        # 归一化权重
-        total_w = sum(current_weights.values())
-        if total_w > 0:
-            current_weights = {k: v / total_w for k, v in current_weights.items()}
-
-        # 3. 加权融合
-        common_index = factor_df.index
-        final_score = pd.Series(0.0, index=common_index)
-
-        for name, score in module_scores.items():
-            w = current_weights.get(name, 0)
-            if w > 0:
-                # 对齐index
-                aligned = score.reindex(common_index).fillna(0)
-                final_score += w * aligned
-
-        # 4. 最终横截面标准化
-        final_score = self._cross_sectional_zscore(final_score)
-
-        logger.info(
-            "Alpha ensemble fused",
-            extra={
-                "n_modules": len(module_scores),
-                "weights": {k: round(v, 3) for k, v in current_weights.items()},
-                "regime": regime,
-            },
-        )
-
-        return final_score, module_scores
-
-    def dynamic_weights(self, ic_history: pd.DataFrame,
-                        window: int = 60,
-                        shrinkage: float = 0.5) -> Dict[str, float]:
+    def step2_dynamic_ic_weights(
+        self,
+        base_weights: Dict[str, float],
+        ic_dict: Optional[Dict[str, float]] = None,
+    ) -> Dict[str, float]:
         """
-        基于滚动IC/IR动态调权 (GPT设计9.3节)
+        Step 2: 动态IC加权
+
+        基于滚动IC调整权重:
+        - IC > 0: 权重上调
+        - IC < 0: 权重下调
+        - IC缺失: 使用基础权重
 
         Args:
-            ic_history: 模块IC历史, columns=模块名, index=trade_date
-            window: 滚动窗口(交易日)
-            shrinkage: 权重收缩系数 (防止极端权重)
-
-        Returns:
-            动态权重字典
-        """
-        if ic_history.empty:
-            return self.weights.copy()
-
-        # 取最近window的IC
-        recent_ic = ic_history.iloc[-window:] if len(ic_history) > window else ic_history
-
-        # 计算各模块IR (IC均值/IC标准差)
-        ir = {}
-        for col in recent_ic.columns:
-            ic_series = recent_ic[col].dropna()
-            if len(ic_series) > 10:
-                ic_mean = ic_series.mean()
-                ic_std = ic_series.std()
-                ir[col] = ic_mean / ic_std if ic_std > 0 else 0
-            else:
-                ir[col] = 0
-
-        # IR -> 权重 (正值IR才分配权重)
-        positive_ir = {k: max(v, 0) for k, v in ir.items()}
-        total_ir = sum(positive_ir.values())
-
-        if total_ir == 0:
-            return self.weights.copy()
-
-        # 收缩: w = (1-shrinkage)*w_base + shrinkage*w_ir
-        dynamic_w = {}
-        for name in self.weights:
-            w_base = self.weights[name]
-            w_ir = positive_ir.get(name, 0) / total_ir
-            dynamic_w[name] = (1 - shrinkage) * w_base + shrinkage * w_ir
-
-        # 归一化
-        total = sum(dynamic_w.values())
-        if total > 0:
-            dynamic_w = {k: v / total for k, v in dynamic_w.items()}
-
-        return dynamic_w
-
-    def regime_adjust_weights(self, regime: str,
-                              base_weights: Dict[str, float]) -> Dict[str, float]:
-        """
-        Regime调权 (GPT设计9.3节)
-
-        Args:
-            regime: 市场状态 ('trending', 'mean_reverting', 'defensive', 'risk_on')
             base_weights: 基础权重
-
-        Returns:
-            调整后的权重
+            ic_dict: 各模块的滚动IC值 {module_name: ic_value}
         """
-        adjustments = self.REGIME_WEIGHT_ADJUSTMENTS.get(regime)
-        if adjustments is None:
+        if ic_dict is None:
             return base_weights.copy()
 
+        dynamic_weights = {}
+        for name, base_w in base_weights.items():
+            ic = ic_dict.get(name, 0.0)
+            # IC调整幅度: IC * 0.3 (IC=0.1 → +3%)
+            adjustment = ic * 0.3
+            dynamic_weights[name] = base_w + adjustment
+
+        return dynamic_weights
+
+    def step3_regime_adjustment(
+        self,
+        weights: Dict[str, float],
+        regime: str = "trending",
+    ) -> Dict[str, float]:
+        """
+        Step 3: Regime调权
+
+        根据市场状态调整模块权重
+        """
+        adjustments = REGIME_WEIGHT_ADJUSTMENTS.get(regime, {})
         adjusted = {}
-        for name, w in base_weights.items():
-            adj = adjustments.get(name, 1.0)
-            adjusted[name] = w * adj
-
-        # 归一化
-        total = sum(adjusted.values())
-        if total > 0:
-            adjusted = {k: v / total for k, v in adjusted.items()}
-
-        logger.info(
-            "Regime weight adjustment",
-            extra={"regime": regime, "adjusted_weights": {k: round(v, 3) for k, v in adjusted.items()}},
-        )
-
+        for name, w in weights.items():
+            adj = adjustments.get(name, 0.0)
+            adjusted[name] = w + adj
         return adjusted
 
-    def correlation_shrink(self, module_scores: pd.DataFrame,
-                           weights: Dict[str, float],
-                           threshold: float = 0.7,
-                           shrink_factor: float = 0.5) -> Dict[str, float]:
+    def step4_correlation_shrinkage(
+        self,
+        weights: Dict[str, float],
+        module_corr: Optional[pd.DataFrame] = None,
+    ) -> Dict[str, float]:
         """
-        高相关模块权重收缩 (GPT设计9.3节)
-        如果两个模块近期高度相关, 则对权重做shrink
+        Step 4: 高相关收缩
 
-        Args:
-            module_scores: 模块分数, columns=模块名
-            weights: 当前权重
-            threshold: 相关性阈值
-            shrink_factor: 收缩因子
-
-        Returns:
-            收缩后的权重
+        当模块间相关性过高时, 将动态权重向基线收缩
+        收缩公式: w = shrink_base * w_base + (1 - shrink_base) * w_dynamic
         """
-        if module_scores.shape[1] < 2:
+        if module_corr is None:
+            # 无相关性信息时, 轻微收缩
+            shrunk = {}
+            for name, w in weights.items():
+                base_w = self.base_weights.get(name, 0.25)
+                shrunk[name] = self.shrink_base * base_w + (1 - self.shrink_base) * w
+            return shrunk
+
+        # 计算平均相关系数
+        n = len(module_corr)
+        if n < 2:
             return weights.copy()
 
-        # 计算相关矩阵
-        corr = module_scores.corr()
+        total_corr = 0.0
+        count = 0
+        cols = module_corr.columns.tolist()
+        for i in range(n):
+            for j in range(i + 1, n):
+                total_corr += abs(module_corr.iloc[i, j])
+                count += 1
 
-        # 找高相关对
-        adjusted = weights.copy()
-        modules = list(module_scores.columns)
+        avg_corr = total_corr / count if count > 0 else 0.0
 
-        for i in range(len(modules)):
-            for j in range(i + 1, len(modules)):
-                m1, m2 = modules[i], modules[j]
-                if m1 not in corr.columns or m2 not in corr.columns:
-                    continue
-                c = abs(corr.loc[m1, m2])
-                if c > threshold and m1 in adjusted and m2 in adjusted:
-                    # 两个模块高度相关, 按比例收缩较小的权重
-                    if adjusted[m1] >= adjusted[m2]:
-                        adjusted[m2] *= shrink_factor
-                    else:
-                        adjusted[m1] *= shrink_factor
+        # 相关性越高, 收缩越强
+        effective_shrink = min(1.0, self.shrink_base + 0.3 * avg_corr)
+
+        shrunk = {}
+        for name, w in weights.items():
+            base_w = self.base_weights.get(name, 0.25)
+            shrunk[name] = effective_shrink * base_w + (1 - effective_shrink) * w
+
+        return shrunk
+
+    def step5_normalize(
+        self, weights: Dict[str, float]
+    ) -> Dict[str, float]:
+        """
+        Step 5: 归一化 + 权重边界约束
+
+        - 单模块权重 ∈ [min_weight, max_weight]
+        - 所有模块权重之和 = 1.0
+        """
+        # 边界约束
+        constrained = {}
+        for name, w in weights.items():
+            constrained[name] = max(self.min_weight, min(self.max_weight, w))
 
         # 归一化
-        total = sum(adjusted.values())
+        total = sum(constrained.values())
         if total > 0:
-            adjusted = {k: v / total for k, v in adjusted.items()}
+            constrained = {k: v / total for k, v in constrained.items()}
 
-        return adjusted
+        return constrained
 
-    def update_ic_history(self, module_name: str, ic_value: float) -> None:
-        """更新模块IC历史"""
-        if module_name not in self._ic_history:
-            self._ic_history[module_name] = []
-        self._ic_history[module_name].append(ic_value)
-
-    def get_ic_history_df(self) -> pd.DataFrame:
-        """获取IC历史DataFrame"""
-        return pd.DataFrame(self._ic_history)
-
-    # ==================== 辅助方法 ====================
-
-    @staticmethod
-    def _cross_sectional_zscore(series: pd.Series) -> pd.Series:
-        """横截面z-score标准化
-
-        自动检测MultiIndex中日期所在的level:
-        - (ts_code, trade_date) → date在level=1
-        - (trade_date, ts_code) → date在level=0
+    def fuse(
+        self,
+        df: pd.DataFrame,
+        regime: str = "trending",
+        ic_dict: Optional[Dict[str, float]] = None,
+        module_corr: Optional[pd.DataFrame] = None,
+        apply_risk_penalty: bool = True,
+        precomputed_module_scores: Optional[Dict[str, pd.Series]] = None,
+        precomputed_risk_penalty: Optional[pd.Series] = None,
+        **kwargs,
+    ) -> Tuple[pd.Series, Dict]:
         """
-        if isinstance(series.index, pd.MultiIndex) and series.index.nlevels >= 2:
-            # 检测日期所在level: ts_code格式为 000001.SZ
-            level0_sample = str(series.index.get_level_values(0)[0])
-            if re.match(r'\d{6}\.[A-Z]{2}', level0_sample):
-                date_level = 1  # (ts_code, trade_date)
-            else:
-                date_level = 0  # (trade_date, ts_code)
-            return series.groupby(level=date_level).transform(
-                lambda x: (x - x.mean()) / x.std() if x.std() > 0 else x * 0
-            )
+        完整V2融合流程
+
+        Args:
+            df: 包含所有因子数据的DataFrame
+            regime: 当前市场状态
+            ic_dict: 各模块滚动IC
+            module_corr: 模块间相关系数矩阵
+            apply_risk_penalty: 是否应用风险惩罚
+            precomputed_module_scores: 预计算的Alpha模块得分(避免重复计算)
+            precomputed_risk_penalty: 预计算的风险惩罚得分
+
+        Returns:
+            (final_scores, meta_info)
+            - final_scores: 最终综合得分Series
+            - meta_info: 融合元信息(各步权重、模块得分等)
+        """
+        meta = {}
+
+        # 计算各模块得分 (使用预计算结果或重新计算)
+        if precomputed_module_scores is not None:
+            module_scores = precomputed_module_scores
         else:
-            std = series.std()
-            return (series - series.mean()) / std if std > 0 else series * 0
+            module_scores = self.compute_module_scores(df, **kwargs)
+        meta["module_scores"] = {k: v.to_dict() for k, v in module_scores.items()}
+
+        # Step 1: 基础权重
+        weights = self.step1_base_weights()
+        meta["step1_base_weights"] = weights.copy()
+
+        # Step 2: 动态IC加权
+        weights = self.step2_dynamic_ic_weights(weights, ic_dict)
+        meta["step2_ic_weights"] = weights.copy()
+
+        # Step 3: Regime调权
+        weights = self.step3_regime_adjustment(weights, regime)
+        meta["step3_regime_weights"] = weights.copy()
+
+        # Step 4: 高相关收缩
+        weights = self.step4_correlation_shrinkage(weights, module_corr)
+        meta["step4_shrunk_weights"] = weights.copy()
+
+        # Step 5: 归一化
+        weights = self.step5_normalize(weights)
+        meta["step5_final_weights"] = weights.copy()
+
+        # 加权融合
+        raw_score = pd.Series(0.0, index=df.index)
+        for name, w in weights.items():
+            if name in module_scores:
+                raw_score += w * module_scores[name]
+
+        meta["raw_score_stats"] = {
+            "mean": float(raw_score.mean()),
+            "std": float(raw_score.std()),
+            "min": float(raw_score.min()),
+            "max": float(raw_score.max()),
+        }
+
+        # 风险惩罚独立扣分
+        if apply_risk_penalty:
+            risk_penalty = self.compute_risk_penalty(df, **kwargs)
+            final_score = raw_score - self.risk_lambda * risk_penalty
+            meta["risk_penalty_stats"] = {
+                "mean": float(risk_penalty.mean()),
+                "std": float(risk_penalty.std()),
+                "lambda": self.risk_lambda,
+            }
+        else:
+            final_score = raw_score
+
+        meta["final_score_stats"] = {
+            "mean": float(final_score.mean()),
+            "std": float(final_score.std()),
+            "min": float(final_score.min()),
+            "max": float(final_score.max()),
+        }
+
+        return final_score, meta
+
+
+# ─────────────────────────────────────────────
+# 便捷函数
+# ─────────────────────────────────────────────
+
+def get_default_weights() -> Dict[str, float]:
+    """获取V2默认权重"""
+    return DEFAULT_WEIGHTS.copy()
+
+
+def get_regime_adjustments() -> Dict[str, Dict[str, float]]:
+    """获取Regime权重调整映射"""
+    return REGIME_WEIGHT_ADJUSTMENTS.copy()
+
+
+def create_ensemble_engine(**kwargs) -> EnsembleEngine:
+    """创建融合引擎"""
+    return EnsembleEngine(**kwargs)

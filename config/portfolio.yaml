@@ -1,0 +1,46 @@
+# 组合配置 V2
+portfolio:
+  # 持仓数量
+  top_n: 60
+
+  # 分层赋权
+  tier_multipliers:
+    tier1:
+      range: [1, 10]
+      multiplier: 1.5
+    tier2:
+      range: [11, 30]
+      multiplier: 1.2
+    tier3:
+      range: [31, 60]
+      multiplier: 1.0
+
+  # 风险折扣
+  risk_discount:
+    low: 1.00
+    medium: 0.85
+    high: 0.60
+    extreme: 0.00
+
+  # 流动性折扣
+  liquidity_discount:
+    normal: 1.00
+    marginal: 0.85
+    insufficient: 0.60
+
+  # 行业约束
+  industry_constraints:
+    max_single_industry: 0.20
+    max_deviation: 0.05
+
+  # 调仓缓冲区
+  rebalance_buffer:
+    hold_top: 75
+    buy_top: 50
+    min_weight_pct: 0.20
+
+  # 交易单位
+  lot_size: 100
+
+  # 双轨制
+  mode: production  # research / production

@@ -1,0 +1,52 @@
+# 风控配置 V2
+risk:
+  # 黑名单规则
+  blacklist:
+    st: true
+    delist_organizing: true
+    major_investigation: true
+    severe_audit_non_standard: true
+
+  # 风险惩罚规则引擎
+  penalty_rules:
+    goodwill_ratio:
+      threshold: 0.50
+      weight: 0.15
+    pledge_ratio:
+      threshold: 0.50
+      weight: 0.10
+    reduction_density:
+      threshold: 0.01
+      window_days: 30
+      weight: 0.10
+    cashflow_quality:
+      threshold: 0.50
+      weight: 0.10
+    earnings_warning:
+      weight: 0.15
+    inquiry_frequency:
+      window_days: 60
+      weight: 0.20
+
+  # 组合风控阈值
+  portfolio_risk:
+    max_single_position: 0.03
+    max_industry_deviation: 0.05
+    max_portfolio_vol: 0.25
+    max_drawdown: 0.15
+    max_turnover: 8.0
+    crowding_threshold: 0.40
+
+  # 极端情景保护
+  extreme_scenarios:
+    vix_spike:
+      percentile: 95
+      action: reduce_to_60_pct
+    index_crash_plus_breadth_collapse:
+      index_drop_pct: 3
+      breadth_threshold: 0.30
+      action: reduce_to_30_pct
+    northbound_outflow_plus_high_vol:
+      outflow_threshold: 5000000000
+      vol_percentile: 75
+      action: reduce_to_30_pct

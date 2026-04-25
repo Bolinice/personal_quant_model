@@ -58,6 +58,18 @@ def sync_financial_tushare(ts_code: str, source: TushareDataSource) -> int:
         if df is None or df.empty:
             return 0
 
+        # 2. balancesheet - 获取商誉
+        goodwill_map = {}
+        try:
+            bs_df = source.get_balance_sheet_with_goodwill(ts_code)
+            if bs_df is not None and not bs_df.empty and 'end_date' in bs_df.columns:
+                for _, bs_row in bs_df.iterrows():
+                    ed = str(bs_row.get('end_date', ''))
+                    if ed and 'goodwill' in bs_df.columns and pd.notna(bs_row.get('goodwill')):
+                        goodwill_map[ed] = safe_float(bs_row['goodwill'])
+        except Exception:
+            pass
+
         # 批量获取已存在的end_date
         end_dates = []
         for _, row in df.iterrows():
@@ -91,6 +103,9 @@ def sync_financial_tushare(ts_code: str, source: TushareDataSource) -> int:
 
             ann_date = str(row.get('ann_date', ''))[:8] if pd.notna(row.get('ann_date')) else None
 
+            # 从balancesheet获取商誉
+            goodwill = goodwill_map.get(ed) or goodwill_map.get(str(end_date))
+
             new_records.append(StockFinancial(
                 ts_code=ts_code,
                 end_date=end_date,
@@ -106,6 +121,7 @@ def sync_financial_tushare(ts_code: str, source: TushareDataSource) -> int:
                 total_revenue=safe_float(row.get('total_revenue')),
                 net_profit=safe_float(row.get('net_profit')),
                 operating_cash_flow=safe_float(row.get('ocfps')),  # 每股经营现金流
+                goodwill=goodwill,
             ))
 
         if new_records:

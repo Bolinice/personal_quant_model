@@ -7,10 +7,12 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { backtestApi } from '@/api';
 import type { BacktestCreate } from '@/api';
 import { PageHeader, GlassPanel } from '@/components/ui';
+import { ComplianceModal } from '@/components/compliance';
 
 export default function BacktestCreate() {
   const navigate = useNavigate();
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
+  const [complianceOpen, setComplianceOpen] = useState(false);
   const [form, setForm] = useState<BacktestCreate>({
     name: '',
     start_date: '2020-01-01',
@@ -25,6 +27,16 @@ export default function BacktestCreate() {
       setSnackbar({ open: true, message: '回测创建成功', severity: 'success' });
       setTimeout(() => navigate(`/backtests/${res.data.id}`), 1000);
     } catch { setSnackbar({ open: true, message: '创建失败', severity: 'error' }); }
+  };
+
+  const handleCreateClick = () => {
+    // 首次创建回测时弹出合规确认
+    const confirmed = localStorage.getItem('compliance_backtest_confirmed');
+    if (!confirmed) {
+      setComplianceOpen(true);
+    } else {
+      handleCreate();
+    }
   };
 
   return (
@@ -43,7 +55,7 @@ export default function BacktestCreate() {
           <TextField label="描述" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} fullWidth multiline rows={2} />
           <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', mt: 2 }}>
             <Button onClick={() => navigate('/backtests')}>取消</Button>
-            <Button variant="contained" onClick={handleCreate}>创建</Button>
+            <Button variant="contained" onClick={handleCreateClick}>创建</Button>
           </Box>
         </Box>
       </GlassPanel>
@@ -51,6 +63,12 @@ export default function BacktestCreate() {
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
         <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>{snackbar.message}</Alert>
       </Snackbar>
+      <ComplianceModal
+        storageKey="compliance_backtest_confirmed"
+        open={complianceOpen}
+        onClose={() => setComplianceOpen(false)}
+        onConfirm={handleCreate}
+      />
     </Box>
   );
 }

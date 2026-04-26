@@ -4,7 +4,7 @@ from app.api.v1 import (
     auth, users, securities, market, stock_pools, factors,
     models, timing, portfolios, backtests, simulated_portfolios,
     products, subscriptions, reports, task_logs, alert_logs, performance,
-    strategies, notifications, content,
+    strategies, notifications, content, usage, risk_assessment, data_quality,
     # V2新增路由
     events, factor_metadata, model_registry, experiments, snapshots, monitor,
 )
@@ -31,6 +31,9 @@ api_router.include_router(performance.router, prefix="/performance", tags=["绩�
 api_router.include_router(strategies.router, prefix="/strategies", tags=["策略管理"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["通知管理"])
 api_router.include_router(content.router, prefix="/content", tags=["内容管理"])
+api_router.include_router(usage.router, prefix="/usage", tags=["用量统计"])
+api_router.include_router(risk_assessment.router, prefix="/risk-assessment", tags=["风险测评"])
+api_router.include_router(data_quality.router, prefix="/data-quality", tags=["数据质量"])
 # V2新增路由
 api_router.include_router(events.router, tags=["事件中心"])
 api_router.include_router(factor_metadata.router, tags=["因子元数据"])

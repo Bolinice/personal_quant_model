@@ -70,6 +70,9 @@ class MLConfig(BaseSettings):
 class Settings(BaseSettings):
     """应用配置 - 所有敏感值必须从环境变量读取"""
 
+    # 运行环境
+    ENV: str = "development"  # development / staging / production
+
     # 数据库 - PostgreSQL (生产环境)
     DATABASE_URL: str = "postgresql+psycopg2://localhost/quant_platform"
 
@@ -118,16 +121,27 @@ class Settings(BaseSettings):
     }
 
     def check_production_safety(self) -> List[str]:
-        """检查生产环境安全配置，返回警告列表"""
+        """检查生产环境安全配置，返回警告列表；生产环境直接阻断"""
         warnings = []
         if self.SECRET_KEY == "CHANGE_ME_IN_PRODUCTION":
-            warnings.append("SECRET_KEY 未修改，请在 .env 中设置强密钥")
+            msg = "SECRET_KEY 未修改，请在 .env 中设置强密钥"
+            if self.ENV == "production":
+                raise ValueError(f"生产环境安全阻断: {msg}")
+            warnings.append(msg)
         if not self.MINIO_ACCESS_KEY:
-            warnings.append("MINIO_ACCESS_KEY 未设置")
+            msg = "MINIO_ACCESS_KEY 未设置"
+            if self.ENV == "production":
+                raise ValueError(f"生产环境安全阻断: {msg}")
+            warnings.append(msg)
         if not self.MINIO_SECRET_KEY:
-            warnings.append("MINIO_SECRET_KEY 未设置")
+            msg = "MINIO_SECRET_KEY 未设置"
+            if self.ENV == "production":
+                raise ValueError(f"生产环境安全阻断: {msg}")
+            warnings.append(msg)
         if not self.TUSHARE_TOKEN:
             warnings.append("TUSHARE_TOKEN 未设置，数据同步功能不可用")
+        if self.ENV == "production" and self.DEBUG:
+            raise ValueError("生产环境安全阻断: DEBUG=True 不允许在生产环境开启")
         return warnings
 
 

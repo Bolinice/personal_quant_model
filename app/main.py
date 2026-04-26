@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.logging import logger
 from app.api.v1 import api_router
-from app.middleware.middleware import MetricsMiddleware, LoggingMiddleware, RateLimitMiddleware
+from app.middleware.middleware import MetricsMiddleware, LoggingMiddleware, RateLimitMiddleware, RedisRateLimitMiddleware, ComplianceMiddleware, SlowQueryMiddleware
 
 
 @asynccontextmanager
@@ -12,16 +12,21 @@ async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     logger.info("Application starting...")
 
-    # 生产环境安全检查
-    safety_warnings = settings.check_production_safety()
-    if safety_warnings:
-        for w in safety_warnings:
-            logger.warning(f"Security: {w}")
+    # 生产环境安全检查（阻断而非警告）
+    try:
+        safety_warnings = settings.check_production_safety()
+        if safety_warnings:
+            for w in safety_warnings:
+                logger.warning(f"Security: {w}")
+    except ValueError as e:
+        logger.error(str(e))
+        raise
 
-    # 初始化数据库表
-    from app.db.base import Base, engine
-    Base.metadata.create_all(bind=engine)
-    logger.info("Database tables initialized")
+    # 开发环境自动建表，生产环境必须走 Alembic
+    if settings.ENV == "development":
+        from app.db.base import Base, engine
+        Base.metadata.create_all(bind=engine)
+        logger.info("开发环境：自动建表完成（生产环境请使用 Alembic 迁移）")
 
     yield
 
@@ -55,8 +60,10 @@ app.add_middleware(
 )
 
 app.add_middleware(LoggingMiddleware)
-app.add_middleware(RateLimitMiddleware, requests_per_minute=60)
+app.add_middleware(RedisRateLimitMiddleware, requests_per_minute=60)
 app.add_middleware(MetricsMiddleware)
+app.add_middleware(SlowQueryMiddleware)
+app.add_middleware(ComplianceMiddleware)
 
 # 注册API路由
 app.include_router(api_router, prefix="/api/v1")

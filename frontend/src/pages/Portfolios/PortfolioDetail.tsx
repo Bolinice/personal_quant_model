@@ -8,6 +8,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { portfolioApi } from '@/api';
 import type { PortfolioPosition, RebalanceRecord } from '@/api';
 import { PageHeader, GlassPanel, NeonChip } from '@/components/ui';
+import { DisclaimerBanner } from '@/components/compliance';
 
 export default function PortfolioDetail() {
   const { id } = useParams<{ id: string }>();
@@ -96,6 +97,7 @@ export default function PortfolioDetail() {
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
         <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>{snackbar.message}</Alert>
       </Snackbar>
+      <DisclaimerBanner variant="page" pageType="portfolio" />
     </Box>
   );
 }

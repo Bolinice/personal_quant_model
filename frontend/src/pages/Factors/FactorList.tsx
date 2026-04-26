@@ -66,6 +66,7 @@ export default function FactorList() {
       <Snackbar open={!!error} autoHideDuration={3000} onClose={() => setError('')} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
         <Alert severity="error" onClose={() => setError('')}>{error}</Alert>
       </Snackbar>
+      <DisclaimerBanner variant="section" pageType="factor" />
     </Box>
   );
 }

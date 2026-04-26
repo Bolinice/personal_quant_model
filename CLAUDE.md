@@ -3,6 +3,8 @@
 ## 项目概述
 基于 Python + FastAPI 的 A 股中低频量化策略平台，核心能力：多因子选股、指数择时、组合构建、回测验证、模拟组合、商业化交付。
 
+**合规定位**：本平台定位为"量化研究与回测分析工具"，不构成投资建议，不提供个性化证券投资顾问服务，不代客交易。详见 [PLAN_COMMERCIALIZATION](document/PLAN_COMMERCIALIZATION.md)。
+
 ## 技术栈
 - 后端：Python 3.11+ / FastAPI / SQLAlchemy 2.x / Celery + Redis
 - 前端：React + TypeScript + Vite + Ant Design
@@ -28,19 +30,25 @@
 - `document/` — 项目文档
 
 ## 文档
-- [PRD](document/PRD.md) — 产品需求文档 V2.2
-- [TDD](document/TDD.md) — 技术架构与数据库设计 V2.1
+- [PRD](document/PRD.md) — 产品需求文档 V2.4
+- [TDD](document/TDD.md) — 技术架构与数据库设计 V2.3
 - [ADD](document/ADD.md) — 算法设计说明书 V1.2
 - [WORKFLOW](document/WORKFLOW.md) — 工作流文档 V1.2（日终流水线、数据流、性能优化、自然语言解读）
 - [API](document/API.md) — API 接口文档 V1.1
 - [DEPLOYMENT](document/DEPLOYMENT.md) — 部署指南 V1.2
 - [user_guide](document/user_guide.md) — 客户端使用指南 V1.1
+- [PLAN_CODE_OPTIMIZATION](document/PLAN_CODE_OPTIMIZATION.md) — 业务代码优化计划书 V1.0
+- [PLAN_COMMERCIALIZATION](document/PLAN_COMMERCIALIZATION.md) — 商业逻辑与合规改造计划书 V1.0
+- [PLAN_UI_UX](document/PLAN_UI_UX.md) — 前台 UI/UX 设计说明书 V1.0
+- [PLAN_COPYWRITING](document/PLAN_COPYWRITING.md) — 首页/定价页/免责声明文案规范 V1.0
 
 ## 开发规范
 - 所有财务数据必须按公告发布日期使用，禁止未来函数
 - 因子预处理流程：缺失值处理 → 去极值(MAD) → 标准化(Z-score) → 中性化
 - 回测必须遵守 A 股交易规则：T+1、涨跌停、停牌、100 股交易单位
 - 统一响应格式：`{"code": 0, "message": "success", "data": {}}`
+- **合规规范**：禁止使用"荐股/调仓信号/跟单/保收益"等高风险表述，使用"研究观察/结构变化/历史分析"替代
+- 所有收益类数据必须标注"历史回测，不代表未来"
 
 ## 常用命令
 ```bash

@@ -5,9 +5,8 @@
 """
 from typing import Optional, Dict, Tuple
 import secrets
-from datetime import datetime, timedelta, timedelta
+from datetime import datetime, timedelta
 import hashlib
-import secrets
 import re
 from jose import jwt, JWTError
 from sqlalchemy.orm import Session

@@ -26,7 +26,10 @@ import PortfolioDetail from '@/pages/Portfolios/PortfolioDetail';
 import PerformanceReport from '@/pages/Performance/PerformanceReport';
 import MonitorDashboard from '@/pages/Monitor/MonitorDashboard';
 import EventList from '@/pages/Events/EventList';
+import DataCenter from '@/pages/DataCenter';
 import Profile from '@/pages/Settings/Profile';
+import RiskAssessment from '@/pages/Settings/RiskAssessment';
+import SubscriptionPage from '@/pages/Settings/SubscriptionPage';
 import Subscribe from '@/pages/Subscribe';
 
 function AppRoutes() {
@@ -65,7 +68,10 @@ function AppRoutes() {
         <Route path="performance" element={<PerformanceReport />} />
         <Route path="monitor" element={<MonitorDashboard />} />
         <Route path="events" element={<EventList />} />
+        <Route path="data" element={<DataCenter />} />
         <Route path="settings" element={<Profile />} />
+        <Route path="settings/subscription" element={<SubscriptionPage />} />
+        <Route path="settings/risk-assessment" element={<RiskAssessment />} />
         <Route path="subscribe" element={<Subscribe />} />
       </Route>
     </Routes>

@@ -11,6 +11,7 @@ import { backtestApi, performanceApi } from '@/api';
 import type { Backtest, BacktestResult, BacktestTrade } from '@/api';
 import type { PerformanceAnalysis } from '@/api';
 import { PageHeader, GlassPanel, MetricCard, NeonChip } from '@/components/ui';
+import { DisclaimerBanner, BacktestTag } from '@/components/compliance';
 
 const statusNeonColor: Record<string, 'default' | 'cyan' | 'green' | 'red' | 'amber'> = {
   pending: 'default', running: 'cyan', completed: 'green', failed: 'red', cancelled: 'amber',
@@ -143,6 +144,7 @@ export default function BacktestResultPage() {
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
         <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>{snackbar.message}</Alert>
       </Snackbar>
+      <DisclaimerBanner variant="page" pageType="backtest" />
     </Box>
   );
 }

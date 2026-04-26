@@ -1,6 +1,7 @@
 """内容管理 API。"""
 
 from typing import List
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.base import get_db
@@ -13,8 +14,19 @@ from app.schemas.content import (
     PageContentOut, ContentSectionOut,
 )
 from app.core.response import success, error
+from app.core.compliance import check_high_risk_text, SAFE_REPLACEMENTS
 
 router = APIRouter()
+
+
+class CheckTextRequest(BaseModel):
+    text: str
+
+
+class CheckTextResponse(BaseModel):
+    has_risk: bool
+    found_terms: List[str]
+    replacements: dict
 
 
 @router.get("/pages")
@@ -54,3 +66,18 @@ def update_block(block_id: int, block_update: ContentBlockUpdate, db: Session = 
     if block is None:
         raise HTTPException(status_code=404, detail="Block not found")
     return success(block)
+
+
+@router.post("/check-text")
+def check_text(req: CheckTextRequest):
+    """检测文本中的高风险词汇（合规审核）
+
+    返回检测到的高风险词汇及安全替换建议。
+    """
+    found_terms = check_high_risk_text(req.text)
+    replacements = {term: SAFE_REPLACEMENTS[term] for term in found_terms if term in SAFE_REPLACEMENTS}
+    return success({
+        "has_risk": len(found_terms) > 0,
+        "found_terms": found_terms,
+        "replacements": replacements,
+    })

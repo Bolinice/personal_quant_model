@@ -11,6 +11,8 @@ from app.services.backtests_service import (
 )
 from app.schemas.backtests import BacktestCreate, BacktestUpdate, BacktestOut, BacktestResultOut
 from app.core.response import success, error
+from app.core.permissions import require_permission, PermissionCode
+from app.services import usage_service
 
 router = APIRouter()
 
@@ -32,9 +34,23 @@ def read_backtest(backtest_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/")
-def create_backtest_endpoint(backtest: BacktestCreate, db: Session = Depends(get_db)):
-    """创建回测"""
+def create_backtest_endpoint(
+    backtest: BacktestCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_permission(PermissionCode.BACKTEST_DAILY_1)),
+):
+    """创建回测（需权限 + 用量检查）"""
+    # 检查每日用量限制
+    usage_check = usage_service.check_usage_limit(db, current_user.id, PermissionCode.BACKTEST_DAILY_1)
+    if not usage_check["allowed"]:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"今日回测次数已达上限({usage_check['limit']}次/天)，请升级订阅方案",
+        )
+
     result = create_backtest(backtest, db=db)
+    # 记录用量
+    usage_service.record_usage(db, current_user.id, PermissionCode.BACKTEST_DAILY_1)
     return success(result)
 
 

@@ -18,6 +18,7 @@ class User(Base):
     org_id: Optional[int] = Column(Integer)  # 所属机构
     is_active: bool = Column(Boolean, default=True)
     is_superuser: bool = Column(Boolean, default=False)
+    risk_level: Optional[str] = Column(String(10), nullable=True, comment='风险等级: C1/C2/C3/C4')
     avatar_url: Optional[str] = Column(String(255))
     reset_token: Optional[str] = Column(String(255), nullable=True, comment='密码重置令牌')
     reset_token_expires: Optional[DateTime] = Column(DateTime, nullable=True, comment='重置令牌过期时间')

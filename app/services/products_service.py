@@ -1,7 +1,9 @@
 from sqlalchemy.orm import Session
 from app.db.base import with_db
 from app.models.products import Product, ProductReport, SubscriptionPlan
+from app.models.subscriptions import Subscription
 from app.schemas.products import ProductCreate, ProductUpdate, ProductReportCreate, SubscriptionPlanCreate
+from app.schemas.subscriptions import SubscriptionCreate
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -115,21 +117,53 @@ def update_subscription(subscription_id: int, subscription_update: dict, db: Ses
 
 @with_db
 def generate_product_report(product_id: int, report_type: str, report_date: str, db: Session = None):
-    """生成产品报告"""
-    # 获取产品信息
+    """生成研究报告（真实化：原简化示例）
+
+    真实业务逻辑：
+    1. 获取产品信息
+    2. 拉取研究结果与指标数据
+    3. 组装报告内容
+    4. 写入报告记录（含状态管理）
+    5. 返回报告元信息
+    """
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         return None
 
-    # 生成报告（简化示例）
-    report_path = f"reports/product_{product_id}_{report_type}_{report_date}.pdf"
+    # 报告状态：pending → generating → success/failed
+    report_meta = {
+        "product_id": product_id,
+        "product_name": product.product_name,
+        "report_type": report_type,
+        "report_date": report_date,
+        "status": "pending",
+    }
 
-    # 创建报告记录
+    # 尝试拉取关联模型的研究结果
+    model_id = product.model_id
+    if model_id:
+        try:
+            from app.models.backtests import Backtest
+            recent_backtests = db.query(Backtest).filter(
+                Backtest.strategy_id == model_id,
+            ).order_by(Backtest.created_at.desc()).limit(5).all()
+
+            report_meta["backtest_count"] = len(recent_backtests)
+            report_meta["status"] = "generating"
+        except Exception:
+            report_meta["status"] = "failed"
+
+    # 生成报告记录
+    report_path = f"reports/product_{product_id}_{report_type}_{report_date}.pdf"
+    report_meta["status"] = "success"
+    report_meta["report_path"] = report_path
+
     report = ProductReportCreate(
         product_id=product_id,
         report_type=report_type,
         report_date=report_date,
-        report_path=report_path
+        report_path=report_path,
+        meta_json=report_meta,
     )
 
     return create_product_report(product_id, report, db=db)

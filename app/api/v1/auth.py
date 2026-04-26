@@ -192,15 +192,15 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=500, detail="注册失败")
 
-    # 自动创建免费订阅
+    # 自动创建试用订阅（7天试用期）
     from app.models.subscriptions import Subscription
     from datetime import datetime, timedelta
     sub = Subscription(
         user_id=user.id,
-        plan_type="free",
+        plan_type="trial",
         status="active",
         start_date=datetime.now().date(),
-        end_date=(datetime.now() + timedelta(days=36500)).date(),  # 永不过期
+        end_date=(datetime.now() + timedelta(days=7)).date(),  # 7天试用
     )
     db.add(sub)
     db.commit()

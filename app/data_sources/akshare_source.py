@@ -543,7 +543,11 @@ class AKShareDataSource(BaseDataSource):
     def get_share_pledge(self, ts_code: str = None) -> pd.DataFrame:
         """获取股权质押数据 (东方财富)"""
         try:
-            df = self._ak.stock_share_pledge_em(symbol=ts_code.split('.')[0] if ts_code else None)
+            if ts_code:
+                code = ts_code.split('.')[0]
+                df = self._ak.stock_gpzy_individual_pledge_ratio_detail_em(symbol=code)
+            else:
+                df = self._ak.stock_gpzy_pledge_ratio_em()
             if df is not None and not df.empty:
                 logger.info(f"获取股权质押数据: {len(df)} 条")
             return df if df is not None else pd.DataFrame()
@@ -571,7 +575,7 @@ class AKShareDataSource(BaseDataSource):
         """获取机构持仓数据 (东方财富)"""
         try:
             code = ts_code.split('.')[0]
-            df = self._ak.stock_institute_hold_detail_em(symbol=code, quarter=quarter)
+            df = self._ak.stock_institute_hold_detail(stock=code, quarter=quarter)
             if df is not None and not df.empty:
                 logger.info(f"获取机构持仓 {ts_code}: {len(df)} 条")
             return df if df is not None else pd.DataFrame()
@@ -581,14 +585,13 @@ class AKShareDataSource(BaseDataSource):
 
     # ==================== 分析师一致预期 ====================
 
-    def get_analyst_consensus(self, ts_code: str) -> pd.DataFrame:
-        """获取分析师一致预期数据 (东方财富)"""
+    def get_analyst_consensus(self, ts_code: str = None) -> pd.DataFrame:
+        """获取分析师一致预期数据 (新浪财经)"""
         try:
-            code = ts_code.split('.')[0]
-            df = self._ak.stock_analyst_detail_em(symbol=code)
+            df = self._ak.stock_institute_recommend(symbol='一致预期选股')
             if df is not None and not df.empty:
-                logger.info(f"获取分析师一致预期 {ts_code}: {len(df)} 条")
+                logger.info(f"获取分析师一致预期: {len(df)} 条")
             return df if df is not None else pd.DataFrame()
         except Exception as e:
-            logger.error(f"获取分析师一致预期 {ts_code} 失败: {e}")
+            logger.error(f"获取分析师一致预期失败: {e}")
             return pd.DataFrame()

@@ -14,7 +14,7 @@ class Subscription(Base):
 
     id: int = Column(Integer, primary_key=True, index=True)
     user_id: int = Column(Integer, index=True, nullable=False)
-    product_id: int = Column(Integer, index=True, nullable=False)
+    product_id: int = Column(Integer, index=True, nullable=True)
     plan_id: int = Column(Integer)
     plan_type: str = Column(String(20))  # month, quarter, year
     start_date: Date = Column(Date)

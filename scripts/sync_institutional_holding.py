@@ -4,6 +4,12 @@
 按季度周期同步
 """
 import sys
+import os
+
+# 清除代理环境变量，防止 tushare 请求走 macOS 系统代理超时
+for _k in ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY']:
+    os.environ.pop(_k, None)
+
 sys.path.insert(0, '.')
 
 import time
@@ -87,18 +93,17 @@ def sync_institutional_akshare(ts_code: str) -> int:
             for q in range(1, 5):
                 quarter = f"{year}{q}"
                 try:
-                    df = ak.stock_institute_hold_detail_em(symbol=code, quarter=quarter)
+                    df = ak.stock_institute_hold_detail(stock=code, quarter=quarter)
                 except Exception:
                     df = pd.DataFrame()
 
                 if df is None or df.empty:
                     continue
 
-                # 取汇总行(通常第一行是合计)
-                for _, row in df.head(1).iterrows():
-                    end_date = str(row.get('截止日期', ''))[:10].replace('-', '')
-                    if not end_date:
-                        continue
+                # 计算汇总: 所有机构的持股比例之和
+                if '持股比例' in df.columns:
+                    total_ratio = df['持股比例'].sum()
+                    end_date = f"{year}{['0331','0630','0930','1231'][q-1]}"
                     existing = db.query(StockInstitutionalHolding).filter(
                         StockInstitutionalHolding.ts_code == ts_code,
                         StockInstitutionalHolding.trade_date == end_date,
@@ -108,9 +113,8 @@ def sync_institutional_akshare(ts_code: str) -> int:
                     new_records.append(StockInstitutionalHolding(
                         ts_code=ts_code,
                         trade_date=end_date,
-                        ann_date=end_date,  # AKShare无公告日, 保守用报告期
-                        hold_amount=safe_float(row.get('持股数量', row.get('持有数量'))),
-                        hold_ratio=safe_float(row.get('持股比例', row.get('持有比例'))),
+                        ann_date=end_date,
+                        hold_ratio=total_ratio,
                     ))
 
                 time.sleep(0.1)

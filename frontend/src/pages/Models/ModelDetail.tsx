@@ -16,6 +16,7 @@ import HistoryIcon from '@mui/icons-material/History';
 import ApiIcon from '@mui/icons-material/Api';
 import GroupIcon from '@mui/icons-material/Group';
 import DescriptionIcon from '@mui/icons-material/Description';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
 import { stockPoolApi, modelApi, subscriptionApi } from '@/api';
 import type { StockPool, Model, ModelPerformance, ModelScore } from '@/api';
 import { PageHeader, GlassPanel, GlassTable, NeonChip, MetricCard } from '@/components/ui';
@@ -256,29 +257,55 @@ export default function ModelDetail() {
               </Grid>
             </Grid>
 
-            {/* Chart placeholder */}
+            {/* Charts */}
             <Grid container spacing={2.5} sx={{ mb: 3 }}>
               <Grid size={{ xs: 12, md: 6 }}>
                 <GlassPanel animate={false}>
                   <Typography sx={{ fontWeight: 600, mb: 1.5 }}>收益曲线</Typography>
-                  <Box sx={{
-                    height: 250, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: 'linear-gradient(180deg, rgba(34, 211, 238, 0.03) 0%, rgba(139, 92, 246, 0.03) 100%)',
-                    borderRadius: 2, border: '1px dashed rgba(148, 163, 184, 0.15)',
-                  }}>
-                    <Typography sx={{ color: '#64748b' }}>图表区域</Typography>
+                  <Box sx={{ height: 250 }}>
+                    {performance.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={performance.slice().reverse().map((p) => ({
+                          date: p.trade_date?.slice(0, 10) || '',
+                          return: p.cumulative_return != null ? p.cumulative_return * 100 : 0,
+                        }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" />
+                          <XAxis dataKey="date" fontSize={10} tick={{ fill: '#64748b' }} />
+                          <YAxis fontSize={10} tick={{ fill: '#64748b' }} unit="%" />
+                          <Tooltip contentStyle={{ backgroundColor: 'rgba(15,23,42,0.9)', border: '1px solid rgba(148,163,184,0.15)', borderRadius: 8 }} />
+                          <Area type="monotone" dataKey="return" stroke="#22d3ee" fill="rgba(34,211,238,0.1)" strokeWidth={2} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Typography sx={{ color: '#64748b' }}>暂无收益数据</Typography>
+                      </Box>
+                    )}
                   </Box>
                 </GlassPanel>
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
                 <GlassPanel animate={false}>
                   <Typography sx={{ fontWeight: 600, mb: 1.5 }}>回撤曲线</Typography>
-                  <Box sx={{
-                    height: 250, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: 'linear-gradient(180deg, rgba(244, 63, 94, 0.03) 0%, rgba(245, 158, 11, 0.03) 100%)',
-                    borderRadius: 2, border: '1px dashed rgba(148, 163, 184, 0.15)',
-                  }}>
-                    <Typography sx={{ color: '#64748b' }}>图表区域</Typography>
+                  <Box sx={{ height: 250 }}>
+                    {performance.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={performance.slice().reverse().map((p) => ({
+                          date: p.trade_date?.slice(0, 10) || '',
+                          drawdown: p.max_drawdown != null ? p.max_drawdown * 100 : 0,
+                        }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" />
+                          <XAxis dataKey="date" fontSize={10} tick={{ fill: '#64748b' }} />
+                          <YAxis fontSize={10} tick={{ fill: '#64748b' }} unit="%" />
+                          <Tooltip contentStyle={{ backgroundColor: 'rgba(15,23,42,0.9)', border: '1px solid rgba(148,163,184,0.15)', borderRadius: 8 }} />
+                          <Area type="monotone" dataKey="drawdown" stroke="#f43f5e" fill="rgba(244,63,94,0.1)" strokeWidth={2} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Typography sx={{ color: '#64748b' }}>暂无回撤数据</Typography>
+                      </Box>
+                    )}
                   </Box>
                 </GlassPanel>
               </Grid>

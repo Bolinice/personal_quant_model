@@ -1,12 +1,77 @@
 """
 Tushare 数据源适配器
 专业金融数据接口
+
+注意: macOS 系统代理会导致 tushare 请求超时,
+此处通过 monkey-patch DataApi.query 使用显式 no-proxy 的 Session 绕过系统代理。
 """
+import os
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import pandas as pd
+import requests as _requests
 from app.data_sources.base import BaseDataSource
 from app.core.logging import logger
+
+# 清除代理环境变量，防止 requests 通过 env 读取代理
+for _k in ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY']:
+    os.environ.pop(_k, None)
+
+# 全局 Session: trust_env=False + 显式 no-proxy，彻底绕过 macOS 系统代理
+_NO_PROXY_SESSION = _requests.Session()
+_NO_PROXY_SESSION.trust_env = False
+_NO_PROXY_PROXIES = {'http': None, 'https': None}
+
+
+def _patch_tushare_query():
+    """Monkey-patch tushare DataApi.query, 使用显式 no-proxy 的 requests Session
+
+    macOS 系统代理 (127.0.0.1:7897) 会导致 tushare 请求转发超时。
+    requests 默认 trust_env=True，会通过 getproxies() 读取 macOS 系统偏好设置中的代理。
+    patch 后改用 trust_env=False + proxies={http:None, https:None} 彻底绕过。
+    """
+    try:
+        from tushare.pro.client import DataApi
+        import json
+
+        def patched_query(self, api_name, fields='', **kwargs):
+            # 读取实例属性（connect() 设置的代理URL），fallback 到类属性
+            http_url = getattr(self, '_DataApi__http_url', DataApi._DataApi__http_url)
+            timeout = getattr(self, '_DataApi__timeout', 30)
+            token = getattr(self, '_DataApi__token', '')
+
+            kwargs.setdefault('ts_type_name', http_url)
+            req_params = {
+                'api_name': api_name,
+                'token': token,
+                'params': kwargs,
+                'fields': fields,
+            }
+
+            url = f"{http_url}/{api_name}"
+            res = _NO_PROXY_SESSION.post(
+                url, json=req_params, timeout=timeout,
+                proxies=_NO_PROXY_PROXIES,
+            )
+            if res and res.status_code == 200:
+                result = json.loads(res.text)
+                if result['code'] != 0:
+                    raise Exception(result['msg'])
+                data = result['data']
+                columns = data['fields']
+                items = data['items']
+                return pd.DataFrame(items, columns=columns)
+            else:
+                return pd.DataFrame()
+
+        DataApi.query = patched_query
+        logger.info("Tushare DataApi.query patched with no-proxy session")
+    except Exception as e:
+        logger.warning(f"Failed to patch tushare DataApi: {e}")
+
+
+# 启动时自动 patch
+_patch_tushare_query()
 
 
 class TushareDataSource(BaseDataSource):
@@ -18,20 +83,37 @@ class TushareDataSource(BaseDataSource):
         self._pro = None
 
     def connect(self) -> bool:
-        """连接 Tushare（使用代理API地址）"""
+        """连接 Tushare（优先代理API，fallback到官方API）"""
         try:
             import tushare as ts
             if self.token:
                 ts.set_token(self.token)
             self._pro = ts.pro_api()
-            # 使用代理API地址，解锁全部接口权限
+
+            # 优先尝试代理API（全接口权限）
             self._pro._DataApi__http_url = "http://tsy.xiaodefa.cn"
-            # 测试连接 - 使用股票基础信息接口
-            df = self._pro.stock_basic(exchange='', list_status='L', fields='ts_code')
-            self._connected = not df.empty
-            if self._connected:
-                logger.info("Tushare connected successfully (proxy API, full access)")
-            return self._connected
+            try:
+                df = self._pro.stock_basic(exchange='', list_status='L', fields='ts_code')
+                if not df.empty:
+                    self._connected = True
+                    logger.info("Tushare connected successfully (proxy API, full access)")
+                    return True
+            except Exception:
+                logger.warning("Proxy API unavailable, falling back to official API")
+
+            # Fallback: 官方 API（部分接口可能权限不足）
+            self._pro._DataApi__http_url = "https://api.tushare.pro"
+            try:
+                df = self._pro.stock_basic(exchange='', list_status='L', fields='ts_code')
+                if not df.empty:
+                    self._connected = True
+                    logger.info("Tushare connected successfully (official API, limited access)")
+                    return True
+            except Exception as e2:
+                logger.error(f"Both proxy and official API failed: {e2}")
+
+            self._connected = False
+            return False
         except Exception as e:
             logger.error(f"Failed to connect Tushare: {e}")
             self._connected = False

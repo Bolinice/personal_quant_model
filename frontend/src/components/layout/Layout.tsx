@@ -19,11 +19,20 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 import CardMembershipIcon from '@mui/icons-material/CardMembership';
 import PaletteIcon from '@mui/icons-material/Palette';
 import CheckIcon from '@mui/icons-material/Check';
+import TimelineIcon from '@mui/icons-material/Timeline';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import MonitorIcon from '@mui/icons-material/Monitor';
+import NotificationsIcon from '@mui/icons-material/Notifications';
+import PersonIcon from '@mui/icons-material/Person';
+import SettingsIcon from '@mui/icons-material/Settings';
+import LogoutIcon from '@mui/icons-material/Logout';
 import { motion, AnimatePresence } from 'framer-motion';
 import AnimatedPage from './AnimatedPage';
 import { Logo } from '@/components/ui';
 import { useLang } from '@/i18n';
 import { useBackground, CONSTELLATION_THEMES } from '@/components/background';
+import { useAuth } from '@/contexts/AuthContext';
 
 const COLLAPSED = 72;
 const EXPANDED = 240;
@@ -36,14 +45,27 @@ const modelSubItems = [
   { labelKey: 'plan' as const, path: '/app/models/plan', icon: <CardMembershipIcon sx={{ fontSize: 20 }} /> },
 ];
 
+const navItems = [
+  { path: '/app/dashboard', label: '仪表盘', icon: <DashboardIcon /> },
+  { path: '/app/factors', label: '因子管理', icon: <FunctionsIcon /> },
+  { path: '/app/backtests', label: '回测管理', icon: <AssessmentIcon /> },
+  { path: '/app/timing', label: '择时管理', icon: <TimelineIcon /> },
+  { path: '/app/portfolios', label: '组合管理', icon: <AccountBalanceIcon /> },
+  { path: '/app/performance', label: '绩效分析', icon: <TrendingUpIcon /> },
+  { path: '/app/monitor', label: '监控中心', icon: <MonitorIcon /> },
+  { path: '/app/events', label: '事件中心', icon: <NotificationsIcon /> },
+];
+
 export default function Layout() {
   const [expanded, setExpanded] = useState(true);
   const [modelsOpen, setModelsOpen] = useState(true);
   const [settingsAnchor, setSettingsAnchor] = useState<HTMLElement | null>(null);
+  const [userMenuAnchor, setUserMenuAnchor] = useState<HTMLElement | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { lang, t, toggleLang } = useLang();
   const { theme: bgTheme, setThemeById } = useBackground();
+  const { user, logout } = useAuth();
   const width = expanded ? EXPANDED : COLLAPSED;
 
   const isActive = (path: string) =>
@@ -98,45 +120,49 @@ export default function Layout() {
 
         {/* Nav items */}
         <List sx={{ flex: 1, px: 1, py: 1, overflow: 'auto' }}>
-          {/* Factor management */}
-          <Tooltip title={expanded ? '' : t.nav.factors} placement="right" arrow>
-            <ListItemButton
-              onClick={() => navigate('/app/factors')}
-              sx={{
-                borderRadius: 2,
-                mb: 0.5,
-                minHeight: 44,
-                px: 1.5,
-                justifyContent: expanded ? 'flex-start' : 'center',
-                backgroundColor: isActive('/app/factors') ? 'rgba(34, 211, 238, 0.1)' : 'transparent',
-                border: isActive('/app/factors') ? '1px solid rgba(34, 211, 238, 0.2)' : '1px solid transparent',
-                '&:hover': {
-                  backgroundColor: isActive('/app/factors') ? 'rgba(34, 211, 238, 0.12)' : 'rgba(148, 163, 184, 0.06)',
-                },
-                transition: 'all 0.2s ease',
-              }}
-            >
-              <ListItemIcon sx={{ minWidth: expanded ? 40 : 0, color: isActive('/app/factors') ? '#22d3ee' : '#64748b', transition: 'color 0.2s ease' }}>
-                <FunctionsIcon />
-              </ListItemIcon>
-              <AnimatePresence>
-                {expanded && (
-                  <motion.div
-                    initial={{ opacity: 0, width: 0 }}
-                    animate={{ opacity: 1, width: 'auto' }}
-                    exit={{ opacity: 0, width: 0 }}
-                    transition={{ duration: 0.2 }}
-                    style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}
-                  >
-                    <ListItemText
-                      primary={t.nav.factors}
-                      sx={{ '& .MuiListItemText-primary': { fontWeight: isActive('/app/factors') ? 600 : 400, color: isActive('/app/factors') ? '#e2e8f0' : '#94a3b8', fontSize: '0.875rem' } }}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </ListItemButton>
-          </Tooltip>
+          {navItems.map((item) => {
+            const active = isActive(item.path);
+            return (
+              <Tooltip key={item.path} title={expanded ? '' : item.label} placement="right" arrow>
+                <ListItemButton
+                  onClick={() => navigate(item.path)}
+                  sx={{
+                    borderRadius: 2,
+                    mb: 0.5,
+                    minHeight: 44,
+                    px: 1.5,
+                    justifyContent: expanded ? 'flex-start' : 'center',
+                    backgroundColor: active ? 'rgba(34, 211, 238, 0.1)' : 'transparent',
+                    border: active ? '1px solid rgba(34, 211, 238, 0.2)' : '1px solid transparent',
+                    '&:hover': {
+                      backgroundColor: active ? 'rgba(34, 211, 238, 0.12)' : 'rgba(148, 163, 184, 0.06)',
+                    },
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: expanded ? 40 : 0, color: active ? '#22d3ee' : '#64748b', transition: 'color 0.2s ease' }}>
+                    {item.icon}
+                  </ListItemIcon>
+                  <AnimatePresence>
+                    {expanded && (
+                      <motion.div
+                        initial={{ opacity: 0, width: 0 }}
+                        animate={{ opacity: 1, width: 'auto' }}
+                        exit={{ opacity: 0, width: 0 }}
+                        transition={{ duration: 0.2 }}
+                        style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}
+                      >
+                        <ListItemText
+                          primary={item.label}
+                          sx={{ '& .MuiListItemText-primary': { fontWeight: active ? 600 : 400, color: active ? '#e2e8f0' : '#94a3b8', fontSize: '0.875rem' } }}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </ListItemButton>
+              </Tooltip>
+            );
+          })}
 
           {/* Model management — expandable */}
           <Tooltip title={expanded ? '' : t.nav.modelMgmt} placement="right" arrow>
@@ -226,6 +252,82 @@ export default function Layout() {
             </List>
           </Collapse>
         </List>
+
+        {/* User info */}
+        <Box sx={{ p: 1.5, borderTop: '1px solid rgba(148, 163, 184, 0.08)' }}>
+          <ListItemButton
+            onClick={(e) => setUserMenuAnchor(e.currentTarget)}
+            sx={{
+              borderRadius: 2,
+              px: 1,
+              minHeight: 48,
+              justifyContent: expanded ? 'flex-start' : 'center',
+            }}
+          >
+            <Box sx={{
+              width: 32, height: 32, borderRadius: '50%',
+              background: 'linear-gradient(135deg, #22d3ee 0%, #8b5cf6 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontWeight: 700, fontSize: '0.875rem', flexShrink: 0,
+            }}>
+              {user?.username?.charAt(0)?.toUpperCase() || 'U'}
+            </Box>
+            <AnimatePresence>
+              {expanded && (
+                <motion.div
+                  initial={{ opacity: 0, width: 0 }}
+                  animate={{ opacity: 1, width: 'auto' }}
+                  exit={{ opacity: 0, width: 0 }}
+                  transition={{ duration: 0.2 }}
+                  style={{ overflow: 'hidden', whiteSpace: 'nowrap', marginLeft: 12, flex: 1 }}
+                >
+                  <Typography sx={{ fontWeight: 600, fontSize: '0.85rem', color: '#e2e8f0', lineHeight: 1.2 }}>
+                    {user?.username || '用户'}
+                  </Typography>
+                  <Typography sx={{ fontSize: '0.7rem', color: '#64748b', lineHeight: 1.2, mt: 0.25 }}>
+                    {user?.email || ''}
+                  </Typography>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </ListItemButton>
+
+          {/* User dropdown menu */}
+          <Popover
+            open={Boolean(userMenuAnchor)}
+            anchorEl={userMenuAnchor}
+            onClose={() => setUserMenuAnchor(null)}
+            anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+            transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            slotProps={{
+              paper: {
+                sx: {
+                  mt: -1, minWidth: 160, py: 0.5,
+                  background: 'rgba(15, 23, 42, 0.95)',
+                  backdropFilter: 'blur(20px)',
+                  border: '1px solid rgba(148, 163, 184, 0.12)',
+                  borderRadius: 2,
+                  boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+                },
+              },
+            }}
+          >
+            <ListItemButton
+              onClick={() => { setUserMenuAnchor(null); navigate('/app/settings'); }}
+              sx={{ px: 2, py: 1 }}
+            >
+              <SettingsIcon sx={{ fontSize: 18, color: '#94a3b8', mr: 1.5 }} />
+              <Typography sx={{ fontSize: '0.85rem', color: '#e2e8f0' }}>个人设置</Typography>
+            </ListItemButton>
+            <ListItemButton
+              onClick={() => { setUserMenuAnchor(null); logout(); navigate('/login'); }}
+              sx={{ px: 2, py: 1 }}
+            >
+              <LogoutIcon sx={{ fontSize: 18, color: '#f43f5e', mr: 1.5 }} />
+              <Typography sx={{ fontSize: '0.85rem', color: '#f43f5e' }}>退出登录</Typography>
+            </ListItemButton>
+          </Popover>
+        </Box>
 
         {/* Collapse toggle */}
         <Box sx={{ p: 1, borderTop: '1px solid rgba(148, 163, 184, 0.08)' }}>

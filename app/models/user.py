@@ -19,6 +19,8 @@ class User(Base):
     is_active: bool = Column(Boolean, default=True)
     is_superuser: bool = Column(Boolean, default=False)
     avatar_url: Optional[str] = Column(String(255))
+    reset_token: Optional[str] = Column(String(255), nullable=True, comment='密码重置令牌')
+    reset_token_expires: Optional[DateTime] = Column(DateTime, nullable=True, comment='重置令牌过期时间')
     last_login_at: Optional[DateTime] = Column(DateTime)
     login_count: int = Column(Integer, default=0)
     created_at: DateTime = Column(DateTime, server_default=func.now())

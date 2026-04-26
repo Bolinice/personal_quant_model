@@ -21,12 +21,12 @@ class PITFinancial(Base):
     total_equity = Column(Numeric(20, 4), comment="净资产")
     operating_cashflow = Column(Numeric(20, 4), comment="经营现金流")
     gross_margin = Column(Numeric(10, 6), comment="毛利率")
-    roe = Column(Numeric(10, 6), comment="ROE")
-    roa = Column(Numeric(10, 6), comment="ROA")
-    pe_ttm = Column(Numeric(10, 6), comment="PE")
-    pb = Column(Numeric(10, 6), comment="PB")
-    ps_ttm = Column(Numeric(10, 6), comment="PS")
-    asset_liability_ratio = Column(Numeric(10, 6), comment="资产负债率")
+    roe = Column(Numeric(12, 4), comment="ROE")
+    roa = Column(Numeric(12, 4), comment="ROA")
+    pe_ttm = Column(Numeric(12, 4), comment="PE")
+    pb = Column(Numeric(12, 4), comment="PB")
+    ps_ttm = Column(Numeric(12, 4), comment="PS")
+    asset_liability_ratio = Column(Numeric(12, 4), comment="资产负债率")
     snapshot_id = Column(String(50), index=True, comment="快照ID")
 
     __table_args__ = (

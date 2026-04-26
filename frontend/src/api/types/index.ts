@@ -8,3 +8,6 @@ export * from './reports';
 export * from './stockPools';
 export * from './subscriptions';
 export * from './content';
+export * from './monitor';
+export * from './events';
+export * from './auth';

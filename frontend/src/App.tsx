@@ -1,8 +1,15 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { ProtectedRoute, PublicRoute } from '@/components/auth/AuthGuard';
 import { Layout, MarketingLayout } from '@/components/layout';
 import HomePage from '@/pages/Home';
 import PricingPage from '@/pages/Pricing';
 import AboutPage from '@/pages/About';
+import Login from '@/pages/Auth/Login';
+import Register from '@/pages/Auth/Register';
+import ForgotPassword from '@/pages/Auth/ForgotPassword';
+import ResetPassword from '@/pages/Auth/ResetPassword';
+import Dashboard from '@/pages/Dashboard';
 import FactorList from '@/pages/Factors/FactorList';
 import ModelList from '@/pages/Models/ModelList';
 import ModelDetail from '@/pages/Models/ModelDetail';
@@ -10,21 +17,38 @@ import ModelOverview from '@/pages/Models/ModelOverview';
 import ModelTemplates from '@/pages/Models/ModelTemplates';
 import ModelBacktests from '@/pages/Models/ModelBacktests';
 import ModelPlan from '@/pages/Models/ModelPlan';
+import BacktestList from '@/pages/Backtests/BacktestList';
+import BacktestCreate from '@/pages/Backtests/BacktestCreate';
+import BacktestResult from '@/pages/Backtests/BacktestResult';
+import TimingList from '@/pages/Timing/TimingList';
+import PortfolioList from '@/pages/Portfolios/PortfolioList';
+import PortfolioDetail from '@/pages/Portfolios/PortfolioDetail';
+import PerformanceReport from '@/pages/Performance/PerformanceReport';
+import MonitorDashboard from '@/pages/Monitor/MonitorDashboard';
+import EventList from '@/pages/Events/EventList';
+import Profile from '@/pages/Settings/Profile';
 import Subscribe from '@/pages/Subscribe';
 
-export default function App() {
+function AppRoutes() {
   return (
     <Routes>
-      {/* 官网 - 公开页面 */}
+      {/* 公开页面 */}
       <Route element={<MarketingLayout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/pricing" element={<PricingPage />} />
         <Route path="/about" element={<AboutPage />} />
       </Route>
 
-      {/* 内部系统 */}
-      <Route path="/app" element={<Layout />}>
-        <Route index element={<Navigate to="/app/factors" replace />} />
+      {/* 认证页面 — 已登录则跳转 dashboard */}
+      <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+      <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+      <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+      <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
+
+      {/* 需要认证的页面 */}
+      <Route path="/app" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+        <Route index element={<Navigate to="/app/dashboard" replace />} />
+        <Route path="dashboard" element={<Dashboard />} />
         <Route path="factors" element={<FactorList />} />
         <Route path="models" element={<ModelList />} />
         <Route path="models/overview" element={<ModelOverview />} />
@@ -32,8 +56,26 @@ export default function App() {
         <Route path="models/backtests" element={<ModelBacktests />} />
         <Route path="models/plan" element={<ModelPlan />} />
         <Route path="models/:code" element={<ModelDetail />} />
+        <Route path="backtests" element={<BacktestList />} />
+        <Route path="backtests/create" element={<BacktestCreate />} />
+        <Route path="backtests/:id" element={<BacktestResult />} />
+        <Route path="timing" element={<TimingList />} />
+        <Route path="portfolios" element={<PortfolioList />} />
+        <Route path="portfolios/:id" element={<PortfolioDetail />} />
+        <Route path="performance" element={<PerformanceReport />} />
+        <Route path="monitor" element={<MonitorDashboard />} />
+        <Route path="events" element={<EventList />} />
+        <Route path="settings" element={<Profile />} />
         <Route path="subscribe" element={<Subscribe />} />
       </Route>
     </Routes>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppRoutes />
+    </AuthProvider>
   );
 }

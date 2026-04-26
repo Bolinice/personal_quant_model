@@ -28,14 +28,7 @@ async def get_factor_health(
 ):
     """查询因子健康状态"""
     health = MonitorService.get_factor_health(db, trade_date=trade_date)
-    return success_response(data=[{
-        "trade_date": str(h.trade_date), "factor_name": h.factor_name,
-        "coverage_rate": float(h.coverage_rate) if h.coverage_rate else None,
-        "ic_mean": float(h.ic_mean) if h.ic_mean else None,
-        "ir": float(h.ir) if h.ir else None,
-        "psi": float(h.psi) if h.psi else None,
-        "health_status": h.health_status,
-    } for h in health])
+    return success_response(data=health)
 
 
 @router.get("/model-health")
@@ -102,5 +95,14 @@ async def get_regime(
     db: Session = Depends(get_db),
 ):
     """查询市场状态(Regime)"""
-    result = MonitorService.get_regime(db, trade_date=trade_date)
-    return success_response(data=result)
+    try:
+        result = MonitorService.get_regime(db, trade_date=trade_date)
+        return success_response(data=result)
+    except Exception:
+        return success_response(data={
+            "trade_date": str(trade_date or date.today()),
+            "regime": "unknown",
+            "confidence": None,
+            "regime_detail": None,
+            "module_weight_adjustment": None,
+        })

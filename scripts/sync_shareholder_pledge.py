@@ -3,6 +3,12 @@
 数据源: Tushare share_pledge + AKShare stock_share_pledge_em
 """
 import sys
+import os
+
+# 清除代理环境变量，防止 tushare 请求走 macOS 系统代理超时
+for _k in ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY']:
+    os.environ.pop(_k, None)
+
 sys.path.insert(0, '.')
 
 import time
@@ -83,31 +89,46 @@ def sync_pledge_tushare(ts_code: str, start_date: str, end_date: str,
         db.close()
 
 
-def sync_pledge_akshare(ts_code: str) -> int:
-    """使用 AKShare 同步股权质押数据"""
+def sync_pledge_akshare(ts_code: str = None) -> int:
+    """使用 AKShare 同步股权质押数据 (全市场快照)"""
     db = SessionLocal()
     try:
         import akshare as ak
-        code = ts_code.split('.')[0]
-        df = ak.stock_share_pledge_em(symbol=code)
+        df = ak.stock_gpzy_pledge_ratio_em()
         if df is None or df.empty:
             return 0
 
-        existing_dates = set(r[0] for r in db.query(StockShareholderPledge.trade_date).filter(
-            StockShareholderPledge.ts_code == ts_code,
+        # 格式化日期
+        trade_date = str(df['交易日期'].iloc[0])[:10].replace('-', '') if not df.empty else None
+        if not trade_date:
+            return 0
+
+        # 检查是否已存在该日期数据
+        existing = set(r[0] for r in db.query(StockShareholderPledge.ts_code).filter(
+            StockShareholderPledge.trade_date == trade_date,
         ).all())
+
+        def format_ts_code(code):
+            code = str(code).zfill(6)
+            if code.startswith('6') or code.startswith('9'):
+                return f"{code}.SH"
+            else:
+                return f"{code}.SZ"
 
         new_records = []
         for _, row in df.iterrows():
-            d = str(row.get('最新日期', row.get('日期', '')))[:10].replace('-', '')
-            if not d or d in existing_dates:
+            code = str(row.get('股票代码', ''))
+            if not code:
+                continue
+            ts_code = format_ts_code(code)
+            if ts_code in existing:
                 continue
             new_records.append(StockShareholderPledge(
                 ts_code=ts_code,
-                trade_date=d,
-                pledge_ratio=safe_float(row.get('质押比例', row.get('质押比例(%)'))),
-                total_pledge_shares=safe_float(row.get('质押数量', row.get('质押股数'))),
-                pledgor_count=safe_int(row.get('质押次数', row.get('质押笔数'))),
+                trade_date=trade_date,
+                pledge_ratio=safe_float(row.get('质押比例')),
+                total_pledge_shares=safe_float(row.get('质押股数')),
+                pledgor_count=safe_int(row.get('质押笔数')),
             ))
 
         if new_records:
@@ -115,7 +136,8 @@ def sync_pledge_akshare(ts_code: str) -> int:
             db.commit()
         return len(new_records)
 
-    except Exception:
+    except Exception as e:
+        print(f"  AKShare pledge sync error: {e}")
         db.rollback()
         return -1
     finally:

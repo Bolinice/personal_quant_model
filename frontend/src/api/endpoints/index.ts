@@ -8,3 +8,6 @@ export { reportApi } from './reports';
 export { stockPoolApi } from './stockPools';
 export { subscriptionApi } from './subscriptions';
 export { contentApi } from './content';
+export { monitorApi } from './monitor';
+export { eventsApi } from './events';
+export { authApi } from './auth';

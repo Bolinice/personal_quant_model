@@ -4,6 +4,12 @@
 按季度周期同步 (0331/0630/0930/1231)
 """
 import sys
+import os
+
+# 清除代理环境变量，防止 tushare 请求走 macOS 系统代理超时
+for _k in ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY']:
+    os.environ.pop(_k, None)
+
 sys.path.insert(0, '.')
 
 import time
@@ -99,35 +105,36 @@ def sync_top10_akshare(ts_code: str) -> int:
         code = ts_code.split('.')[0]
 
         new_records = []
-        for period in PERIODS:
+        try:
+            df = ak.stock_gdfx_top_10_em(symbol=code)
+        except Exception:
+            df = pd.DataFrame()
+
+        if df is None or df.empty:
+            return 0
+
+        # AKShare返回所有报告期数据, 按end_date分组
+        for end_date, group in df.groupby('报告期' if '报告期' in df.columns else df.columns[1]):
+            ed = str(end_date)[:10].replace('-', '')
+            if not ed:
+                continue
             existing = db.query(StockTop10Holders).filter(
                 StockTop10Holders.ts_code == ts_code,
-                StockTop10Holders.end_date == period,
+                StockTop10Holders.end_date == ed,
             ).first()
             if existing:
                 continue
 
-            try:
-                date_str = f"{period[:4]}-{period[4:6]}-{period[6:8]}"
-                df = ak.stock_gdfx_top_10_em(symbol=code, date=date_str)
-            except Exception:
-                df = pd.DataFrame()
-
-            if df is None or df.empty:
-                continue
-
-            for rank_val, (_, row) in enumerate(df.iterrows(), 1):
+            for rank_val, (_, row) in enumerate(group.iterrows(), 1):
                 new_records.append(StockTop10Holders(
                     ts_code=ts_code,
-                    end_date=period,
-                    ann_date=period,  # AKShare无公告日, 保守用报告期
+                    end_date=ed,
+                    ann_date=ed,
                     holder_name=str(row.get('股东名称', ''))[:100],
                     hold_amount=safe_float(row.get('持股数', row.get('持有股数'))),
                     hold_ratio=safe_float(row.get('持股比例', row.get('持有比例'))),
                     rank=rank_val,
                 ))
-
-            time.sleep(0.1)
 
         if new_records:
             db.bulk_save_objects(new_records)

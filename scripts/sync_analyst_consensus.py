@@ -3,6 +3,12 @@
 数据源: Tushare consensus_data + AKShare stock_analyst_detail_em
 """
 import sys
+import os
+
+# 清除代理环境变量，防止 tushare 请求走 macOS 系统代理超时
+for _k in ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY']:
+    os.environ.pop(_k, None)
+
 sys.path.insert(0, '.')
 
 import time
@@ -86,39 +92,54 @@ def sync_analyst_tushare(ts_code: str, start_date: str, end_date: str,
         db.close()
 
 
-def sync_analyst_akshare(ts_code: str) -> int:
-    """使用 AKShare 同步分析师一致预期"""
+def sync_analyst_akshare(ts_code: str = None) -> int:
+    """使用 AKShare 同步分析师一致预期 (stock_institute_recommend)"""
     db = SessionLocal()
     try:
         import akshare as ak
-        code = ts_code.split('.')[0]
 
+        # 使用一致预期选股获取全市场数据
         try:
-            df = ak.stock_analyst_detail_em(symbol=code)
+            df = ak.stock_institute_recommend(symbol='一致预期选股')
         except Exception:
             df = pd.DataFrame()
 
         if df is None or df.empty:
             return 0
 
-        existing_dates = set(r[0] for r in db.query(StockAnalystConsensus.effective_date).filter(
-            StockAnalystConsensus.ts_code == ts_code,
+        # 格式化日期
+        today = datetime.now().strftime('%Y%m%d')
+
+        def format_ts_code(code):
+            code = str(code).zfill(6)
+            if code.startswith('6') or code.startswith('9'):
+                return f"{code}.SH"
+            else:
+                return f"{code}.SZ"
+
+        existing_codes = set(r[0] for r in db.query(StockAnalystConsensus.ts_code).filter(
+            StockAnalystConsensus.effective_date == today,
         ).all())
 
         new_records = []
         for _, row in df.iterrows():
-            d = str(row.get('日期', row.get('预测日期', '')))[:10].replace('-', '')
-            if not d or d in existing_dates:
+            code = str(row.get('股票代码', row.get('代码', '')))
+            if not code:
                 continue
+            tc = format_ts_code(code)
+            if tc in existing_codes:
+                continue
+            if ts_code and tc != ts_code:
+                continue
+
             new_records.append(StockAnalystConsensus(
-                ts_code=ts_code,
-                effective_date=d,
-                ann_date=d,
-                consensus_eps_fy0=safe_float(row.get('预测EPS(FY0)', row.get('今年EPS'))),
-                consensus_eps_fy1=safe_float(row.get('预测EPS(FY1)', row.get('明年EPS'))),
-                consensus_eps_fy2=safe_float(row.get('预测EPS(FY2)', row.get('后年EPS'))),
-                analyst_coverage=safe_int(row.get('预测机构数', row.get('研究机构数'))),
-                rating_mean=safe_float(row.get('评级', row.get('综合评级'))),
+                ts_code=tc,
+                effective_date=today,
+                ann_date=today,
+                consensus_eps_fy0=safe_float(row.get('一致预期EPS(今年)', row.get('今年EPS'))),
+                consensus_eps_fy1=safe_float(row.get('一致预期EPS(明年)', row.get('明年EPS'))),
+                analyst_coverage=safe_int(row.get('评级机构数', row.get('研究机构数'))),
+                rating_mean=safe_float(row.get('综合评级', row.get('评级'))),
                 target_price_mean=safe_float(row.get('目标价', row.get('综合目标价'))),
             ))
 
@@ -127,7 +148,8 @@ def sync_analyst_akshare(ts_code: str) -> int:
             db.commit()
         return len(new_records)
 
-    except Exception:
+    except Exception as e:
+        print(f"  AKShare analyst sync error: {e}")
         db.rollback()
         return -1
     finally:

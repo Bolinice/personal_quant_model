@@ -15,3 +15,6 @@ export { reportApi } from './endpoints/reports';
 export { stockPoolApi } from './endpoints/stockPools';
 export { subscriptionApi } from './endpoints/subscriptions';
 export { contentApi } from './endpoints/content';
+export { monitorApi } from './endpoints/monitor';
+export { eventsApi } from './endpoints/events';
+export { authApi } from './endpoints/auth';

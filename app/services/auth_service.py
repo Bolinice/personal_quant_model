@@ -4,7 +4,8 @@
 符合ADD 11节安全规范
 """
 from typing import Optional, Dict, Tuple
-from datetime import datetime, timedelta
+import secrets
+from datetime import datetime, timedelta, timedelta
 import hashlib
 import secrets
 import re
@@ -157,6 +158,46 @@ class AuthService:
             db.commit()
 
         return key_record
+
+    @staticmethod
+    def generate_reset_token(db: Session, email: str) -> Optional[str]:
+        """生成密码重置令牌"""
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return None
+
+        token = secrets.token_urlsafe(32)
+        user.reset_token = token
+        user.reset_token_expires = datetime.now() + timedelta(hours=1)
+        db.commit()
+
+        logger.info(f"Password reset token generated for {email}")
+        # 生产环境应发送邮件，暂时仅记录日志
+        return token
+
+    @staticmethod
+    def reset_password_with_token(db: Session, token: str, new_password: str) -> bool:
+        """使用重置令牌重置密码"""
+        user = db.query(User).filter(User.reset_token == token).first()
+        if not user:
+            return False
+
+        if user.reset_token_expires and user.reset_token_expires < datetime.now():
+            # 令牌已过期，清除
+            user.reset_token = None
+            user.reset_token_expires = None
+            db.commit()
+            return False
+
+        valid, msg = AuthService.validate_password_strength(new_password)
+        if not valid:
+            return False
+
+        user.hashed_password = AuthService.hash_password(new_password)
+        user.reset_token = None
+        user.reset_token_expires = None
+        db.commit()
+        return True
 
     # ==================== 兼容旧接口 ====================
 

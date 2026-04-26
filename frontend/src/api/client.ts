@@ -20,10 +20,12 @@ client.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// 响应拦截器：统一错误处理
+// 响应拦截器：统一解包 + 401自动刷新（仅一次，防死循环）
+let isRefreshing = false;
+let refreshPromise: Promise<string | null> | null = null;
+
 client.interceptors.response.use(
   (response) => {
-    // 如果后端返回 {code, message, data} 格式，自动解包
     const data = response.data;
     if (data && typeof data === 'object' && 'code' in data && 'data' in data) {
       if (data.code === 0) {
@@ -34,19 +36,53 @@ client.interceptors.response.use(
     }
     return response;
   },
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config;
     const status = error.response?.status;
-    const message = error.response?.data?.detail || error.response?.data?.message || error.message || '请求失败';
 
-    // 401 未授权：清除token并跳转登录
-    if (status === 401) {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+    // 401 且未重试过 → 尝试刷新token
+    if (status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+
+      // 登录/注册/刷新本身的401不需要重试
+      const url = originalRequest.url || '';
+      if (url.includes('/auth/login') || url.includes('/auth/register') || url.includes('/auth/refresh')) {
+        return Promise.reject(new Error(error.response?.data?.detail || '认证失败'));
+      }
+
+      // 并发请求只刷新一次
+      if (!isRefreshing) {
+        isRefreshing = true;
+        refreshPromise = (async () => {
+          const rt = localStorage.getItem('refresh_token');
+          if (!rt) return null;
+          try {
+            const res = await axios.post(
+              `${import.meta.env.VITE_API_BASE_URL || '/api/v1'}/auth/refresh`,
+              { refresh_token: rt }
+            );
+            const respData = res.data?.data || res.data;
+            localStorage.setItem('access_token', respData.access_token);
+            localStorage.setItem('refresh_token', respData.refresh_token);
+            return respData.access_token as string;
+          } catch {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            return null;
+          } finally {
+            isRefreshing = false;
+          }
+        })();
+      }
+
+      const newToken = await refreshPromise;
+      if (newToken) {
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return client(originalRequest);
       }
     }
 
+    const message = error.response?.data?.detail || error.response?.data?.message || error.message || '请求失败';
     console.error(`API Error [${status}]:`, message);
     return Promise.reject(new Error(message));
   }

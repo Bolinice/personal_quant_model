@@ -14,16 +14,31 @@
 import pytest
 import numpy as np
 import pandas as pd
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from sqlalchemy import text
 
 
 @pytest.fixture(scope="module")
 def db_conn():
-    """数据库连接fixture"""
+    """数据库连接fixture - skip if no real database available"""
     from app.db.base import engine
-    with engine.connect() as conn:
+    try:
+        conn = engine.connect()
+        conn.execute(text("SELECT 1"))
+        conn.commit()
         yield conn
+    except Exception:
+        pytest.skip("Database not available, skipping data audit tests")
+
+
+@pytest.fixture(autouse=True)
+def _rollback_on_error(db_conn):
+    """Auto-rollback after each test to prevent InFailedSqlTransaction"""
+    yield
+    try:
+        db_conn.rollback()
+    except Exception:
+        pass
 
 
 # ═══════════════════════════════════════════════
@@ -553,7 +568,7 @@ class TestFactorComputationFeasibility:
         """QualityGrowth因子计算可行性"""
         # ROE: 从stock_financial获取
         result = db_conn.execute(text('''
-            SELECT ts_code, end_date, ann_date, roe, grossprofit_margin
+            SELECT ts_code, end_date, ann_date, roe, gross_profit_margin
             FROM stock_financial
             WHERE roe IS NOT NULL AND ann_date IS NOT NULL
             ORDER BY ann_date DESC

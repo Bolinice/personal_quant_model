@@ -27,6 +27,18 @@ logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────
+# FactorPreprocessor 单例 (无状态, 避免每次调用重复创建)
+# ─────────────────────────────────────────────
+
+def _get_factor_preprocessor():
+    """延迟导入并缓存 FactorPreprocessor 单例"""
+    from app.core.factor_preprocess import FactorPreprocessor
+    if not hasattr(_get_factor_preprocessor, '_instance'):
+        _get_factor_preprocessor._instance = FactorPreprocessor()
+    return _get_factor_preprocessor._instance
+
+
+# ─────────────────────────────────────────────
 # 基类
 # ─────────────────────────────────────────────
 
@@ -71,9 +83,8 @@ class AlphaModuleBase(ABC):
         mad_threshold: float = 3.0,
         zscore: bool = True,
     ) -> pd.Series:
-        """因子预处理: 去极值(MAD) → 标准化(Z-score) — 委托给FactorPreprocessor"""
-        from app.core.factor_preprocess import FactorPreprocessor
-        fp = FactorPreprocessor()
+        """因子预处理: 去极值(MAD) → 标准化(Z-score) — 委托给FactorPreprocessor单例"""
+        fp = _get_factor_preprocessor()
         result = fp.winsorize_mad(series, mad_threshold)
         if zscore:
             result = fp.standardize_zscore(result)

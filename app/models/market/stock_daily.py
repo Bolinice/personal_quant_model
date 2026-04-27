@@ -22,6 +22,9 @@ class StockDaily(Base):
     amount = Column(Numeric(24, 4))
     data_source = Column(String(20))           # 数据来源: tushare/akshare/crawler
     amount_is_estimated = Column(Boolean, default=False)  # 成交额是否为估算值
+    large_order_volume = Column(Numeric(20, 4), comment='大单成交量(手)')
+    super_large_order_volume = Column(Numeric(20, 4), comment='超大单成交量(手)')
+    turnover_rate = Column(Numeric(10, 4), comment='换手率(%)')
 
     def __repr__(self):
         return f"<StockDaily(ts_code='{self.ts_code}', trade_date='{self.trade_date}', close={self.close})>"

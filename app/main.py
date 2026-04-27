@@ -34,7 +34,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="A股多因子增强策略平台",
+    title="银河漫游策略平台",
     description="基于多因子选股模型的量化投资策略平台",
     version="2.1.0",
     lifespan=lifespan,

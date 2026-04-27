@@ -8,6 +8,8 @@ from pydantic import BaseModel
 from app.db.base import get_db
 from app.models.models import Model, ModelFactorWeight
 from app.core.response import success, error, page_result
+from app.api.v1.auth import get_current_user
+from app.models.user import User
 
 
 router = APIRouter()
@@ -16,19 +18,19 @@ router = APIRouter()
 class StrategyCreate(BaseModel):
     model_name: str
     model_type: str = "scoring"
-    description: str = None
+    description: Optional[str] = None
     factor_ids: List[int] = []
     factor_weights: dict = {}
     config: dict = {}
 
 
 class StrategyUpdate(BaseModel):
-    model_name: str = None
-    description: str = None
-    factor_ids: List[int] = None
-    factor_weights: dict = None
-    config: dict = None
-    status: str = None
+    model_name: Optional[str] = None
+    description: Optional[str] = None
+    factor_ids: Optional[List[int]] = None
+    factor_weights: Optional[dict] = None
+    config: Optional[dict] = None
+    status: Optional[str] = None
 
 
 @router.get("/")
@@ -37,6 +39,7 @@ def list_strategies(
     page_size: int = Query(20, ge=1, le=100),
     status: str = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """获取策略列表"""
     query = db.query(Model)
@@ -63,7 +66,11 @@ def list_strategies(
 
 
 @router.get("/{strategy_id}")
-def get_strategy(strategy_id: int, db: Session = Depends(get_db)):
+def get_strategy(
+    strategy_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """获取策略详情"""
     model = db.query(Model).filter(Model.id == strategy_id).first()
     if not model:
@@ -93,7 +100,11 @@ def get_strategy(strategy_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/")
-def create_strategy(strategy: StrategyCreate, db: Session = Depends(get_db)):
+def create_strategy(
+    strategy: StrategyCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """创建策略"""
     import uuid
     model = Model(
@@ -123,25 +134,37 @@ def create_strategy(strategy: StrategyCreate, db: Session = Depends(get_db)):
     return success({"id": model.id, "model_code": model.model_code}, message="策略创建成功")
 
 
+# 映射 Pydantic 字段名到 ORM 模型字段名
+_FIELD_MAP = {"config": "model_config"}
+
+
 @router.put("/{strategy_id}")
-def update_strategy(strategy_id: int, strategy: StrategyUpdate, db: Session = Depends(get_db)):
+def update_strategy(
+    strategy_id: int,
+    strategy: StrategyUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """更新策略"""
     model = db.query(Model).filter(Model.id == strategy_id).first()
     if not model:
         raise HTTPException(status_code=404, detail="策略不存在")
 
     update_data = strategy.model_dump(exclude_unset=True)
-    if "config" in update_data:
-        update_data["model_config"] = update_data.pop("config")
     for key, value in update_data.items():
-        setattr(model, key, value)
+        orm_key = _FIELD_MAP.get(key, key)
+        setattr(model, orm_key, value)
 
     db.commit()
     return success(message="策略更新成功")
 
 
 @router.post("/{strategy_id}/publish")
-def publish_strategy(strategy_id: int, db: Session = Depends(get_db)):
+def publish_strategy(
+    strategy_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """发布策略"""
     model = db.query(Model).filter(Model.id == strategy_id).first()
     if not model:
@@ -156,7 +179,11 @@ def publish_strategy(strategy_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{strategy_id}/archive")
-def archive_strategy(strategy_id: int, db: Session = Depends(get_db)):
+def archive_strategy(
+    strategy_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """归档策略"""
     model = db.query(Model).filter(Model.id == strategy_id).first()
     if not model:

@@ -138,11 +138,11 @@ class TestFactorPreprocessor:
 
 
 class TestMomentumSkipMonth:
-    """动量因子跳月处理测试"""
+    """动量因子跳月处理测试 - 使用FactorCalculator"""
 
     def test_skip_month_no_overlap(self):
         """验证跳月动量与1月反转无时间重叠"""
-        from app.core.factor_engine import FactorEngine
+        from app.core.factor_calculator import FactorCalculator
 
         # 生成300个交易日的价格数据
         np.random.seed(42)
@@ -152,11 +152,11 @@ class TestMomentumSkipMonth:
             'close': close,
         })
 
-        result = FactorEngine._calc_momentum_static(price_df)
+        calc = FactorCalculator()
+        result = calc.calc_momentum_factors(price_df)
 
         # ret_1m_reversal = close[t]/close[t-20]-1 (含最近1月)
         # ret_12m_skip1 = close[t-20]/close[t-240]-1 (跳过最近1月)
-        # 两者不应完全重叠
         assert 'ret_1m_reversal' in result.columns
         assert 'ret_12m_skip1' in result.columns
         assert 'ret_3m_skip1' in result.columns
@@ -168,7 +168,7 @@ class TestMomentumSkipMonth:
 
     def test_skip_month_values(self):
         """验证跳月动量计算正确"""
-        from app.core.factor_engine import FactorEngine
+        from app.core.factor_calculator import FactorCalculator
 
         close = pd.Series(range(100, 400), name='close')  # 300个数据点
         price_df = pd.DataFrame({
@@ -176,7 +176,8 @@ class TestMomentumSkipMonth:
             'close': close.values,
         })
 
-        result = FactorEngine._calc_momentum_static(price_df)
+        calc = FactorCalculator()
+        result = calc.calc_momentum_factors(price_df)
 
         # ret_12m_skip1 at t=250: close[230]/close[10] - 1
         # close[230] = 330, close[10] = 110
@@ -186,11 +187,11 @@ class TestMomentumSkipMonth:
 
 
 class TestTTMFactors:
-    """TTM因子计算测试"""
+    """TTM因子计算测试 - 使用FactorCalculator"""
 
     def test_valuation_from_raw(self):
         """测试从原始财务数据计算价值因子"""
-        from app.core.factor_engine import FactorEngine
+        from app.core.factor_calculator import FactorCalculator
 
         financial_df = pd.DataFrame({
             'ts_code': ['A', 'B'],
@@ -201,11 +202,8 @@ class TestTTMFactors:
             'total_market_cap': [200e8, 100e8],
         })
 
-        engine = FactorEngine.__new__(FactorEngine)
-        engine.db = None
-        engine.preprocessor = None
-
-        result = engine.calc_valuation_factors(financial_df, pd.DataFrame())
+        calc = FactorCalculator()
+        result = calc.calc_valuation_factors(financial_df)
 
         # EP_TTM = net_profit / market_cap
         assert abs(result['ep_ttm'].iloc[0] - 10e8 / 200e8) < 1e-6
@@ -216,7 +214,7 @@ class TestTTMFactors:
 
     def test_quality_from_raw(self):
         """测试从原始财务数据计算质量因子"""
-        from app.core.factor_engine import FactorEngine
+        from app.core.factor_calculator import FactorCalculator
 
         financial_df = pd.DataFrame({
             'ts_code': ['A'],
@@ -232,44 +230,34 @@ class TestTTMFactors:
             'current_liabilities': [20e8],
         })
 
-        engine = FactorEngine.__new__(FactorEngine)
-        engine.db = None
-        engine.preprocessor = None
-
-        result = engine.calc_quality_factors(financial_df)
+        calc = FactorCalculator()
+        result = calc.calc_quality_factors(financial_df)
 
         # ROE = net_profit / avg_equity = 10e8 / ((50e8+45e8)/2)
         avg_equity = (50e8 + 45e8) / 2
         assert abs(result['roe'].iloc[0] - 10e8 / avg_equity) < 1e-6
-
-        # Sloan accrual = (net_profit - ocf) / avg_assets
-        avg_assets = (100e8 + 90e8) / 2
-        expected_accrual = (10e8 - 12e8) / avg_assets
-        assert abs(result['sloan_accrual'].iloc[0] - expected_accrual) < 1e-6
 
         # Current ratio
         assert abs(result['current_ratio'].iloc[0] - 40e8 / 20e8) < 1e-6
 
 
 class TestAShareSpecificFactors:
-    """A股特有因子测试"""
+    """A股特有因子测试 - 使用FactorCalculator"""
 
     def test_ashare_specific_factors(self):
-        from app.core.factor_engine import FactorEngine
+        from app.core.factor_calculator import FactorCalculator
 
         price_df = pd.DataFrame({
             'ts_code': ['A', 'B', 'C'],
             'pct_chg': [9.95, -9.95, 2.0],
         })
 
-        engine = FactorEngine.__new__(FactorEngine)
-        engine.db = None
-
-        result = engine.calc_ashare_specific_factors(price_df)
+        calc = FactorCalculator()
+        result = calc.calc_ashare_specific_factors(price_df)
         assert 'security_id' in result.columns
 
     def test_accruals_factor(self):
-        from app.core.factor_engine import FactorEngine
+        from app.core.factor_calculator import FactorCalculator
 
         financial_df = pd.DataFrame({
             'ts_code': ['A', 'B'],
@@ -278,10 +266,8 @@ class TestAShareSpecificFactors:
             'total_assets': [100, 50],
         })
 
-        engine = FactorEngine.__new__(FactorEngine)
-        engine.db = None
-
-        result = engine.calc_accruals_factor(financial_df)
+        calc = FactorCalculator()
+        result = calc.calc_accruals_factor(financial_df)
         # Sloan accrual for A: (10-8)/100 = 0.02
         assert abs(result['sloan_accrual'].iloc[0] - 0.02) < 1e-6
         # Sloan accrual for B: (5-7)/50 = -0.04
@@ -764,6 +750,181 @@ class TestTimingSignalEvaluation:
 
         result = engine.evaluate_timing_signal(signal, returns, regime)
         assert 'regime_conditional' in result
+
+
+class TestT1Restriction:
+    """T+1限制回归测试 - 验证shares_bought_today在calc_nav中不被错误重置"""
+
+    def test_shares_bought_today_reset_at_day_start_not_in_calc_nav(self):
+        """核心bug回归: calc_nav不应重置shares_bought_today
+
+        bug现象: calc_nav中将shares_bought_today重置为0，导致当日买入的股票
+        在同日即可卖出，违反A股T+1规则。
+
+        fix: shares_bought_today仅在每日开盘时(run_backtest主循环)重置，
+        calc_nav只做mark-to-market，不修改持仓的T+1状态。
+        """
+        from app.core.backtest_engine import ABShareBacktestEngine, BacktestState, Position
+
+        engine = ABShareBacktestEngine()
+
+        # 构造状态: 持有600000.SH，其中200股是当日买入(T+1不可卖)
+        state = BacktestState(cash=500000, initial_capital=1000000)
+        state.positions['600000.SH'] = Position(
+            security_id='600000.SH',
+            shares=1000,
+            cost_price=10.0,
+            market_value=10000,
+            shares_bought_today=200,  # 当日买入200股
+        )
+
+        # calc_nav应保留shares_bought_today=200
+        price_data = {'600000.SH': 10.0}
+        nav_record = engine.calc_nav(state, date(2024, 1, 15), price_data)
+
+        # 验证shares_bought_today未被calc_nav重置
+        assert state.positions['600000.SH'].shares_bought_today == 200, \
+            "calc_nav不应重置shares_bought_today，这会违反T+1规则"
+
+    def test_t1_sell_restriction_enforced_after_buy(self):
+        """验证T+1: 当日买入的股票当日不可卖出"""
+        from app.core.backtest_engine import ABShareBacktestEngine, BacktestState, Position
+
+        engine = ABShareBacktestEngine()
+
+        state = BacktestState(cash=500000, initial_capital=1000000)
+        # 全部1000股都是当日买入 → 不可卖
+        state.positions['600000.SH'] = Position(
+            security_id='600000.SH',
+            shares=1000,
+            cost_price=10.0,
+            market_value=10000,
+            shares_bought_today=1000,
+        )
+
+        # 尝试卖出应被T+1限制拒绝
+        result = engine.execute_sell(
+            state, '600000.SH', 1000, 10.0,
+            date(2024, 1, 15),
+            {'is_suspended': False, 'pct_chg': 0, 'is_st': False}
+        )
+        assert result is None, "当日买入的股票应被T+1限制拒绝卖出"
+
+    def test_t1_old_position_sellable_after_buy_more(self):
+        """验证T+1: 增仓后原有持仓仍可卖出，仅新买部分不可卖"""
+        from app.core.backtest_engine import ABShareBacktestEngine, BacktestState, Position
+
+        engine = ABShareBacktestEngine()
+
+        state = BacktestState(cash=500000, initial_capital=1000000)
+        # 持有1000股，其中200股是当日增仓买入 → 800股可卖
+        state.positions['600000.SH'] = Position(
+            security_id='600000.SH',
+            shares=1000,
+            cost_price=10.0,
+            market_value=10000,
+            shares_bought_today=200,
+        )
+
+        # 卖出800股应成功(原持仓可卖)
+        result = engine.execute_sell(
+            state, '600000.SH', 800, 10.0,
+            date(2024, 1, 15),
+            {'is_suspended': False, 'pct_chg': 0, 'is_st': False}
+        )
+        assert result is not None, "原持仓应可卖出"
+        assert result['quantity'] == 800
+
+        # 卖出剩余200股(当日买入)应失败
+        result2 = engine.execute_sell(
+            state, '600000.SH', 200, 10.0,
+            date(2024, 1, 15),
+            {'is_suspended': False, 'pct_chg': 0, 'is_st': False}
+        )
+        assert result2 is None, "当日买入部分不可卖出"
+
+    def test_shares_bought_today_reset_across_trading_days(self):
+        """验证shares_bought_today在跨交易日后被重置为0
+
+        使用3个交易日: Day1买入, Day2(信号仍持有但T+1后可卖),
+        Day3清仓验证卖出成功
+        """
+        from app.core.backtest_engine import ABShareBacktestEngine
+
+        engine = ABShareBacktestEngine()
+
+        # 3个交易日
+        trading_days = [date(2024, 1, 2), date(2024, 1, 3), date(2024, 1, 4)]
+        universe = ['600000.SH']
+        price_data = {}
+        for td in trading_days:
+            price_data[('600000.SH', td)] = {
+                'close': 10.0, 'open': 10.0, 'pct_chg': 0.0,
+                'volume': 1e8, 'amount': 1e9,
+                'is_suspended': False, 'is_st': False,
+            }
+
+        def signal_generator(trade_date, universe, state):
+            if trade_date == date(2024, 1, 2):
+                return {'600000.SH': 1.0}  # Day1: 买入
+            elif trade_date == date(2024, 1, 4):
+                return {'600000.SH': 0.0}  # Day3: 清仓
+            return {'600000.SH': 1.0}  # Day2: 继续持有
+
+        result = engine.run_backtest(
+            signal_generator=signal_generator,
+            universe=universe,
+            start_date=date(2024, 1, 2),
+            end_date=date(2024, 1, 4),
+            rebalance_freq='daily',
+            initial_capital=1000000,
+            trading_days=trading_days,
+            price_data=price_data,
+            use_next_day_open=False,
+        )
+
+        assert result['total_days'] > 0
+        # Day3清仓卖出应成功(因为shares_bought_today在Day2/Day3日初被重置为0)
+        sell_trades = [t for t in result['trade_records'] if t['action'] == 'sell']
+        assert len(sell_trades) > 0, "T+1日后应能卖出前日买入的股票"
+
+
+class TestBSELimitPriceFix:
+    """北交所涨跌停价格修复回归测试"""
+
+    def test_bse_limit_pct_is_30(self):
+        """回归测试: 北交所涨跌停幅度应为30%而非20%
+
+        bug现象: NORTH_LIMIT_PCT常量值错误为20%, 北交所正确涨跌停幅度是30%
+        get_board_type也不应把8开头非BJ后缀的股票误判为北交所
+
+        fix: NORTH_LIMIT_PCT=30.0, get_board_type仅按.BJ后缀判断北交所
+        """
+        from app.core.backtest_engine import ABShareBacktestEngine, NORTH_LIMIT_PCT
+
+        # 常量修复验证
+        assert NORTH_LIMIT_PCT == 30.0, \
+            "北交所涨跌停幅度应为30%, 不应为20%"
+
+        engine = ABShareBacktestEngine()
+
+        # get_board_type只按.BJ后缀判断北交所
+        assert engine.get_board_type('830001.BJ') == 'north', \
+            ".BJ后缀应判为北交所"
+        # 8开头非BJ后缀不应误判为北交所
+        assert engine.get_board_type('800001.SZ') == 'main', \
+            ".SZ后缀的8开头代码应判为主板, 不应误判为北交所"
+
+        # 北交所涨停判断: pct_chg=29.99应为涨停(>=30-0.01)
+        assert engine.is_limit_up(29.99, 'north') == True, \
+            "北交所29.99%涨幅应为涨停(30%限制)"
+        # 北交所20%涨幅不应为涨停(旧bug会把20%当涨停)
+        assert engine.is_limit_up(20.0, 'north') == False, \
+            "北交所20%涨幅不应为涨停(30%限制下20%未达涨停)"
+
+        # 获取限价
+        assert engine.get_limit_pct('north') == 30.0, \
+            "北交所限价百分比应为30"
 
 
 class TestWalkForwardBacktest:

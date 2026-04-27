@@ -24,6 +24,7 @@ class StockFinancial(Base):
     revenue_yoy = Column(Float, nullable=True, comment='营收同比增长率(%)')
     net_profit_yoy = Column(Float, nullable=True, comment='净利润同比增长率(%)')
     yoy_deduct_net_profit = Column(Float, nullable=True, comment='扣非净利同比增长率(%)')
+    operating_cash_flow = Column(Float, nullable=True, comment='经营活动产生的现金流量净额')
 
     # === 资产负债表字段 ===
     total_assets = Column(Float, nullable=True, comment='总资产')
@@ -31,9 +32,23 @@ class StockFinancial(Base):
     current_assets = Column(Float, nullable=True, comment='流动资产合计')
     current_liabilities = Column(Float, nullable=True, comment='流动负债合计')
     total_liabilities = Column(Float, nullable=True, comment='负债合计')
+    goodwill = Column(Float, nullable=True, comment='商誉')
 
-    # === 现金流量表字段 ===
-    operating_cash_flow = Column(Float, nullable=True, comment='经营活动产生的现金流量净额')
+    # === 上期数据 (用于ROE/ROA/Sloan应计的期初值) ===
+    total_equity_prev = Column(Float, nullable=True, comment='上期所有者权益')
+    total_assets_prev = Column(Float, nullable=True, comment='上期总资产')
+
+    # === TTM滚动数据 (用于成长因子) ===
+    revenue_ttm = Column(Float, nullable=True, comment='营业收入TTM')
+    net_profit_ttm = Column(Float, nullable=True, comment='净利润TTM')
+    deduct_net_profit_ttm = Column(Float, nullable=True, comment='扣非净利TTM')
+    ocf_ttm = Column(Float, nullable=True, comment='经营现金流TTM')
+    revenue_yoy_4q = Column(Float, nullable=True, comment='营收同比(4季前)')
+    net_profit_yoy_4q = Column(Float, nullable=True, comment='净利同比(4季前)')
+
+    # === 多期统计 (用于盈利稳定性) ===
+    net_profit_mean_8q = Column(Float, nullable=True, comment='近8季净利均值')
+    net_profit_std_8q = Column(Float, nullable=True, comment='近8季净利标准差')
 
     # === 财务比率字段 ===
     roe = Column(Float, nullable=True, comment='净资产收益率(%)')

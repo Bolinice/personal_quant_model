@@ -290,9 +290,16 @@ class DailyPipeline:
                 r5 = self.step5_module_scoring(df, **kwargs)
                 module_scores = r5.get("module_scores")
                 risk_penalty = module_scores.pop("risk_penalty", None) if module_scores else None
+                # Store full module info including risk_penalty (which was already popped
+                # from module_scores for separate use in step6). Reconstruct the full
+                # list of module names for debugging clarity.
+                step5_module_names = list(module_scores.keys())
+                if risk_penalty is not None:
+                    step5_module_names.append("risk_penalty")
                 results["steps"]["step5_module_scoring"] = {
                     "status": r5["status"],
-                    "modules": list(r5["module_scores"].keys()),
+                    "modules": step5_module_names,
+                    "has_risk_penalty": risk_penalty is not None,
                 }
             else:
                 results["steps"]["step5_module_scoring"] = {"status": "skipped", "reason": "no_data"}

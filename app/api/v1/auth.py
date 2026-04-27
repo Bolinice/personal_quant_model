@@ -3,6 +3,7 @@
 支持JWT登录、refresh token、API Key认证
 """
 from datetime import datetime, timedelta
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from pydantic import BaseModel, EmailStr
@@ -37,7 +38,7 @@ class ChangePasswordRequest(BaseModel):
 
 
 class APIKeyCreateRequest(BaseModel):
-    name: str = None
+    name: Optional[str] = None
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
@@ -49,6 +50,9 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     )
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+        # 确保是 access token，而非 refresh token
+        if payload.get("type") != "access":
+            raise credentials_exception
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
@@ -194,7 +198,6 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
 
     # 自动创建试用订阅（7天试用期）
     from app.models.subscriptions import Subscription
-    from datetime import datetime, timedelta
     sub = Subscription(
         user_id=user.id,
         plan_type="trial",
@@ -235,7 +238,7 @@ def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db
 @router.post("/reset-password")
 def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
     """重置密码"""
-    ok = AuthService.reset_password_with_token(db, request.token, request.new_password)
+    ok, msg = AuthService.reset_password_with_token(db, request.token, request.new_password)
     if not ok:
-        raise HTTPException(status_code=400, detail="重置令牌无效或已过期")
+        raise HTTPException(status_code=400, detail=msg or "重置令牌无效或已过期")
     return success(message="密码重置成功")

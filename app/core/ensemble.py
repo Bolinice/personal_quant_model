@@ -33,6 +33,7 @@ from app.core.alpha_modules import (
     get_risk_penalty_module,
     MODULE_REGISTRY,
 )
+from app.core.regime import REGIME_WEIGHT_ADJUSTMENTS
 
 logger = logging.getLogger(__name__)
 
@@ -60,39 +61,9 @@ RISK_LAMBDA = 0.35
 
 
 # ─────────────────────────────────────────────
-# V2 Regime权重调整映射
+# V2 Regime权重调整映射 (单一来源: app.core.regime)
 # ─────────────────────────────────────────────
-
-REGIME_WEIGHT_ADJUSTMENTS: Dict[str, Dict[str, float]] = {
-    "risk_on": {
-        # 进攻: 质量成长↓ 动量↑ 资金流↑
-        "quality_growth": -0.05,
-        "expectation": 0.00,
-        "residual_momentum": +0.08,
-        "flow_confirm": +0.05,
-    },
-    "trending": {
-        # 趋势: 均衡
-        "quality_growth": 0.00,
-        "expectation": 0.00,
-        "residual_momentum": 0.00,
-        "flow_confirm": 0.00,
-    },
-    "defensive": {
-        # 防御: 质量↑ 动量↓
-        "quality_growth": +0.08,
-        "expectation": +0.02,
-        "residual_momentum": -0.08,
-        "flow_confirm": -0.02,
-    },
-    "mean_reverting": {
-        # 震荡: 修正↑ 动量↓
-        "quality_growth": +0.02,
-        "expectation": +0.06,
-        "residual_momentum": -0.06,
-        "flow_confirm": -0.02,
-    },
-}
+# REGIME_WEIGHT_ADJUSTMENTS 从 app.core.regime 导入, 避免重复定义
 
 
 # ─────────────────────────────────────────────

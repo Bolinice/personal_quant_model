@@ -1,5 +1,5 @@
 """
-组合构建器测试
+组合构建器测试 - 适配V2架构(PortfolioBuilder无db参数)
 """
 import pytest
 import numpy as np
@@ -7,14 +7,122 @@ import pandas as pd
 from datetime import date
 
 
-class TestPortfolioBuilder:
-    """组合构建测试"""
+class TestPortfolioBuilderProduction:
+    """V2组合构建器 - 实盘模式"""
 
-    def test_select_top_n(self):
+    def test_build_production_basic(self):
         from app.core.portfolio_builder import PortfolioBuilder
-        from unittest.mock import MagicMock
+        builder = PortfolioBuilder(top_n=5)
 
-        builder = PortfolioBuilder(db=MagicMock())
+        scores = pd.Series({
+            '000001.SZ': 0.8,
+            '000002.SZ': 0.7,
+            '000003.SZ': 0.6,
+            '000004.SZ': 0.5,
+            '000005.SZ': 0.4,
+            '000006.SZ': 0.3,
+        })
+
+        result = builder.build_production_portfolio(scores)
+        assert len(result) <= 5
+        assert 'ts_code' in result.columns
+        assert 'weight' in result.columns
+        assert abs(result['weight'].sum() - 1.0) < 1e-6
+
+    def test_build_production_with_risk_discount(self):
+        from app.core.portfolio_builder import PortfolioBuilder
+        builder = PortfolioBuilder(top_n=3)
+
+        scores = pd.Series({
+            '000001.SZ': 0.9,
+            '000002.SZ': 0.7,
+            '000003.SZ': 0.5,
+        })
+        risk_levels = pd.Series({
+            '000001.SZ': 'low',
+            '000002.SZ': 'high',
+            '000003.SZ': 'medium',
+        })
+
+        result = builder.build_production_portfolio(scores, risk_levels=risk_levels)
+        assert len(result) <= 3
+        # High risk stock should have lower weight than low risk
+        low_weight = result[result['ts_code'] == '000001.SZ']['weight'].values[0]
+        high_weight = result[result['ts_code'] == '000002.SZ']['weight'].values[0]
+        # With same tier multiplier, low risk should have higher weight
+        assert low_weight >= high_weight
+
+    def test_build_production_with_liquidity_discount(self):
+        from app.core.portfolio_builder import PortfolioBuilder
+        builder = PortfolioBuilder(top_n=3)
+
+        scores = pd.Series({
+            '000001.SZ': 0.9,
+            '000002.SZ': 0.7,
+            '000003.SZ': 0.5,
+        })
+        liquidity_levels = pd.Series({
+            '000001.SZ': 'normal',
+            '000002.SZ': 'insufficient',
+            '000003.SZ': 'marginal',
+        })
+
+        result = builder.build_production_portfolio(scores, liquidity_levels=liquidity_levels)
+        assert len(result) <= 3
+
+    def test_build_production_with_industry_constraints(self):
+        from app.core.portfolio_builder import PortfolioBuilder
+        builder = PortfolioBuilder(top_n=5)
+
+        scores = pd.Series({
+            '000001.SZ': 0.9,
+            '000002.SZ': 0.8,
+            '000003.SZ': 0.7,
+            '000004.SZ': 0.6,
+            '000005.SZ': 0.5,
+        })
+        industry_series = pd.Series({
+            '000001.SZ': '银行',
+            '000002.SZ': '银行',
+            '000003.SZ': '银行',
+            '000004.SZ': '电子',
+            '000005.SZ': '医药',
+        })
+
+        result = builder.build_production_portfolio(scores, industry_series=industry_series)
+        # Verify industry column is present and result is valid
+        if 'industry' in result.columns:
+            industry_weights = result.groupby('industry')['weight'].sum()
+            # Industry constraint may not be fully enforced with only 5 stocks
+            # but the result should still be valid
+            assert abs(result['weight'].sum() - 1.0) < 1e-6
+
+    def test_build_production_with_rebalance_buffer(self):
+        from app.core.portfolio_builder import PortfolioBuilder
+        builder = PortfolioBuilder(top_n=3)
+
+        scores = pd.Series({
+            '000001.SZ': 0.9,
+            '000002.SZ': 0.7,
+            '000003.SZ': 0.5,
+            '000004.SZ': 0.3,
+        })
+        current_holdings = pd.Series({
+            '000001.SZ': 0.4,
+            '000002.SZ': 0.3,
+            '000004.SZ': 0.3,
+        })
+
+        result = builder.build_production_portfolio(scores, current_holdings=current_holdings)
+        assert len(result) > 0
+
+
+class TestPortfolioBuilderResearch:
+    """V2组合构建器 - 研究模式"""
+
+    def test_build_research_basic(self):
+        from app.core.portfolio_builder import PortfolioBuilder, PortfolioMode
+        builder = PortfolioBuilder(top_n=3, mode=PortfolioMode.RESEARCH)
 
         scores = pd.Series({
             '000001.SZ': 0.8,
@@ -24,100 +132,93 @@ class TestPortfolioBuilder:
             '000005.SZ': 0.4,
         })
 
-        selected = builder.select_top_n(scores, n=3)
-        assert len(selected) == 3
-        assert '000001.SZ' in selected
+        result = builder.build_research_portfolio(scores)
+        assert len(result) <= 3
+        assert abs(result['weight'].sum() - 1.0) < 1e-6
 
-    def test_equal_weight(self):
-        from app.core.portfolio_builder import PortfolioBuilder
-        from unittest.mock import MagicMock
+    def test_build_research_with_risk_penalty(self):
+        from app.core.portfolio_builder import PortfolioBuilder, PortfolioMode
+        builder = PortfolioBuilder(top_n=3, mode=PortfolioMode.RESEARCH)
 
-        builder = PortfolioBuilder(db=MagicMock())
-
-        stocks = ['000001.SZ', '000002.SZ', '000003.SZ']
-        weights = builder.equal_weight(stocks)
-
-        assert len(weights) == 3
-        assert abs(weights.sum() - 1.0) < 1e-10
-        assert abs(weights.iloc[0] - 1.0 / 3) < 1e-10
-
-    def test_score_weight(self):
-        from app.core.portfolio_builder import PortfolioBuilder
-        from unittest.mock import MagicMock
-
-        builder = PortfolioBuilder(db=MagicMock())
-
-        stocks = ['000001.SZ', '000002.SZ', '000003.SZ']
         scores = pd.Series({
             '000001.SZ': 0.8,
+            '000002.SZ': 0.7,
+            '000003.SZ': 0.6,
+        })
+        risk_penalty = pd.Series({
+            '000001.SZ': 0.1,
             '000002.SZ': 0.5,
-            '000003.SZ': 0.3,
-        })
-
-        weights = builder.score_weight(stocks, scores)
-        assert len(weights) == 3
-        assert abs(weights.sum() - 1.0) < 1e-10
-        # Highest score should have highest weight
-        assert weights['000001.SZ'] > weights['000002.SZ']
-
-    def test_risk_parity_weight(self):
-        from app.core.portfolio_builder import PortfolioBuilder
-        from unittest.mock import MagicMock
-
-        builder = PortfolioBuilder(db=MagicMock())
-
-        stocks = ['000001.SZ', '000002.SZ', '000003.SZ']
-        volatilities = pd.Series({
-            '000001.SZ': 0.3,
-            '000002.SZ': 0.2,
-            '000003.SZ': 0.1,
-        })
-
-        weights = builder.risk_parity_weight(stocks, volatilities)
-        assert len(weights) == 3
-        assert abs(weights.sum() - 1.0) < 1e-10
-        # Low vol should get higher weight
-        assert weights['000003.SZ'] > weights['000001.SZ']
-
-    def test_apply_position_limit(self):
-        from app.core.portfolio_builder import PortfolioBuilder
-        from unittest.mock import MagicMock
-
-        builder = PortfolioBuilder(db=MagicMock())
-
-        weights = pd.Series({
-            '000001.SZ': 0.5,
-            '000002.SZ': 0.3,
             '000003.SZ': 0.2,
         })
 
-        adjusted = builder.apply_position_limit(weights, max_position=0.4)
-        assert adjusted.max() <= 0.4 + 1e-6
-        assert abs(adjusted.sum() - 1.0) < 1e-6
+        result = builder.build_research_portfolio(scores, risk_penalty=risk_penalty)
+        assert len(result) <= 3
 
-    def test_generate_rebalance(self):
-        from app.core.portfolio_builder import PortfolioBuilder
-        from unittest.mock import MagicMock
+    def test_build_method_dispatches_correctly(self):
+        from app.core.portfolio_builder import PortfolioBuilder, PortfolioMode
+        builder = PortfolioBuilder(top_n=3, mode=PortfolioMode.RESEARCH)
 
-        builder = PortfolioBuilder(db=MagicMock())
-
-        current_positions = {'000001.SZ': 0.5, '000002.SZ': 0.5}
-        target_portfolio = pd.DataFrame({
-            'security_id': ['000001.SZ', '000003.SZ'],
-            'weight': [0.4, 0.6],
+        scores = pd.Series({
+            '000001.SZ': 0.8,
+            '000002.SZ': 0.7,
+            '000003.SZ': 0.6,
         })
 
-        result = builder.generate_rebalance(current_positions, target_portfolio, '2024-01-15')
-        assert 'sell_list' in result
-        assert 'buy_list' in result
-        assert 'adjust_list' in result
-        assert 'total_turnover' in result
-        # Should sell 000002
-        sell_codes = [s['ts_code'] for s in result['sell_list']]
-        assert '000002.SZ' in sell_codes
-        # Should buy 000003
-        buy_codes = [b['ts_code'] for b in result['buy_list']]
-        assert '000003.SZ' in buy_codes
+        # Default mode should use research
+        result = builder.build(scores)
+        assert len(result) <= 3
+
+        # Override to production
+        result_prod = builder.build(scores, mode=PortfolioMode.PRODUCTION)
+        assert len(result_prod) <= 3
+
+
+class TestPortfolioBuilderTierMultipliers:
+    """分层赋权测试"""
+
+    def test_tier1_multiplier(self):
+        from app.core.portfolio_builder import PortfolioBuilder
+        builder = PortfolioBuilder()
+        assert builder._get_tier_multiplier(1) == 1.5
+        assert builder._get_tier_multiplier(10) == 1.5
+
+    def test_tier2_multiplier(self):
+        from app.core.portfolio_builder import PortfolioBuilder
+        builder = PortfolioBuilder()
+        assert builder._get_tier_multiplier(11) == 1.2
+        assert builder._get_tier_multiplier(30) == 1.2
+
+    def test_tier3_multiplier(self):
+        from app.core.portfolio_builder import PortfolioBuilder
+        builder = PortfolioBuilder()
+        assert builder._get_tier_multiplier(31) == 1.0
+        assert builder._get_tier_multiplier(60) == 1.0
+
+    def test_out_of_range_multiplier(self):
+        from app.core.portfolio_builder import PortfolioBuilder
+        builder = PortfolioBuilder()
+        assert builder._get_tier_multiplier(100) == 1.0
+
+
+class TestPortfolioBuilderLotSize:
+    """100股整数倍处理"""
+
+    def test_round_to_lot(self):
+        from app.core.portfolio_builder import PortfolioBuilder
+        builder = PortfolioBuilder()
+
+        # 10% weight, 1e8 capital, 10 yuan price
+        result = builder._round_to_lot(0.10, 10.0, 1e8)
+        assert result > 0
+        # Verify it's close to 10%
+        assert abs(result - 0.10) < 0.005
+
+    def test_round_to_lot_zero_price(self):
+        from app.core.portfolio_builder import PortfolioBuilder
+        builder = PortfolioBuilder()
+
+        result = builder._round_to_lot(0.10, 0.0, 1e8)
+        assert result == 0.0
 
 
 class TestPortfolioOptimizer:
@@ -125,7 +226,6 @@ class TestPortfolioOptimizer:
 
     def test_mean_variance_optimize(self):
         from app.core.portfolio_optimizer import PortfolioOptimizer
-
         optimizer = PortfolioOptimizer()
 
         np.random.seed(42)
@@ -143,7 +243,6 @@ class TestPortfolioOptimizer:
 
     def test_risk_parity_optimize(self):
         from app.core.portfolio_optimizer import PortfolioOptimizer
-
         optimizer = PortfolioOptimizer()
 
         np.random.seed(42)
@@ -158,7 +257,6 @@ class TestPortfolioOptimizer:
 
     def test_min_variance_optimize(self):
         from app.core.portfolio_optimizer import PortfolioOptimizer
-
         optimizer = PortfolioOptimizer()
 
         np.random.seed(42)

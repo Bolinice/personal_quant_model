@@ -1,7 +1,7 @@
 """回测管理 API。"""
 
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from app.db.base import get_db
 from app.models.backtests import Backtest
@@ -12,20 +12,33 @@ from app.services.backtests_service import (
 from app.schemas.backtests import BacktestCreate, BacktestUpdate, BacktestOut, BacktestResultOut
 from app.core.response import success, error
 from app.core.permissions import require_permission, PermissionCode
+from app.api.v1.auth import get_current_user
+from app.models.user import User
 from app.services import usage_service
 
 router = APIRouter()
 
 
 @router.get("/")
-def read_backtests(model_id: int = None, status: str = None, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_backtests(
+    model_id: int = None,
+    status: str = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """获取回测列表"""
     backtests = get_backtests(model_id=model_id, status=status, skip=skip, limit=limit, db=db)
     return success(backtests)
 
 
 @router.get("/{backtest_id}")
-def read_backtest(backtest_id: int, db: Session = Depends(get_db)):
+def read_backtest(
+    backtest_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """获取回测详情"""
     backtest = db.query(Backtest).filter(Backtest.id == backtest_id).first()
     if backtest is None:
@@ -55,7 +68,12 @@ def create_backtest_endpoint(
 
 
 @router.put("/{backtest_id}")
-def update_backtest_endpoint(backtest_id: int, backtest_update: BacktestUpdate, db: Session = Depends(get_db)):
+def update_backtest_endpoint(
+    backtest_id: int,
+    backtest_update: BacktestUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """更新回测"""
     result = update_backtest(backtest_id, backtest_update, db=db)
     if result is None:
@@ -64,14 +82,22 @@ def update_backtest_endpoint(backtest_id: int, backtest_update: BacktestUpdate, 
 
 
 @router.get("/{backtest_id}/results")
-def read_backtest_results(backtest_id: int, db: Session = Depends(get_db)):
+def read_backtest_results(
+    backtest_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """获取回测结果"""
     results = get_backtest_results(backtest_id, db=db)
     return success(results)
 
 
 @router.post("/{backtest_id}/run")
-def run_backtest_endpoint(backtest_id: int, db: Session = Depends(get_db)):
+def run_backtest_endpoint(
+    backtest_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_permission(PermissionCode.BACKTEST_DAILY_1)),
+):
     """运行回测"""
     result = run_backtest(backtest_id, db=db)
     if result is None:
@@ -80,7 +106,11 @@ def run_backtest_endpoint(backtest_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{backtest_id}/cancel")
-def cancel_backtest_endpoint(backtest_id: int, db: Session = Depends(get_db)):
+def cancel_backtest_endpoint(
+    backtest_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """取消回测"""
     cancelled = cancel_backtest(backtest_id, db=db)
     if not cancelled:

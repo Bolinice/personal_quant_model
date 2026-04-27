@@ -26,7 +26,8 @@ class LabelBuilder:
                       horizon: int = 5,
                       code_col: str = 'ts_code',
                       date_col: str = 'trade_date',
-                      price_col: str = 'close') -> pd.DataFrame:
+                      price_col: str = 'close',
+                      exclude_codes: Optional[List[str]] = None) -> pd.DataFrame:
         """
         标签1: 未来k日超额收益 = r_stock - r_benchmark
 
@@ -40,6 +41,10 @@ class LabelBuilder:
             code_col: 股票代码列名
             date_col: 日期列名
             price_col: 价格列名
+            exclude_codes: 当无外部基准时, 计算全市场平均收益需排除的股票代码列表。
+                用于避免循环依赖: 若被评估的股票自身也参与基准计算, 超额收益
+                会被系统性拉低。典型用法: 传入当前持仓/待评估股票列表, 使基准
+                仅由非持仓股票构成。
 
         Returns:
             DataFrame: [ts_code, trade_date, fwd_return, benchmark_return, excess_return]
@@ -68,8 +73,21 @@ class LabelBuilder:
             merged['excess_return'] = merged['excess_return'].fillna(merged['fwd_return'])
         else:
             # 无基准时, 用全市场平均收益作为基准
+            # 排除指定股票, 避免被评估股票自身参与基准计算导致循环依赖
             merged = stock_fwd.copy()
-            market_avg = merged.groupby(date_col)['fwd_return'].mean()
+            if exclude_codes:
+                bench_pool = merged[~merged[code_col].isin(exclude_codes)]
+            else:
+                bench_pool = merged
+            # 注意: 若排除后无可用股票, 退回全市场平均(并记录警告)
+            if bench_pool.empty:
+                from app.core.logging import logger as _logger
+                _logger.warning(
+                    "exclude_codes 排除了所有股票, 退回全市场平均作为基准; "
+                    "这可能引入循环依赖, 建议提供 benchmark_df 或缩小 exclude_codes"
+                )
+                bench_pool = merged
+            market_avg = bench_pool.groupby(date_col)['fwd_return'].mean()
             merged['benchmark_fwd_return'] = merged[date_col].map(market_avg)
             merged['excess_return'] = merged['fwd_return'] - merged['benchmark_fwd_return']
 
@@ -213,7 +231,8 @@ class LabelBuilder:
                               horizons: List[int] = [5, 10, 20],
                               code_col: str = 'ts_code',
                               date_col: str = 'trade_date',
-                              price_col: str = 'close') -> pd.DataFrame:
+                              price_col: str = 'close',
+                              exclude_codes: Optional[List[str]] = None) -> pd.DataFrame:
         """
         多周期标签 (GPT设计16.3节)
 
@@ -222,6 +241,7 @@ class LabelBuilder:
 
         Args:
             horizons: 预测周期列表
+            exclude_codes: 当无外部基准时, 计算全市场平均收益需排除的股票代码列表
 
         Returns:
             DataFrame: [ts_code, trade_date, excess_5d, excess_10d, excess_20d, ...]
@@ -230,7 +250,8 @@ class LabelBuilder:
         for h in horizons:
             label_df = self.excess_return(
                 price_df, benchmark_df, horizon=h,
-                code_col=code_col, date_col=date_col, price_col=price_col
+                code_col=code_col, date_col=date_col, price_col=price_col,
+                exclude_codes=exclude_codes
             )
             if not label_df.empty:
                 # 只保留关键列
@@ -272,6 +293,11 @@ class LabelBuilder:
 
         df = price_df.copy()
         df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+
+        # 去重: 同一 (ts_code, trade_date) 可能存在多条记录(数据质量问题),
+        # 保留最后一条(通常为修正后的数据)
+        df = df.drop_duplicates(subset=[code_col, date_col], keep='last')
+
         df = df.sort_values([code_col, date_col])
 
         # 向量化计算: 按股票分组shift

@@ -6,6 +6,7 @@ import {
 import { factorApi } from '@/api';
 import type { Factor } from '@/api';
 import { PageHeader, GlassTable, NeonChip } from '@/components/ui';
+import { DisclaimerBanner } from '@/components/compliance';
 
 const categoryNeonColor: Record<string, 'cyan' | 'green' | 'amber' | 'red' | 'purple' | 'blue' | 'default'> = {
   value: 'cyan', growth: 'green', quality: 'amber', momentum: 'red',

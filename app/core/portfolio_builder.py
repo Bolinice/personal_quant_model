@@ -355,45 +355,55 @@ class PortfolioBuilder:
         行业约束: 单行业≤20%, 偏离≤5%
 
         超限行业按比例缩减, 释放的权重分配给未超限行业
+        (向量化实现 + 修复: 使用缩放前权重作为再分配基准)
         """
         max_single = self.industry_constraints["max_single_industry"]
         max_deviation = self.industry_constraints["max_deviation"]
 
         adjusted = weights.copy()
 
-        # 计算行业权重
-        industry_weights = {}
-        for ts_code in adjusted.index[adjusted > 0]:
-            ind = industry_series.get(ts_code, "unknown")
-            if ind not in industry_weights:
-                industry_weights[ind] = 0.0
-            industry_weights[ind] += adjusted[ts_code]
+        # 仅处理持仓权重 > 0 的股票
+        active_mask = adjusted > 0
+        if not active_mask.any():
+            return adjusted
 
-        # 检查并调整超限行业
+        active_codes = adjusted.index[active_mask]
+        active_industries = industry_series.reindex(active_codes).fillna("unknown")
+
+        # 向量化: 按行业汇总权重
+        ind_weights = adjusted[active_mask].groupby(active_industries).sum()
+
+        # 识别超限行业
+        over_limit = ind_weights[ind_weights > max_single]
+        if over_limit.empty:
+            return adjusted
+
+        # 计算超限行业内各股票的缩放因子, 并保存缩放前的权重用于再分配
         excess_weight = 0.0
-        for ind, ind_weight in industry_weights.items():
-            if ind_weight > max_single:
-                # 计算需要缩减的权重
-                scale = max_single / ind_weight
-                for ts_code in adjusted.index[adjusted > 0]:
-                    if industry_series.get(ts_code, "unknown") == ind:
-                        reduced = adjusted[ts_code] * (1 - scale)
-                        excess_weight += reduced
-                        adjusted[ts_code] *= scale
+        pre_scale_weights = adjusted.copy()  # 缩放前权重快照, 用于再分配基准
 
-        # 将释放的权重按比例分配给未超限行业
+        for ind, ind_weight in over_limit.items():
+            scale = max_single / ind_weight
+            ind_mask = active_industries == ind
+            # 缩减该行业所有股票权重
+            adjusted.loc[ind_mask[ind_mask].index] *= scale
+            excess_weight += ind_weight * (1 - scale)
+
+        # 将释放的权重按比例分配给未超限行业 (使用缩放前权重作为基准)
         if excess_weight > 0:
-            remaining_mask = adjusted > 0
-            # 排除已超限行业
-            for ts_code in adjusted.index[adjusted > 0]:
-                ind = industry_series.get(ts_code, "unknown")
-                if industry_weights.get(ind, 0) >= max_single:
-                    remaining_mask[ts_code] = False
+            under_limit = ind_weights[ind_weights <= max_single]
+            if not under_limit.empty:
+                # 构建未超限行业的股票掩码
+                under_limit_inds = under_limit.index
+                under_limit_mask = active_industries.isin(under_limit_inds)
 
-            remaining_total = adjusted[remaining_mask].sum()
-            if remaining_total > 0:
-                for ts_code in adjusted.index[remaining_mask]:
-                    adjusted[ts_code] += excess_weight * (adjusted[ts_code] / remaining_total)
+                # 使用缩放前权重计算分配比例 (修复: 原代码使用已缩放的adjusted值)
+                pre_scale_under = pre_scale_weights[active_mask][under_limit_mask]
+                pre_scale_total = pre_scale_under.sum()
+
+                if pre_scale_total > 0:
+                    redistribution = excess_weight * (pre_scale_under / pre_scale_total)
+                    adjusted.loc[pre_scale_under.index] += redistribution.values
 
         return adjusted
 

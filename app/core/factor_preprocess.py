@@ -7,8 +7,6 @@ from typing import List, Optional, Dict, Tuple
 import numpy as np
 import pandas as pd
 from scipy import stats
-from sqlalchemy.orm import Session
-from app.db.base import SessionLocal, with_db
 from app.core.logging import logger
 
 
@@ -435,14 +433,15 @@ class FactorPreprocessor:
             y_valid = y[valid_mask]
             n_industries = X.shape[1]
 
-            # 约束矩阵: 行业系数之和为0
+            # 约束矩阵: 行业系数之和为0 (截距不参与约束)
             # 使用Lagrange乘子法: [X'X  A'] [beta ] = [X'y]
             #                     [A   0 ] [lambda]   [0   ]
-            A = np.ones((1, n_industries))
             X_with_const = np.column_stack([np.ones(X.shape[0]), X])
 
             # 构建KKT系统
             n_vars = X_with_const.shape[1]
+            A = np.zeros((1, n_vars))
+            A[0, 1:] = 1.0  # 跳过截距列(索引0), 约束行业系数之和为0
             KKT = np.zeros((n_vars + 1, n_vars + 1))
             KKT[:n_vars, :n_vars] = X_with_const.T @ X_with_const
             KKT[:n_vars, n_vars] = A.flatten()  # 约束行
@@ -583,6 +582,10 @@ class FactorPreprocessor:
 
         for col in factor_cols:
             if col not in result.columns:
+                continue
+
+            # 跳过缺失指示器列(二值列不应进入预处理流水线)
+            if col.endswith('_missing'):
                 continue
 
             # 覆盖率过滤

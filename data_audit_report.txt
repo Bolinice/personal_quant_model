@@ -5,54 +5,33 @@
 表级统计:
 表名                                       行数       状态
 ----------------------------------------------------
-stock_basic                             N/A  MISSING
-stock_daily                             N/A  MISSING
-stock_daily_basic                       N/A  MISSING
-stock_financial                         N/A  MISSING
-stock_northbound                        N/A  MISSING
-stock_money_flow                        N/A  MISSING
-stock_status_daily                      N/A  MISSING
-stock_margin                            N/A  MISSING
-stock_industry                          N/A  MISSING
-index_daily                             N/A  MISSING
-pit_financial                           N/A  MISSING
-analyst_estimates_pit                   N/A  MISSING
-event_center                            N/A  MISSING
-risk_flag_daily                         N/A  MISSING
+stock_basic                           5,199       OK
+stock_daily                       2,446,613       OK
+stock_daily_basic                 1,135,331       OK
+stock_financial                      34,122       OK
+stock_northbound                      9,234       OK
+stock_money_flow                    155,796       OK
+stock_status_daily                  119,012       OK
+stock_margin                         86,683       OK
+stock_industry                        5,517       OK
+index_daily                           3,856       OK
+pit_financial                        34,122       OK
+analyst_estimates_pit                     0    EMPTY
+event_center                              0    EMPTY
+risk_flag_daily                           0    EMPTY
 
 关键字段覆盖率:
-  stock_basic.list_date: ERROR ((psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
-
-[SQL: SELECT COUNT(*) FROM stock_basic WHERE list_date IS NOT NULL]
-(Background on this error at: https://sqlalche.me/e/20/2j85))
-  stock_basic.industry: ERROR ((psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
-
-[SQL: SELECT COUNT(*) FROM stock_basic WHERE industry IS NOT NULL]
-(Background on this error at: https://sqlalche.me/e/20/2j85))
-  stock_daily.close: ERROR ((psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
-
-[SQL: SELECT COUNT(*) FROM stock_daily WHERE close IS NOT NULL]
-(Background on this error at: https://sqlalche.me/e/20/2j85))
-  stock_daily.amount: ERROR ((psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
-
-[SQL: SELECT COUNT(*) FROM stock_daily WHERE amount IS NOT NULL]
-(Background on this error at: https://sqlalche.me/e/20/2j85))
-  stock_daily_basic.total_mv: ERROR ((psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
-
-[SQL: SELECT COUNT(*) FROM stock_daily_basic WHERE total_mv IS NOT NULL]
-(Background on this error at: https://sqlalche.me/e/20/2j85))
-  stock_financial.roe: ERROR ((psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
-
-[SQL: SELECT COUNT(*) FROM stock_financial WHERE roe IS NOT NULL]
-(Background on this error at: https://sqlalche.me/e/20/2j85))
-  stock_financial.ann_date: ERROR ((psycopg2.errors.InFailedSqlTransaction) current transaction is aborted, commands ignored until end of transaction block
-
-[SQL: SELECT COUNT(*) FROM stock_financial WHERE ann_date IS NOT NULL]
-(Background on this error at: https://sqlalche.me/e/20/2j85))
+  stock_basic.list_date: 0.0%
+  stock_basic.industry: 0.0%
+  stock_daily.close: 100.0%
+  stock_daily.amount: 100.0%
+  stock_daily_basic.total_mv: 100.0%
+  stock_financial.roe: 99.2%
+  stock_financial.ann_date: 100.0%
 
 日期格式:
-  stock_daily.trade_date: N/A
-  stock_daily_basic.trade_date: N/A
-  stock_basic.list_date: N/A
-  stock_financial.end_date: N/A
-  stock_financial.ann_date: N/A
+  stock_daily.trade_date: date
+  stock_daily_basic.trade_date: character varying
+  stock_basic.list_date: date
+  stock_financial.end_date: date
+  stock_financial.ann_date: date

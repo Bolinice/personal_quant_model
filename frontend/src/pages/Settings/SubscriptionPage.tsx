@@ -3,7 +3,7 @@ import {
   Box, Card, CardContent, Typography, Button, Chip, List, ListItem, ListItemIcon, ListItemText,
   CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogActions,
 } from '@mui/material';
-import { Check as CheckIcon, Star as StarIcon, Crown as CrownIcon } from '@mui/icons-material';
+import { Check as CheckIcon, Star as StarIcon, WorkspacePremium as CrownIcon } from '@mui/icons-material';
 import { subscriptionApi } from '@/api/endpoints/subscription';
 import type { SubscriptionPlan, CurrentSubscription } from '@/api/types/subscription';
 import { useTranslation } from 'react-i18next';

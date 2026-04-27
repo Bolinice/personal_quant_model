@@ -80,15 +80,15 @@ class RiskModel:
 
     def _calc_optimal_shrinkage(self, X: np.ndarray, S: np.ndarray,
                                 F: np.ndarray, T: int) -> float:
-        """计算最优压缩系数 (向量化: 消除O(T*N^2)循环)"""
+        """计算最优压缩系数"""
         n = S.shape[0]
 
-        # 向量化: 一次计算所有 (x_t x_t' - S)^2 的Frobenius范数之和
-        X_centered = X - X.mean(axis=0)  # (T, N)
-        # outer products: (T, N, 1) * (T, 1, N) -> (T, N, N)
-        outer_prods = X_centered[:, :, np.newaxis] * X_centered[:, np.newaxis, :]  # (T, N, N)
-        diffs = outer_prods - S[np.newaxis, :, :]  # (T, N, N)
-        var_S = np.sum(diffs ** 2) / (T ** 2)
+        # Large N fallback: vectorized (T, N, N) tensor consumes too much memory
+        # when N > 100 (e.g., N=500 => 125M elements). Use loop-based approach.
+        if n > 100:
+            var_S = self._calc_var_S_loop(X, S, T, n)
+        else:
+            var_S = self._calc_var_S_vectorized(X, S, T, n)
 
         # 计算目标与样本的差异
         diff_sq = np.sum((F - S) ** 2)
@@ -98,6 +98,34 @@ class RiskModel:
 
         alpha = min(var_S / diff_sq, 1.0)
         return alpha
+
+    def _calc_var_S_vectorized(self, X: np.ndarray, S: np.ndarray,
+                               T: int, n: int) -> float:
+        """向量化计算 var_S: 适用于 N <= 100"""
+        X_centered = X - X.mean(axis=0)  # (T, N)
+        # outer products: (T, N, 1) * (T, 1, N) -> (T, N, N)
+        outer_prods = X_centered[:, :, np.newaxis] * X_centered[:, np.newaxis, :]  # (T, N, N)
+        diffs = outer_prods - S[np.newaxis, :, :]  # (T, N, N)
+        var_S = np.sum(diffs ** 2) / (T ** 2)
+        return var_S
+
+    def _calc_var_S_loop(self, X: np.ndarray, S: np.ndarray,
+                         T: int, n: int) -> float:
+        """
+        循环计算 var_S: 适用于 N > 100, 避免创建 (T, N, N) 大张量
+        var_S = (1/T^2) * sum_t || x_t x_t' - S ||_F^2
+        展开: sum of (x_t_i * x_t_j - S_ij)^2 for each (i,j) pair, summed over t
+        等价于: (1/T^2) * [sum_t sum_i sum_j (x_ti * x_tj - S_ij)^2]
+        """
+        X_centered = X - X.mean(axis=0)  # (T, N)
+        total = 0.0
+        for t in range(T):
+            x_t = X_centered[t]  # (N,)
+            # outer product - S, then Frobenius norm squared
+            diff = np.outer(x_t, x_t) - S
+            total += np.sum(diff ** 2)
+        var_S = total / (T ** 2)
+        return var_S
 
     def _ensure_positive_definite(self, matrix: np.ndarray) -> np.ndarray:
         """确保矩阵正定"""
@@ -283,10 +311,14 @@ class RiskModel:
                         valid = False
                         break
 
-                    # 早停: 如果当前对数似然已低于best_ll且已过1/4时间步，跳过
-                    if best_ll > -np.inf and ll < best_ll and t > T // 4:
-                        valid = False
-                        break
+                    # 早停: 如果当前平均每步对数似然已低于best的平均每步对数似然
+                    # 且已过1/4时间步，跳过 (使用平均而非累计，消除时间步数的影响)
+                    if best_ll > -np.inf and t > T // 4:
+                        avg_ll = ll / t
+                        best_avg_ll = best_ll / (T - 1)  # best_ll是完整遍历的累计值
+                        if avg_ll < best_avg_ll:
+                            valid = False
+                            break
 
                 if valid and ll > best_ll:
                     best_ll = ll

@@ -15,6 +15,7 @@ from .stock_shareholder_pledge import StockShareholderPledge
 from .stock_top10_holders import StockTop10Holders
 from .stock_institutional_holding import StockInstitutionalHolding
 from .stock_analyst_consensus import StockAnalystConsensus
+from .industry_daily import IndustryDaily
 
 __all__ = [
     "StockBasic",
@@ -35,4 +36,5 @@ __all__ = [
     "StockTop10Holders",
     "StockInstitutionalHolding",
     "StockAnalystConsensus",
+    "IndustryDaily",
 ]

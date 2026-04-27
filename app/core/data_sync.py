@@ -121,7 +121,7 @@ class ConcurrentDataSyncer:
     # ------------------------------------------------------------------
 
     def _sync_stock_basic(self) -> int:
-        """同步全A股基础信息"""
+        """同步全A股基础信息 (新增 + 更新已有股票的变更属性)"""
         logger.info("[stock_basic] 开始同步...")
         from app.models.market import StockBasic
 
@@ -131,32 +131,66 @@ class ConcurrentDataSyncer:
             if df is None or df.empty:
                 return 0
 
-            existing = set(
-                r[0] for r in db.query(StockBasic.ts_code).all()
-            )
+            # 查询所有已有记录 (不仅仅是ts_code, 还需要完整对象用于更新)
+            existing_map: Dict[str, StockBasic] = {
+                r.ts_code: r
+                for r in db.query(StockBasic).all()
+            }
 
-            new_records = []
+            new_count = 0
+            updated_count = 0
+
             for _, row in df.iterrows():
                 ts_code = row.get("ts_code", "")
-                if ts_code in existing:
+                if not ts_code:
                     continue
-                new_records.append(
-                    StockBasic(
+
+                # 提取API返回的字段值
+                new_name = row.get("name", "")
+                new_industry = row.get("industry", "")
+                new_market = row.get("market", "")
+                new_list_status = row.get("status", "L")
+
+                if ts_code not in existing_map:
+                    # 新增股票
+                    db.add(StockBasic(
                         ts_code=ts_code,
                         symbol=row.get("symbol", ""),
-                        name=row.get("name", ""),
-                        industry=row.get("industry", ""),
-                        market=row.get("market", ""),
-                        list_status=row.get("status", "L"),
-                    )
-                )
+                        name=new_name,
+                        area=row.get("area", ""),
+                        industry=new_industry,
+                        market=new_market,
+                        list_status=new_list_status,
+                    ))
+                    new_count += 1
+                else:
+                    # 已有股票: 检查关键字段是否有变更, 有则更新
+                    existing = existing_map[ts_code]
+                    changed = False
 
-            if new_records:
-                db.bulk_save_objects(new_records)
-                db.commit()
+                    if new_name and existing.name != new_name:
+                        existing.name = new_name
+                        changed = True
+                    if new_industry and existing.industry != new_industry:
+                        existing.industry = new_industry
+                        changed = True
+                    if new_market and existing.market != new_market:
+                        existing.market = new_market
+                        changed = True
+                    if new_list_status and existing.list_status != new_list_status:
+                        existing.list_status = new_list_status
+                        changed = True
 
-            logger.info("[stock_basic] 新增 %d / 已有 %d", len(new_records), len(existing))
-            return len(new_records)
+                    if changed:
+                        updated_count += 1
+
+            db.commit()
+
+            logger.info(
+                "[stock_basic] 新增 %d / 更新 %d / 已有 %d",
+                new_count, updated_count, len(existing_map) - new_count - updated_count,
+            )
+            return new_count + updated_count
         except Exception as e:
             db.rollback()
             logger.error("[stock_basic] 失败: %s", e)
@@ -646,7 +680,7 @@ class ConcurrentDataSyncer:
     # ------------------------------------------------------------------
 
     def _sync_northbound(self, start_date: str, end_date: str) -> int:
-        """同步北向资金（按日期并发）"""
+        """同步北向资金（按日期并发）— 补充持股数据"""
         logger.info("[northbound] 开始同步...")
         from app.models.market import StockNorthbound
 
@@ -685,6 +719,8 @@ class ConcurrentDataSyncer:
                             north_net_buy=safe_float(row.get("net_amount")),
                             north_buy=safe_float(row.get("buy")),
                             north_sell=safe_float(row.get("sell")),
+                            north_holding=safe_float(row.get("vol")),
+                            north_holding_pct=safe_float(row.get("vol_ratio")),
                         )
                     )
 
@@ -757,6 +793,14 @@ class ConcurrentDataSyncer:
                             trade_date=td,
                             smart_net_inflow=safe_float(row.get("net_mf_vol")),
                             smart_net_pct=safe_float(row.get("net_mf_amount")),
+                            super_large_net_inflow=safe_float(row.get("buy_elg_vol", 0)) - safe_float(row.get("sell_elg_vol", 0)),
+                            super_large_net_pct=safe_float(row.get("buy_elg_amount", 0)) - safe_float(row.get("sell_elg_amount", 0)),
+                            large_net_inflow=safe_float(row.get("buy_lg_vol", 0)) - safe_float(row.get("sell_lg_vol", 0)),
+                            large_net_pct=safe_float(row.get("buy_lg_amount", 0)) - safe_float(row.get("sell_lg_amount", 0)),
+                            medium_net_inflow=safe_float(row.get("buy_md_vol", 0)) - safe_float(row.get("sell_md_vol", 0)),
+                            medium_net_pct=safe_float(row.get("buy_md_amount", 0)) - safe_float(row.get("sell_md_amount", 0)),
+                            small_net_inflow=safe_float(row.get("buy_sm_vol", 0)) - safe_float(row.get("sell_sm_vol", 0)),
+                            small_net_pct=safe_float(row.get("buy_sm_amount", 0)) - safe_float(row.get("sell_sm_amount", 0)),
                         )
                     )
 

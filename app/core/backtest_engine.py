@@ -29,14 +29,14 @@ MAIN_BOARD_LIMIT_PCT = 10.0   # 主板 10%
 GEM_LIMIT_PCT = 20.0         # 创业板 20%
 STAR_LIMIT_PCT = 20.0        # 科创板 20%
 ST_LIMIT_PCT = 5.0          # ST 5%
-NORTH_LIMIT_PCT = 20.0       # 北交所 20%
+NORTH_LIMIT_PCT = 30.0       # 北交所 30%
 
 # 保留旧常量名(小数形式)以兼容外部引用
 MAIN_BOARD_LIMIT = 0.10
 GEM_LIMIT = 0.20
 STAR_LIMIT = 0.20
 ST_LIMIT = 0.05
-NORTH_LIMIT = 0.20
+NORTH_LIMIT = 0.30
 
 # 交易单位
 LOT_SIZE = 100  # A股最小交易单位100股
@@ -294,7 +294,7 @@ class ABShareBacktestEngine:
             return 'gem'  # 创业板
         elif ts_code.endswith('.SH') and ts_code.startswith('688'):
             return 'star'  # 科创板
-        elif ts_code.endswith('.BJ') or ts_code.startswith('8'):
+        elif ts_code.endswith('.BJ'):
             return 'north'  # 北交所
         return 'main'
 
@@ -530,11 +530,12 @@ class ABShareBacktestEngine:
                     state.positions[ts_code].market_value / total_nav, 6
                 )
 
-        # 计算回撤
+        # 计算回撤 (nav和peak均为比率, drawdown = (nav - peak) / peak)
         if state.nav_history:
             peak = max(h['nav'] for h in state.nav_history)
-            drawdown = (total_nav - peak * state.initial_capital) / (peak * state.initial_capital)
+            drawdown = (nav - peak) / peak
         else:
+            peak = nav
             drawdown = 0
 
         nav_record = {
@@ -548,10 +549,6 @@ class ABShareBacktestEngine:
             'position_pnl': position_pnl,
         }
         state.nav_history.append(nav_record)
-
-        # 每日结算: 重置shares_bought_today (T+1限制只针对当日买入)
-        for pos in state.positions.values():
-            pos.shares_bought_today = 0
 
         logger.debug(
             "NAV calculated",
@@ -1226,6 +1223,10 @@ class ABShareBacktestEngine:
             if trade_date < start_date or trade_date > end_date:
                 continue
 
+            # 每日开盘: 重置shares_bought_today (T+1限制只针对当日买入，在日初统一重置)
+            for pos in state.positions.values():
+                pos.shares_bought_today = 0
+
             # 判断是否调仓日
             is_rebalance = self.should_rebalance(trade_date, rebalance_freq, trading_days)
 
@@ -1494,6 +1495,10 @@ class EventDrivenBacktestEngine(ABShareBacktestEngine):
         for trade_date in trading_days:
             if trade_date < start_date or trade_date > end_date:
                 continue
+
+            # 每日开盘: 重置shares_bought_today (T+1限制只针对当日买入，在日初统一重置)
+            for pos in state.positions.values():
+                pos.shares_bought_today = 0
 
             self.order_book.clear()
 

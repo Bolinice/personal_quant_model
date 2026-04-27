@@ -495,6 +495,7 @@ class FactorEngine:
                          money_flow_df: pd.DataFrame = None,
                          margin_df: pd.DataFrame = None,
                          daily_basic_df: pd.DataFrame = None,
+                         industry_df: pd.DataFrame = None,
                          trade_date: Optional[date] = None) -> pd.DataFrame:
         """计算所有因子并预处理 (委托给FactorCalculator)
         PIT安全: trade_date传递给FactorCalculator用于财务数据PIT过滤
@@ -509,6 +510,7 @@ class FactorEngine:
             stock_basic_df=stock_basic_df, stock_status_df=stock_status_df,
             money_flow_df=money_flow_df, margin_df=margin_df,
             daily_basic_df=daily_basic_df,
+            industry_df=industry_df,
             trade_date=trade_date,
         )
 

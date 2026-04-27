@@ -628,15 +628,33 @@ class FactorCalculator:
         return result
 
     def calc_sentiment_factors(self, sentiment_df: pd.DataFrame) -> pd.DataFrame:
-        """情绪因子 (A股特有)"""
+        """情绪因子 (A股特有)
+        面板数据安全: 使用groupby('ts_code')确保rolling/pct_change不跨股票边界
+        """
         result = pd.DataFrame()
         result['security_id'] = sentiment_df.get('ts_code')
+
         if 'retail_order_ratio' in sentiment_df.columns:
-            result['retail_sentiment'] = sentiment_df['retail_order_ratio'].rolling(20, min_periods=5).mean()
+            if 'ts_code' in sentiment_df.columns:
+                result['retail_sentiment'] = sentiment_df.groupby('ts_code')['retail_order_ratio'].transform(
+                    lambda s: s.rolling(20, min_periods=5).mean()
+                )
+            else:
+                result['retail_sentiment'] = sentiment_df['retail_order_ratio'].rolling(20, min_periods=5).mean()
         if 'margin_balance' in sentiment_df.columns:
-            result['margin_balance_chg'] = sentiment_df['margin_balance'].pct_change(5)
+            if 'ts_code' in sentiment_df.columns:
+                result['margin_balance_chg'] = sentiment_df.groupby('ts_code')['margin_balance'].transform(
+                    lambda s: s.pct_change(5)
+                )
+            else:
+                result['margin_balance_chg'] = sentiment_df['margin_balance'].pct_change(5)
         if 'new_accounts' in sentiment_df.columns:
-            result['new_account_growth'] = sentiment_df['new_accounts'].pct_change(20)
+            if 'ts_code' in sentiment_df.columns:
+                result['new_account_growth'] = sentiment_df.groupby('ts_code')['new_accounts'].transform(
+                    lambda s: s.pct_change(20)
+                )
+            else:
+                result['new_account_growth'] = sentiment_df['new_accounts'].pct_change(20)
         return result
 
     # ==================== A股特有因子 ====================
@@ -785,6 +803,7 @@ class FactorCalculator:
                          pledge_df: pd.DataFrame = None,
                          holders_df: pd.DataFrame = None,
                          institutional_df: pd.DataFrame = None,
+                         industry_df: pd.DataFrame = None,
                          trade_date: Optional[date] = None) -> pd.DataFrame:
         """
         计算所有因子并预处理 (向量化批处理合并)
@@ -822,10 +841,10 @@ class FactorCalculator:
 
         # 机构级增强因子
         factor_dfs.append(self.calc_technical_factors(price_df))
-        factor_dfs.append(self.calc_smart_money_factors(price_df, northbound_df, margin_df))
+        factor_dfs.append(self.calc_smart_money_factors(price_df, northbound_df, margin_df, institutional_df))
 
         # 行业轮动因子
-        factor_dfs.append(self.calc_industry_rotation_factors(price_df))
+        factor_dfs.append(self.calc_industry_rotation_factors(price_df, industry_df=industry_df))
 
         # 另类数据因子 (已在supply_chain_df处理中调用，此处不再重复)
         # 注: calc_alt_data_factors已在上方supply_chain_df分支中调用
@@ -1039,7 +1058,14 @@ class FactorCalculator:
         if all(c in price_df.columns for c in ['large_order_volume', 'super_large_order_volume', 'volume']):
             smart_vol = price_df['large_order_volume'].fillna(0) + price_df['super_large_order_volume'].fillna(0)
             total_vol = price_df['volume'].replace(0, np.nan)
-            result['smart_money_ratio'] = (smart_vol / total_vol).rolling(20, min_periods=5).mean()
+            ratio = smart_vol / total_vol
+            if 'ts_code' in price_df.columns:
+                # 面板数据: 按股票分组rolling，避免跨股票边界
+                result['smart_money_ratio'] = ratio.groupby(price_df['ts_code']).transform(
+                    lambda s: s.rolling(20, min_periods=5).mean()
+                )
+            else:
+                result['smart_money_ratio'] = ratio.rolling(20, min_periods=5).mean()
 
         # 北向资金动量
         if northbound_df is not None and not northbound_df.empty:
@@ -1059,7 +1085,10 @@ class FactorCalculator:
                 inst_result = pd.DataFrame()
                 inst_result['security_id'] = institutional_df['ts_code']
                 inst_result['institutional_holding_chg'] = institutional_df['hold_ratio'].pct_change(20)
-                return result  # institutional handled separately below
+                # 合并到主result, 而非提前返回
+                for col in inst_result.columns:
+                    if col != 'security_id':
+                        result[col] = inst_result[col].values
         elif 'institutional_holding_pct' in price_df.columns:
             result['institutional_holding_chg'] = price_df['institutional_holding_pct'].pct_change(20)
 
@@ -1074,6 +1103,7 @@ class FactorCalculator:
         - bollinger_position: 布林带位置 (0=下轨, 0.5=中轨, 1=上轨)
         - macd_signal: MACD信号线
         - obv_ratio: OBV能量潮比率
+        面板数据安全: 使用groupby('ts_code')确保ewm/rolling/cumsum不跨股票边界
         """
         result = pd.DataFrame()
         result['security_id'] = price_df.get('ts_code', price_df.index)
@@ -1081,42 +1111,96 @@ class FactorCalculator:
         if 'close' not in price_df.columns:
             return result
 
+        # 关键: 面板数据必须先按(ts_code, trade_date)排序
+        if 'ts_code' in price_df.columns and 'trade_date' in price_df.columns:
+            price_df = price_df.sort_values(['ts_code', 'trade_date'])
+
         close = price_df['close']
         daily_ret = close.pct_change()
 
-        # RSI(14) - Wilder平滑法 (标准定义)
-        # 使用价格差而非收益率，Wilder EMA (alpha=1/14) 而非SMA
-        if len(close) >= 15:
-            price_diff = close.diff()  # 标准RSI使用价格差
-            gain = price_diff.clip(lower=0)
-            loss = (-price_diff).clip(lower=0)
-            # Wilder平滑: EMA with alpha=1/period
-            wilder_alpha = 1.0 / 14
-            avg_gain = gain.ewm(alpha=wilder_alpha, adjust=False).mean()
-            avg_loss = loss.ewm(alpha=wilder_alpha, adjust=False).mean()
-            rs = avg_gain / avg_loss.replace(0, np.nan)
-            result['rsi_14d'] = 100 - (100 / (1 + rs))
+        is_panel = 'ts_code' in price_df.columns
 
-        # 布林带位置
-        if len(close) >= 20:
-            ma20 = close.rolling(20).mean()
-            std20 = close.rolling(20).std()
-            result['bollinger_position'] = ((close - ma20) / (2 * std20)).clip(-1, 1)
+        if is_panel:
+            grouped = price_df.groupby('ts_code')
+            # 面板数据: 每个计算都通过groupby transform确保不跨股票边界
+            daily_ret_grouped = grouped['close'].transform(lambda s: s.pct_change())
 
-        # MACD信号
-        if len(close) >= 35:
-            ema12 = close.ewm(span=12, adjust=False).mean()
-            ema26 = close.ewm(span=26, adjust=False).mean()
-            dif = ema12 - ema26
-            dea = dif.ewm(span=9, adjust=False).mean()
-            result['macd_signal'] = (dif - dea) / close.replace(0, np.nan) * 100
+            # RSI(14) - Wilder平滑法
+            if len(close) >= 15:
+                price_diff = grouped['close'].transform(lambda s: s.diff())
+                gain = price_diff.clip(lower=0)
+                loss = (-price_diff).clip(lower=0)
+                wilder_alpha = 1.0 / 14
+                avg_gain = gain.groupby(price_df['ts_code']).transform(
+                    lambda s: s.ewm(alpha=wilder_alpha, adjust=False).mean()
+                )
+                avg_loss = loss.groupby(price_df['ts_code']).transform(
+                    lambda s: s.ewm(alpha=wilder_alpha, adjust=False).mean()
+                )
+                rs = avg_gain / avg_loss.replace(0, np.nan)
+                result['rsi_14d'] = 100 - (100 / (1 + rs))
 
-        # OBV能量潮比率
-        if 'volume' in price_df.columns and len(close) >= 20:
-            direction = np.sign(daily_ret).fillna(0)
-            obv = (direction * price_df['volume']).cumsum()
-            obv_ma = obv.rolling(20, min_periods=10).mean()
-            result['obv_ratio'] = (obv / obv_ma.replace(0, np.nan) - 1).clip(-3, 3)
+            # 布林带位置
+            if len(close) >= 20:
+                ma20 = grouped['close'].transform(lambda s: s.rolling(20).mean())
+                std20 = grouped['close'].transform(lambda s: s.rolling(20).std())
+                result['bollinger_position'] = ((close - ma20) / (2 * std20)).clip(-1, 1)
+
+            # MACD信号
+            if len(close) >= 35:
+                ema12 = grouped['close'].transform(lambda s: s.ewm(span=12, adjust=False).mean())
+                ema26 = grouped['close'].transform(lambda s: s.ewm(span=26, adjust=False).mean())
+                dif = ema12 - ema26
+                dea = dif.groupby(price_df['ts_code']).transform(
+                    lambda s: s.ewm(span=9, adjust=False).mean()
+                )
+                result['macd_signal'] = (dif - dea) / close.replace(0, np.nan) * 100
+
+            # OBV能量潮比率
+            if 'volume' in price_df.columns and len(close) >= 20:
+                direction = np.sign(daily_ret_grouped).fillna(0)
+                obv = (direction * price_df['volume']).groupby(price_df['ts_code']).transform(
+                    lambda s: s.cumsum()
+                )
+                obv_ma = obv.groupby(price_df['ts_code']).transform(
+                    lambda s: s.rolling(20, min_periods=10).mean()
+                )
+                result['obv_ratio'] = (obv / obv_ma.replace(0, np.nan) - 1).clip(-3, 3)
+
+        else:
+            # 单股时间序列模式 (原始逻辑)
+            # RSI(14) - Wilder平滑法 (标准定义)
+            if len(close) >= 15:
+                price_diff = close.diff()  # 标准RSI使用价格差
+                gain = price_diff.clip(lower=0)
+                loss = (-price_diff).clip(lower=0)
+                # Wilder平滑: EMA with alpha=1/period
+                wilder_alpha = 1.0 / 14
+                avg_gain = gain.ewm(alpha=wilder_alpha, adjust=False).mean()
+                avg_loss = loss.ewm(alpha=wilder_alpha, adjust=False).mean()
+                rs = avg_gain / avg_loss.replace(0, np.nan)
+                result['rsi_14d'] = 100 - (100 / (1 + rs))
+
+            # 布林带位置
+            if len(close) >= 20:
+                ma20 = close.rolling(20).mean()
+                std20 = close.rolling(20).std()
+                result['bollinger_position'] = ((close - ma20) / (2 * std20)).clip(-1, 1)
+
+            # MACD信号
+            if len(close) >= 35:
+                ema12 = close.ewm(span=12, adjust=False).mean()
+                ema26 = close.ewm(span=26, adjust=False).mean()
+                dif = ema12 - ema26
+                dea = dif.ewm(span=9, adjust=False).mean()
+                result['macd_signal'] = (dif - dea) / close.replace(0, np.nan) * 100
+
+            # OBV能量潮比率
+            if 'volume' in price_df.columns and len(close) >= 20:
+                direction = np.sign(daily_ret).fillna(0)
+                obv = (direction * price_df['volume']).cumsum()
+                obv_ma = obv.rolling(20, min_periods=10).mean()
+                result['obv_ratio'] = (obv / obv_ma.replace(0, np.nan) - 1).clip(-3, 3)
 
         return result
 

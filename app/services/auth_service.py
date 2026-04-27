@@ -175,28 +175,32 @@ class AuthService:
         return token
 
     @staticmethod
-    def reset_password_with_token(db: Session, token: str, new_password: str) -> bool:
-        """使用重置令牌重置密码"""
+    def reset_password_with_token(db: Session, token: str, new_password: str) -> Tuple[bool, str]:
+        """使用重置令牌重置密码
+
+        Returns:
+            (success, error_message) - 成功时 error_message 为空字符串
+        """
         user = db.query(User).filter(User.reset_token == token).first()
         if not user:
-            return False
+            return False, "重置令牌无效"
 
         if user.reset_token_expires and user.reset_token_expires < datetime.now():
             # 令牌已过期，清除
             user.reset_token = None
             user.reset_token_expires = None
             db.commit()
-            return False
+            return False, "重置令牌已过期"
 
         valid, msg = AuthService.validate_password_strength(new_password)
         if not valid:
-            return False
+            return False, msg
 
         user.hashed_password = AuthService.hash_password(new_password)
         user.reset_token = None
         user.reset_token_expires = None
         db.commit()
-        return True
+        return True, ""
 
     # ==================== 兼容旧接口 ====================
 

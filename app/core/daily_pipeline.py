@@ -62,6 +62,7 @@ class DailyPipeline:
         - 采集行情/财务/北向/资金流/事件数据
         - PIT对齐: 按公告日取财务数据, 预告>快报>正式
         """
+        # PIT对齐是防未来函数的第一道关: 财务数据必须按公告日而非报告期使用
         logger.info(f"[Step 1] 数据采集与PIT对齐: {trade_date}")
         return {
             "status": "ok",
@@ -76,6 +77,7 @@ class DailyPipeline:
         - 生成当日数据快照, 记录到data_snapshot_registry
         - 快照ID: snap_YYYYMMDD_xxxxxxxx
         """
+        # 快照确保全流水线使用同一份数据, 防止中间数据更新导致不一致
         snapshot_id = f"snap_{trade_date.strftime('%Y%m%d')}_{uuid.uuid4().hex[:8]}"
         logger.info(f"[Step 2] 数据快照生成: {snapshot_id}")
         return {
@@ -103,6 +105,8 @@ class DailyPipeline:
 
         - 缺失值处理 → 去极值(MAD) → 标准化(Z-score) → 中性化(行业+市值)
         """
+        # 顺序不可调换: MAD去极值必须在Z-score之前, 否则极端值会拉偏均值和标准差
+        # 中性化必须在最后, 因为它依赖已标准化的因子值做截面回归
         logger.info(f"[Step 4] 因子预处理流水线: {trade_date}")
         return {
             "status": "ok",
@@ -276,6 +280,7 @@ class DailyPipeline:
             results["steps"]["step4_factor_preprocess"] = r4
 
             # Step 8: Regime检测 (提前到Step5之前, 以便Step6使用regime)
+            # Regime检测只依赖市场数据, 不依赖因子计算, 所以可以提前
             r8 = self.step8_regime_detection(**kwargs)
             results["steps"]["step8_regime"] = r8
             # 从regime检测结果中提取regime标签, 供step6使用
@@ -283,6 +288,7 @@ class DailyPipeline:
                 kwargs = {**kwargs, "regime": r8["regime"]}
 
             # Step 5: 五大模块打分 (需要DataFrame)
+            # 依赖Step4预处理的因子数据, 依赖Step3的股票池确定计算范围
             df = kwargs.get("factor_df", pd.DataFrame())
             module_scores = None
             risk_penalty = None
@@ -305,6 +311,7 @@ class DailyPipeline:
                 results["steps"]["step5_module_scoring"] = {"status": "skipped", "reason": "no_data"}
 
             # Step 6: 信号融合 (使用step5预计算结果, 避免重复计算)
+            # 依赖Step5的模块得分 + Step8的regime标签
             if not df.empty and module_scores is not None:
                 regime = kwargs.get("regime", "trending")
                 scores, meta = self.step6_ensemble(
@@ -322,6 +329,7 @@ class DailyPipeline:
                 results["steps"]["step6_ensemble"] = {"status": "skipped"}
 
             # Step 7: ML增强
+            # 依赖Step6的融合得分, 可选步骤, 无ML模型时直接透传
             if not scores.empty:
                 enhanced_scores = self.step7_ml_enhancement(scores, **kwargs)
                 results["steps"]["step7_ml_enhancement"] = {"status": "ok"}
@@ -330,10 +338,12 @@ class DailyPipeline:
                 results["steps"]["step7_ml_enhancement"] = {"status": "skipped"}
 
             # Step 9: 择时仓位
+            # 依赖Step8的regime + 市场数据, 与个股得分独立, 决定整体仓位水平
             r9 = self.step9_timing_position(**kwargs)
             results["steps"]["step9_timing"] = r9
 
             # Step 10: 组合构建
+            # 依赖Step7得分(选什么) + Step9仓位(买多少) + Step3股票池(约束范围)
             if not enhanced_scores.empty:
                 portfolio = self.step10_portfolio_build(enhanced_scores, **kwargs)
                 results["steps"]["step10_portfolio"] = {
@@ -344,10 +354,12 @@ class DailyPipeline:
                 results["steps"]["step10_portfolio"] = {"status": "skipped"}
 
             # Step 11: 因子健康检查
+            # 依赖Step4预处理后的因子数据, 与组合构建解耦: 即使组合未构建, 仍需监控因子质量
             r11 = self.step11_factor_health_check(trade_date, **kwargs)
             results["steps"]["step11_factor_health"] = r11
 
             # Step 12: 结果存档
+            # 放在最后: 确保全流水线结果(含各步骤元信息)都被持久化
             r12 = self.step12_archive(trade_date, results, **kwargs)
             results["steps"]["step12_archive"] = r12
 

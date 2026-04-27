@@ -17,6 +17,8 @@ from app.schemas.risk_assessment import (
 
 # ============================================================
 # 测评题目（5道题，每题5个选项，分值0-4）
+# 题目设计参照《证券期货投资者适当性管理办法》
+# 总分范围0-20，映射到C1-C4四个风险等级
 # ============================================================
 
 RISK_QUESTIONS: List[RiskQuestion] = [
@@ -36,7 +38,7 @@ RISK_QUESTIONS: List[RiskQuestion] = [
         id=3,
         question="您的投资资金占可支配资产比例？",
         options=["10%以下", "10%-30%", "30%-50%", "50%-70%", "70%以上"],
-        scores=[4, 3, 2, 1, 0],  # 占比越高越需保守
+        scores=[4, 3, 2, 1, 0],  # 占比越高越需保守 — 反向计分，资金集中度高风险承受力低
     ),
     RiskQuestion(
         id=4,
@@ -52,7 +54,10 @@ RISK_QUESTIONS: List[RiskQuestion] = [
     ),
 ]
 
-# 等级定义
+# 等级定义 — C1保守型到C4激进型，对应可购买产品的风险等级
+# C3/C4才能使用本平台回测+模拟组合功能（合规要求：适当性匹配）
+# 分值区间：C1(0-6,7分) > C2(7-12,6分) > C3(13-17,5分) > C4(18-20,3分)
+# 低分区间更宽，因为保守型判定应更宽松；高分区间更窄，激进型需明确高分确认
 RISK_LEVELS = {
     "C1": {"name": "保守型", "min_score": 0, "max_score": 6,
             "description": "您属于保守型投资者，适合低风险产品，追求资产保值。"},
@@ -76,6 +81,7 @@ def calculate_score(answers: List[RiskAnswer]) -> int:
     total = 0
     for ans in answers:
         scores = score_map.get(ans.question_id, [])
+        # answer是选项索引(0-4)，越界选项不计分，防止前端传入非法索引
         if 0 <= ans.answer < len(scores):
             total += scores[ans.answer]
     return total
@@ -86,7 +92,7 @@ def score_to_level(score: int) -> str:
     for level_code, info in RISK_LEVELS.items():
         if info["min_score"] <= score <= info["max_score"]:
             return level_code
-    return "C1"  # 默认保守
+    return "C1"  # 默认保守 — 合规底线：无法判定时按最低风险等级处理
 
 
 def submit_assessment(db: Session, user_id: int, submit: RiskAssessmentSubmit) -> RiskAssessmentResult:
@@ -104,7 +110,7 @@ def submit_assessment(db: Session, user_id: int, submit: RiskAssessmentSubmit) -
     )
     db.add(assessment)
 
-    # 更新用户风险等级
+    # 更新用户风险等级 — 每次测评覆盖旧等级，取最新一次为准
     user = db.query(User).filter(User.id == user_id).first()
     if user:
         user.risk_level = level
@@ -131,7 +137,7 @@ def get_latest_assessment(db: Session, user_id: int) -> Optional[RiskAssessmentO
     if not assessment:
         return None
 
-    level_info = RISK_LEVELS.get(assessment.level, RISK_LEVELS["C1"])
+    level_info = RISK_LEVELS.get(assessment.level, RISK_LEVELS["C1"])  # level字段异常时降级为C1，保证前端不报错
     return RiskAssessmentOut(
         id=assessment.id,
         user_id=assessment.user_id,

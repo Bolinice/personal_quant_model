@@ -24,7 +24,9 @@ class AuthService:
         """创建访问令牌"""
         to_encode = data.copy()
         expire = datetime.utcnow() + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+        # 在payload中嵌入type字段，防止access token被当作refresh token滥用
         to_encode.update({"exp": expire, "type": "access"})
+        # HS256对称签名 — 密钥由settings.SECRET_KEY统一管理，适用于单体应用；分布式场景需考虑RS256非对称签名
         return jwt.encode(to_encode, settings.SECRET_KEY, algorithm="HS256")
 
     @staticmethod
@@ -33,12 +35,14 @@ class AuthService:
         to_encode = data.copy()
         expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
         to_encode.update({"exp": expire, "type": "refresh"})
+        # refresh token与access token使用相同密钥和算法，仅通过type和exp区分用途
         return jwt.encode(to_encode, settings.SECRET_KEY, algorithm="HS256")
 
     @staticmethod
     def verify_token(token: str, token_type: str = "access") -> Optional[Dict]:
         """
         验证令牌
+        通过type字段区分access/refresh，防止用refresh token调用业务接口
 
         Args:
             token: JWT令牌
@@ -56,6 +60,8 @@ class AuthService:
     def refresh_access_token(refresh_token: str) -> Optional[Tuple[str, str]]:
         """
         使用refresh token刷新access token
+        同时签发新的refresh token（轮转策略），旧token自然过期失效
+        注意：无状态JWT无法主动吊销旧refresh token，高安全场景需配合token黑名单
 
         Returns:
             (new_access_token, new_refresh_token) 或 None
@@ -69,13 +75,17 @@ class AuthService:
             return None
 
         new_data = {"sub": user_id, "role": payload.get("role", "user")}
+        # 双token同时刷新：access短效+refresh长效
+        # 轮转策略(refresh token rotation) — 每次刷新都签发新refresh token，旧token在exp前仍可用
+        # 无状态JWT无法主动吊销旧token，若多个请求并发刷新，旧token可能短暂可用（race condition）
+        # 高安全场景需引入token黑名单或在DB中记录refresh token版本号
         new_access = AuthService.create_access_token(new_data)
         new_refresh = AuthService.create_refresh_token(new_data)
         return new_access, new_refresh
 
     @staticmethod
     def hash_password(password: str) -> str:
-        """密码哈希"""
+        # bcrypt自适应哈希 — 内置salt，gensalt()默认cost factor=12，兼顾安全与性能
         import bcrypt
         return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
@@ -110,7 +120,7 @@ class AuthService:
         if not user:
             return None
         if not user.is_active:
-            return None
+            return None  # 不区分"用户不存在"和"用户已禁用"，防止枚举攻击
         if not AuthService.verify_password(password, user.hashed_password):
             return None
 
@@ -124,9 +134,10 @@ class AuthService:
     @staticmethod
     def create_api_key(db: Session, user_id: int, name: str = None) -> Dict:
         """创建API Key"""
+        # 前缀qpm_标识本平台API Key，便于日志识别和来源追溯
         api_key = f"qpm_{secrets.token_hex(16)}"
         secret = secrets.token_hex(32)
-        secret_hash = hashlib.sha256(secret.encode()).hexdigest()
+        secret_hash = hashlib.sha256(secret.encode()).hexdigest()  # 只存哈希，防止数据库泄露导致secret暴露
 
         key_record = APIKey(
             user_id=user_id,
@@ -140,7 +151,7 @@ class AuthService:
 
         return {
             "api_key": api_key,
-            "api_secret": secret,  # 只在创建时返回一次
+            "api_secret": secret,  # 只在创建时返回一次，后续无法再获取原文
             "name": name,
         }
 
@@ -167,7 +178,7 @@ class AuthService:
 
         token = secrets.token_urlsafe(32)
         user.reset_token = token
-        user.reset_token_expires = datetime.now() + timedelta(hours=1)
+        user.reset_token_expires = datetime.now() + timedelta(hours=1)  # 重置令牌1小时有效，缩短窗口降低泄露风险
         db.commit()
 
         logger.info(f"Password reset token generated for {email}")
@@ -186,7 +197,7 @@ class AuthService:
             return False, "重置令牌无效"
 
         if user.reset_token_expires and user.reset_token_expires < datetime.now():
-            # 令牌已过期，清除
+            # 令牌已过期，清除 — 防止过期token被反复尝试
             user.reset_token = None
             user.reset_token_expires = None
             db.commit()
@@ -229,7 +240,7 @@ class AuthService:
         if not user:
             return None
         if "password" in kwargs:
-            kwargs["hashed_password"] = AuthService.hash_password(kwargs.pop("password"))
+            kwargs["hashed_password"] = AuthService.hash_password(kwargs.pop("password"))  # 明文password不入库，转为哈希存储
         for key, value in kwargs.items():
             setattr(user, key, value)
         db.commit()
@@ -248,7 +259,7 @@ class AuthService:
         return db.query(User).filter(User.username == username).first()
 
 
-# Module-level aliases for backward compatibility
+# Module-level aliases for backward compatibility — 旧代码直接调用函数，新代码应使用AuthService类方法
 create_user = AuthService.create_user
 update_user = AuthService.update_user
 get_current_user = AuthService.get_current_user

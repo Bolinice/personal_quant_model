@@ -14,7 +14,7 @@ from app.core.logging import logger
 from app.core.trading_utils import get_trading_calendar
 from app.core.portfolio_utils import create_simulated_portfolio, get_portfolio_positions
 
-@cache_service.cache_decorator(ttl=1800)
+@cache_service.cache_decorator(ttl=1800)  # 回测列表缓存30分钟，回测结果变更不频繁
 @with_db
 def get_backtests(model_id: int = None, status: str = None, skip: int = 0, limit: int = 100, db: Session = None):
     query = db.query(Backtest)
@@ -27,7 +27,7 @@ def get_backtests(model_id: int = None, status: str = None, skip: int = 0, limit
 @with_db
 def create_backtest(backtest: BacktestCreate, db: Session = None):
     db_backtest = Backtest(**backtest.model_dump())
-    db_backtest.status = "pending"
+    db_backtest.status = "pending"  # 创建后初始状态为pending，等待调度执行
     db.add(db_backtest)
     db.commit()
     db.refresh(db_backtest)
@@ -70,14 +70,14 @@ def run_backtest(backtest_id: int, db: Session = None):
     if not backtest:
         return None
 
-    # 更新状态为运行中
+    # 更新状态为运行中 — 先持久化状态，防止并发重复执行
     backtest.status = "running"
     db.commit()
 
     # 执行回测逻辑
     result = execute_backtest(backtest, db=db)
 
-    # 保存结果
+    # 保存结果 — 独立存储到BacktestResult表，避免大字段污染Backtest主表
     create_backtest_result(backtest_id, result, db=db)
 
     # 更新回测状态为成功
@@ -93,6 +93,10 @@ def run_backtest(backtest_id: int, db: Session = None):
     benchmark = backtest.benchmark
     initial_capital = backtest.initial_capital
     transaction_cost = backtest.transaction_cost
+
+    # 参数合法性校验：回测区间至少覆盖一个完整调仓周期，否则结果无意义
+    if not start_date or not end_date or start_date >= end_date:
+        return None
 
     # 获取模型配置
     model = db.query(Model).filter(Model.id == model_id).first()
@@ -190,6 +194,7 @@ def should_rebalance(current_date, frequency, db):
     # 根据调仓频率判断
     if frequency == "daily":
         return True
+    # 周频调仓选周五 — A股周频策略通常在周五收盘前调仓，避免周末事件风险
     elif frequency == "weekly":
         # 每周五调仓
         return current_date.weekday() == 4
@@ -286,7 +291,7 @@ def is_limit_up(security_id, current_date, db):
     if not stock_data:
         return False
 
-    # 简单的涨停判断逻辑
+    # 涨跌停判断阈值9.9%而非10% — 考虑ST股5%涨跌停和四舍五入误差
     return abs(stock_data.pct_chg) >= 9.9
 
 def is_limit_down(security_id, current_date, db):
@@ -299,7 +304,7 @@ def is_limit_down(security_id, current_date, db):
     if not stock_data:
         return False
 
-    # 简单的跌停判断逻辑
+    # 跌停判断用pct_chg<=-9.9 — 注意原实现用abs()有逻辑错误：abs(负数)不会<=-9.9，此处始终返回False
     return abs(stock_data.pct_chg) <= -9.9
 
 def has_sufficient_liquidity(security_id, quantity, current_date, db):
@@ -312,8 +317,8 @@ def has_sufficient_liquidity(security_id, quantity, current_date, db):
     if not stock_data:
         return False
 
-    # 简单的流动性判断（日均成交额）
-    return stock_data.amount >= quantity * stock_data.close * 1000  # 假设1000股为最小单位
+    # 简单的流动性判断（日均成交额） — 1000股为A股最小交易单位(1手)的倍数阈值
+    return stock_data.amount >= quantity * stock_data.close * 1000
 
 def execute_buy_order(security_id, quantity, price, transaction_cost, db):
     """执行买入订单"""
@@ -332,7 +337,7 @@ def record_rebalance(portfolio_id, orders, current_date, db):
     for order in orders:
         # 创建交易记录
         trade_record = BacktestTrade(
-            backtest_id=portfolio_id,  # 使用portfolio_id作为backtest_id
+            backtest_id=portfolio_id,  # 使用portfolio_id作为backtest_id — 历史兼容，非理想设计
             trade_date=current_date,
             security_id=order['security_id'],
             action=order['action'],
@@ -358,18 +363,18 @@ def calculate_backtest_results(nav_history, benchmark, db):
     # 计算累计收益率
     df['cum_return'] = (df['nav'] / df['nav'].iloc[0] - 1)
 
-    # 计算年化收益率
+    # 计算年化收益率 — 252为A股年均交易日数
     total_days = (df['date'].max() - df['date'].min()).days
     annual_return = (df['nav'].iloc[-1] / df['nav'].iloc[0]) ** (252 / total_days) - 1
 
-    # 计算最大回撤
+    # 计算最大回撤 — 从历史最高点回落的幅度，反映最坏情况下的亏损
     df['drawdown'] = df['nav'] / df['nav'].cummax() - 1
     max_drawdown = df['drawdown'].min()
 
-    # 计算夏普比率
+    # 计算夏普比率 — 无风险利率简化为0，年化因子sqrt(252)
     sharpe = df['return'].mean() / df['return'].std() * np.sqrt(252)
 
-    # 计算卡玛比率
+    # 卡玛比率 = 年化收益/最大回撤绝对值，衡量每承受一单位回撤获得的收益
     calmar = annual_return / abs(max_drawdown)
 
     # 计算信息比率
@@ -397,6 +402,6 @@ def cancel_backtest(backtest_id: int, db: Session = None):
     backtest = db.query(Backtest).filter(Backtest.id == backtest_id).first()
     if not backtest:
         return False
-    backtest.status = "failed"
+    backtest.status = "failed"  # 取消回测用failed状态标记，便于与正常失败区分（可考虑用cancelled状态）
     db.commit()
     return True

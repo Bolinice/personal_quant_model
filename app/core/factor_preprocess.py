@@ -17,6 +17,11 @@ class FactorPreprocessor:
         pass
 
     # ==================== 1. 缺失值处理 ====================
+    # 预处理流水线顺序不可随意调整:
+    # 缺失值 → 去极值 → 中性化 → 标准化 → 方向统一
+    # 原因: 1)极值会扭曲填充统计量，须先去极值再填充?不，缺失值须先填满才能做后续计算
+    #       2)中性化用回归取残差，若先标准化则残差不再标准正态，失去可比性
+    #       3)方向统一放最后，避免中间步骤的clip/regress受翻转影响
 
     def fill_missing_mean(self, series: pd.Series) -> pd.Series:
         """用均值填充缺失值"""
@@ -28,10 +33,12 @@ class FactorPreprocessor:
 
     def fill_missing_zero(self, series: pd.Series) -> pd.Series:
         """用0填充缺失值"""
+        # 仅适用于0有明确业务含义的因子(如研发费用占比，缺失≈无研发)
         return series.fillna(0)
 
     def fill_missing_industry_mean(self, df: pd.DataFrame, value_col: str, industry_col: str) -> pd.Series:
         """用行业均值填充缺失值 (向量化: groupby.transform替代逐行业循环)"""
+        # 同行业公司财务特征更相似，用行业均值比全市场均值偏差更小
         industry_mean = df.groupby(industry_col)[value_col].transform('mean')
         return df[value_col].fillna(industry_mean)
 
@@ -50,6 +57,7 @@ class FactorPreprocessor:
         Returns:
             (是否通过, 实际覆盖率)
         """
+        # 覆盖率过低时填充值占比大，会稀释真实信号，0.8为业界常用下限
         coverage = 1 - series.isna().mean()
         return coverage >= min_coverage, coverage
 
@@ -65,6 +73,8 @@ class FactorPreprocessor:
             max_iter: 最大迭代次数
             random_state: 随机种子
         """
+        # MICE适用于因子间存在经济逻辑关联的场景(如PE/PB/ROE相关性)
+        # 简单均值填充会低估方差，MICE通过链式迭代保留协方差结构
         try:
             from sklearn.experimental import enable_iterative_imputer
             from sklearn.impute import IterativeImputer
@@ -92,6 +102,8 @@ class FactorPreprocessor:
             series: 因子值序列(按时间排序)
             decay_rate: 衰减率
         """
+        # 季报数据在非公告日需前向填充，但旧数据信息量递减
+        # decay_rate=0.05表示约20个交易日(1个月)后权重降至~37%
         result = series.copy()
         # ffill获取最近有效值
         filled = series.ffill()
@@ -123,6 +135,8 @@ class FactorPreprocessor:
             df: 包含因子值的数据框
             factor_cols: 因子列名列表
         """
+        # 缺失模式反映公司特征：如小公司不披露研发费用、金融行业无存货
+        # 将缺失作为独立特征，可被下游模型利用
         result = df.copy()
         for col in factor_cols:
             result[f'{col}_missing'] = result[col].isna().astype(int)
@@ -138,14 +152,16 @@ class FactorPreprocessor:
         x' = median(x) ± k * MAD
         MAD = median(|x - median(x)|)
         """
+        # n_mad=3.0: 正态分布下3倍MAD≈4.4倍标准差，覆盖99.999%，
+        # 比MAD=2(更激进)保留更多尾部信息，A股因子分布常偏尖峰厚尾
         s = series.dropna()
         if s.empty:
             return series
         median = s.median()
         mad = np.median(np.abs(s - median))
         if mad == 0:
-            # MAD=0表示超过50%数据相同，可能是数据质量问题
-            # 回退到分位数去极值
+            # MAD=0表示超过50%数据相同，常见于离散型因子(如评级1-5)
+            # 此时MAD法失效，回退到分位数去极值
             q_low = series.quantile(0.01)
             q_high = series.quantile(0.99)
             iqr = q_high - q_low
@@ -162,12 +178,14 @@ class FactorPreprocessor:
         分位数截断去极值
         符合ADD 6.3.2节，默认1%/99%
         """
+        # 1%/99%是机构级常用阈值，比2%/98%更保守，避免在A股小票中过度截断
         lower_bound = series.quantile(lower)
         upper_bound = series.quantile(upper)
         return series.clip(lower_bound, upper_bound)
 
     def winsorize_sigma(self, series: pd.Series, n_sigma: float = 3.0) -> pd.Series:
         """标准差去极值"""
+        # 标准差法对厚尾分布不够稳健，A股因子分布多为尖峰厚尾，优先用MAD
         mean = series.mean()
         std = series.std()
         if std == 0:
@@ -190,11 +208,13 @@ class FactorPreprocessor:
             vol_series: 当前波动率序列(可选)
             long_run_vol: 长期波动率(可选)
         """
+        # 市场波动率变化时，固定阈值会误杀正常值或漏掉极端值
+        # 自适应k随波动率缩放：牛市低波动→k小→更严格；熊市高波动→k大→更宽容
         if vol_series is not None and long_run_vol is not None and long_run_vol > 0:
             # 自适应k
             current_vol = vol_series.iloc[-1] if len(vol_series) > 0 else long_run_vol
             adaptive_k = base_k * (current_vol / long_run_vol)
-            adaptive_k = np.clip(adaptive_k, base_k * 0.5, base_k * 2.0)  # 限制范围
+            adaptive_k = np.clip(adaptive_k, base_k * 0.5, base_k * 2.0)  # 限制范围，防止极端波动率导致k失控
         else:
             adaptive_k = base_k
 
@@ -213,6 +233,8 @@ class FactorPreprocessor:
             contamination: 异常比例
             random_state: 随机种子
         """
+        # 单变量去极值无法捕捉跨因子异常(如PE低且PB高的组合在各自维度不极端)
+        # contamination=0.02假设异常样本约2%，对应A股全市场约80只
         try:
             from sklearn.ensemble import IsolationForest
         except ImportError:
@@ -222,6 +244,7 @@ class FactorPreprocessor:
         result = df.copy()
         valid_mask = result[factor_cols].notna().all(axis=1)
         if valid_mask.sum() < 50:
+            # 50为最小样本量，过少时Isolation Forest分割不可靠
             return result
 
         clf = IsolationForest(contamination=contamination, random_state=random_state)
@@ -229,6 +252,7 @@ class FactorPreprocessor:
         outliers = clf.fit_predict(X)
 
         # 将异常值标记为NaN(后续由单变量方法处理)
+        # 不直接截断，而是置空后走标准填充+去极值流程，避免引入截断偏差
         outlier_mask = outliers == -1
         outlier_indices = result.loc[valid_mask].index[outlier_mask]
         for col in factor_cols:
@@ -237,12 +261,16 @@ class FactorPreprocessor:
         return result
 
     # ==================== 3. 标准化 ====================
+    # 截面标准化(time-series vs cross-sectional): 用截面而非时序，
+    # 因为我们关心的是"同一天股票间的相对排名"，而非"同一股票随时间的相对变化"。
+    # 时序标准化会引入前瞻偏差(需用历史均值/标准差)且经济含义不同。
 
     def standardize_zscore(self, series: pd.Series) -> pd.Series:
         """
         横截面Z-score标准化
         符合ADD 6.3.3节: z_i = (x_i - μ) / σ
         """
+        # 截面Z-score使不同量纲因子可加性组合，是IC加权/组合优化的前提
         mean = series.mean()
         std = series.std()
         if std == 0 or np.isnan(std):
@@ -251,6 +279,7 @@ class FactorPreprocessor:
 
     def standardize_rank(self, series: pd.Series) -> pd.Series:
         """排名标准化: 将因子值转换为排名百分比 [0, 1]"""
+        # 排名标准化对异常值天然免疫，适合偏态严重的因子(如市值)
         return series.rank(pct=True)
 
     def standardize_minmax(self, series: pd.Series, min_val: float = 0, max_val: float = 1) -> pd.Series:
@@ -269,6 +298,8 @@ class FactorPreprocessor:
         z_i = Phi^{-1}(rank_i / (N + 1))
         强制横截面服从标准正态，对下游线性模型最优
         """
+        # rank/(N+1)而非rank/N：+1避免最大排名映射到1导致norm.ppf(1)=inf
+        # 对厚尾因子(如动量)尤其有效，将极端值压缩到正态尾部
         ranks = series.rank(method='average')
         n = len(series.dropna())
         if n == 0:
@@ -276,6 +307,7 @@ class FactorPreprocessor:
         # 逆正态变换
         percentile = ranks / (n + 1)
         # 限制在(0.001, 0.999)避免无穷
+        # 即使有N+1保护，极端排名仍可能产生>3σ的值，clip防止数值溢出
         percentile = percentile.clip(0.001, 0.999)
         result = pd.Series(np.nan, index=series.index)
         valid = series.notna()
@@ -288,6 +320,8 @@ class FactorPreprocessor:
         z_i = (x_i - median(x)) / (1.4826 * MAD(x))
         1.4826因子使MAD与标准差在正态分布下一致
         """
+        # 1.4826 = 1/(Φ^{-1}(3/4)) ≈ 1/0.6745，使E[1.4826*MAD]=σ在正态下成立
+        # 当数据含极端值时，比普通Z-score更稳定
         s = series.dropna()
         if s.empty:
             return series
@@ -298,6 +332,8 @@ class FactorPreprocessor:
         return (series - median) / (1.4826 * mad)
 
     # ==================== 4. 因子方向统一 ====================
+    # 方向统一放最后一步：若先翻转再中性化，回归系数解释相反但残差相同，
+    # 但clip/标准化等操作的对称性依赖正值域，翻转后可能引入数值问题
 
     def align_direction(self, series: pd.Series, direction: int = 1) -> pd.Series:
         """
@@ -312,6 +348,9 @@ class FactorPreprocessor:
         return series
 
     # ==================== 5. 中性化 ====================
+    # 中性化必须在标准化之前执行：
+    # 中性化=回归取残差，残差天然均值≈0但方差≠1；若先标准化再做回归，
+    # 回归后的残差不再均值为0/方差为1，标准化被破坏，因子间不可比。
 
     def neutralize_industry(self, df: pd.DataFrame, value_col: str, industry_col: str) -> pd.Series:
         """
@@ -333,7 +372,8 @@ class FactorPreprocessor:
         # 处理NaN
         valid_mask = has_industry & ~np.isnan(y)
         if valid_mask.sum() < X.shape[1] + 10:
-            # 样本不足，退化为行业内标准化
+            # 样本不足时回归不可靠(参数多于样本)，退化为行业内Z-score
+            # +10是经验值，确保每个行业至少有足够样本估计均值和标准差
             result = pd.Series(np.nan, index=df.index)
             for industry in df.loc[has_industry, industry_col].unique():
                 mask = (df[industry_col] == industry) & has_industry
@@ -343,6 +383,7 @@ class FactorPreprocessor:
             return result
 
         # WLS回归
+        # 此处实际用OLS而非WLS，WLS需权重矩阵；如需真正的WLS需传入市值权重
         try:
             X_valid = X[valid_mask]
             y_valid = y[valid_mask]
@@ -370,6 +411,7 @@ class FactorPreprocessor:
 
         x_i = α + β * log(MV_i) + ε_i
         """
+        # 取log而非原始市值：A股市值跨3个数量级，log变换使线性回归假设更合理
         log_cap = np.log(df[cap_col])
         valid_mask = ~(np.isnan(df[value_col]) | np.isnan(log_cap) | np.isinf(log_cap))
 

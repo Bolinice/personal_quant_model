@@ -19,30 +19,31 @@ REGIME_DEFENSIVE = 'defensive'       # 防御市: 质量/低波动权重更高
 REGIME_RISK_ON = 'risk_on'           # 进攻市: 资金/事件权重更高
 
 # Regime对应的模块权重调整 (V2: 与EnsembleEngine一致, 使用增量而非乘数)
+# 增量调整而非乘数: 乘数在边界处行为不稳定(如权重接近0时乘数效果异常)
 REGIME_WEIGHT_ADJUSTMENTS = {
     REGIME_RISK_ON: {
-        'quality_growth': -0.05,  # 进攻: 质量↓
+        'quality_growth': -0.05,  # 进攻: 质量↓ — 牛市中质量因子alpha衰减, 成长股更受追捧
         'expectation': 0.00,
-        'residual_momentum': +0.08,  # 动量↑
-        'flow_confirm': +0.05,  # 资金流↑
+        'residual_momentum': +0.08,  # 动量↑ — 进攻市趋势延续性强, 动量因子IC上升
+        'flow_confirm': +0.05,  # 资金流↑ — 资金涌入是进攻市的核心确认信号
     },
     REGIME_TRENDING: {
-        # 趨势: 均衡
+        # 趨势: 均衡 — 趋势市无极端偏好, 保持基线权重
         'quality_growth': 0.00,
         'expectation': 0.00,
         'residual_momentum': 0.00,
         'flow_confirm': 0.00,
     },
     REGIME_DEFENSIVE: {
-        'quality_growth': +0.08,  # 防御: 质量↑
+        'quality_growth': +0.08,  # 防御: 质量↑ — 防御市资金回流确定性高的质量股
         'expectation': +0.02,
-        'residual_momentum': -0.08,  # 动量↓
+        'residual_momentum': -0.08,  # 动量↓ — 防御市动量反转频繁, 趋势不可靠
         'flow_confirm': -0.02,
     },
     REGIME_MEAN_REVERTING: {
         'quality_growth': +0.02,
-        'expectation': +0.06,  # 震荡: 修正↑
-        'residual_momentum': -0.06,  # 动量↓
+        'expectation': +0.06,  # 震荡: 修正↑ — 震荡市中分析师修正信号更具区分度
+        'residual_momentum': -0.06,  # 动量↓ — 震荡市动量因子衰减甚至反转
         'flow_confirm': -0.02,
     },
 }
@@ -81,6 +82,7 @@ class RegimeDetector:
         features = {}
 
         # 1. 市场趋势: 均线斜率 (20日/60日)
+        # 均线斜率而非价格变化: 斜率衡量趋势持续性, 单日涨跌幅噪声大
         close = df[price_col].values
         if len(close) >= 60:
             ma20 = np.mean(close[-20:])
@@ -94,6 +96,7 @@ class RegimeDetector:
             features['market_trend_20d'] = (ma20 - close[-1]) / close[-1] if close[-1] > 0 else 0
 
         # 2. 市场波动率
+        # 年化波动率: 日std * sqrt(252), A股年均约252个交易日
         returns = df[price_col].pct_change().dropna()
         if len(returns) >= 20:
             features['market_vol_20d'] = returns.tail(20).std() * np.sqrt(252)
@@ -104,6 +107,7 @@ class RegimeDetector:
             features['vol_ratio'] = vol_short / vol_long if vol_long > 0 else 1.0
 
         # 3. 市场宽度 (上涨股票占比) - 需要个股数据
+        # 宽度>0.6=普涨(多头), <0.4=普跌(空头), 中间=分化 — 区分"指数涨个股跌"的虚假趋势
         if 'pct_chg' in df.columns and 'ts_code' in df.columns:
             # 如果是个股数据, 计算breadth
             latest = df[df[date_col] == df[date_col].max()]
@@ -193,7 +197,7 @@ class RegimeDetector:
         features = self.market_features(market_data)
 
         if not features:
-            return REGIME_MEAN_REVERTING  # 默认震荡市
+            return REGIME_MEAN_REVERTING  # 默认震荡市 — 无数据时保守选择, 震荡权重最均衡
 
         # 综合评分
         trend_score = 0.0
@@ -206,6 +210,7 @@ class RegimeDetector:
         ma_cross = features.get('ma_cross', 0)
 
         # 强趋势: 20d和60d方向一致且幅度大
+        # 阈值3%/5%: A股指数日均波动约1-2%, 3%以上斜率意味着持续性趋势
         if abs(trend_20d) > 0.03 and abs(trend_60d) > 0.05:
             trend_score = np.sign(trend_20d) * min(abs(trend_20d) * 10, 1.0)
         elif abs(ma_cross) > 0.02:
@@ -218,8 +223,10 @@ class RegimeDetector:
         vol_ratio = features.get('vol_ratio', 1.0)
 
         if vol_20d > 0.30 or vol_ratio > 1.5:
+            # 年化30%以上或短期/长期波动率比>1.5: 市场恐慌, 需防御
             vol_score = -1.0  # 高波动 → 防御
         elif vol_20d < 0.15 and vol_ratio < 0.7:
+            # 年化15%以下且波动率在收缩: 市场平静, 可进攻
             vol_score = 1.0   # 低波动 → 进攻
         else:
             vol_score = 0.0
@@ -244,8 +251,11 @@ class RegimeDetector:
         # 防御市: 高波动 + 宽度差 + 负趋势
         # 进攻市: 低波动 + 宽度好 + 正趋势 + 小盘强
 
+        # composite简单求和: 三个维度等权, 避免人为设定复杂权重
         composite = trend_score + vol_score + breadth_score
 
+        # 阈值设计: 1.5/0.5/-1.0, 不对称 — 进入进攻需强信号, 进入防御更敏感
+        # 不对称原因: 进攻误判代价(回撤)远大于防御误判代价(踏空)
         if composite >= 1.5 and trend_score > 0:
             regime = REGIME_RISK_ON
         elif composite >= 0.5 and abs(trend_score) > 0.3:
@@ -314,11 +324,12 @@ class RegimeDetector:
         breadth = features.get('breadth', 0.5)
 
         # 特征越偏离中性，置信度越高
+        # 三项特征归一化后取平均: 趋势强度*10(放大至0-1量级) + 波动率偏离 + 宽度偏离
         confidence = min(
             (trend_20d * 10 + abs(vol_ratio - 1.0) * 2 + abs(breadth - 0.5) * 2) / 3,
             1.0
         )
-        confidence = max(confidence, 0.3)  # 最低30%置信度
+        confidence = max(confidence, 0.3)  # 最低30%置信度 — 防止下游完全忽略regime信号
 
         base_weights = {'quality_growth': 0.35, 'expectation': 0.30, 'residual_momentum': 0.25, 'flow_confirm': 0.10}
         adjusted_weights = self.get_weight_adjustments(regime, base_weights)

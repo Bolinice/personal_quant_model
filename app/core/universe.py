@@ -18,28 +18,28 @@ class UniverseBuilder:
 
     # V2默认参数 (参数收紧)
     DEFAULT_CORE_PARAMS = {
-        'min_list_days': 180,        # V2: 上市满180个交易日(原250)
-        'min_daily_amount': 8e7,     # V2: 日均成交额>8000万(原1亿)
-        'min_price': 3.0,            # V2: 价格>3元(原3元)
-        'liquidity_pct': 0.80,       # 流动性前80%
+        'min_list_days': 180,        # V2: 上市满180个交易日(原250) — 180天覆盖一个完整财报季, IPO效应基本消退
+        'min_daily_amount': 8e7,     # V2: 日均成交额>8000万(原1亿) — 保证中等规模资金可进出, 降低冲击成本
+        'min_price': 3.0,            # V2: 价格>3元(原3元) — 3元以下多为ST/退市风险股, 且涨跌幅绝对值占比过大
+        'liquidity_pct': 0.80,       # 流动性前80% — 排除尾部20%低流动性股, 减少滑点
         'exclude_st': True,
         'exclude_suspended': True,
         'exclude_delist': True,
-        'min_market_cap': 80e9,      # V2: 最低市值80亿(原50亿)
+        'min_market_cap': 80e9,      # V2: 最低市值80亿(原50亿) — 80亿以上个股容量足以容纳策略资金, 减少小盘风格暴露
         'exclude_risk_events': True,  # V2: 排除重大风险事件股
         'exclude_blacklist': True,    # V2: 黑名单硬过滤
         'exclude_limit_up_down': True, # V2: 排除涨跌停无法成交
     }
 
     DEFAULT_EXTENDED_PARAMS = {
-        'min_list_days': 120,        # 扩展池: 上市满120个交易日
-        'min_daily_amount': 5e7,     # 日均成交额>5000万
-        'min_price': 2.0,            # 价格>2元
-        'liquidity_pct': 0.70,       # 流动性前70%
+        'min_list_days': 120,        # 扩展池: 上市满120个交易日 — 120天覆盖季报, 但保留更多次新股alpha
+        'min_daily_amount': 5e7,     # 日均成交额>5000万 — 放松流动性要求以覆盖中小盘
+        'min_price': 2.0,            # 价格>2元 — 放松至2元, 但仍排除极端低价股
+        'liquidity_pct': 0.70,       # 流动性前70% — 覆盖更广, 噪音也更大
         'exclude_st': True,
         'exclude_suspended': True,
         'exclude_delist': True,
-        'min_market_cap': 0,         # 无市值下限
+        'min_market_cap': 0,         # 无市值下限 — 扩展池允许小盘股, alpha更多但风格暴露也更大
         'exclude_risk_events': True,
         'exclude_blacklist': True,
         'exclude_limit_up_down': True,
@@ -100,6 +100,7 @@ class UniverseBuilder:
             candidates -= set(non_listed)
 
         # 2. 上市天数过滤
+        # 新股IPO效应: 上市初期定价偏差大、换手率异常、缺乏历史数据, 需冷却期
         if min_list_days > 0 and 'list_date' in stock_basic_df.columns:
             list_dates = pd.to_datetime(stock_basic_df.set_index('ts_code')['list_date'], errors='coerce')
             min_list_date = pd.Timestamp(trade_date) - pd.Timedelta(days=min_list_days)
@@ -132,6 +133,7 @@ class UniverseBuilder:
                 candidates -= set(delist_stocks)
 
         # 6. 流动性和价格过滤 (基于近期行情)
+        # 使用20日均值而非单日: 避免单日异常成交额导致误判
         if not price_df.empty:
             recent = self._get_recent_data(price_df, trade_date, window=20)
             if not recent.empty:
@@ -157,6 +159,7 @@ class UniverseBuilder:
                     candidates -= set(low_price)
 
         # 7. 市值过滤
+        # 市值是流动性代理: 小市值股冲击成本高、操纵风险大
         if min_market_cap > 0 and daily_basic_df is not None and not daily_basic_df.empty:
             daily_on_date = self._filter_by_date(daily_basic_df, trade_date)
             if 'total_mv' in daily_on_date.columns:
@@ -236,6 +239,7 @@ class UniverseBuilder:
 
         # 筛选严重事件 (立案/处罚/严重审计问题)
         severe_types = {'investigation', 'penalty', 'audit_issue', 'delist_risk'}
+        # 立案/处罚 → 公司治理重大缺陷; 审计问题 → 财务真实性存疑; 退市风险 → 直接剔除
         if 'event_type' in recent_events.columns:
             severe_events = recent_events[
                 recent_events['event_type'].isin(severe_types)
@@ -311,6 +315,7 @@ class UniverseBuilder:
             return candidates, excluded_reasons
 
         # 一字涨停/跌停: open=high=close=low (向量化替代iterrows)
+        # 一字板无法成交, 买入即套牢或卖出无法成交, 必须排除
         candidate_mask = daily['ts_code'].isin(candidates)
         is_one_price = (
             (daily['open'] > 0) &
@@ -349,7 +354,7 @@ class UniverseBuilder:
             return df
 
         df_dates = pd.to_datetime(df['trade_date'], errors='coerce')
-        cutoff = pd.Timestamp(trade_date) - pd.Timedelta(days=window * 2)  # 多取一些确保有足够交易日
+        cutoff = pd.Timestamp(trade_date) - pd.Timedelta(days=window * 2)  # 多取一些确保有足够交易日 (交易日约=自然日*0.7)
         mask = (df_dates >= cutoff) & (df_dates <= pd.Timestamp(trade_date))
         recent = df[mask].copy()
 

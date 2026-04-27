@@ -44,7 +44,7 @@ class MultiFactorScorer:
                 weight_sum += abs(weight)
 
         if weight_sum == 0:
-            return self.equal_weight(factor_scores)
+            return self.equal_weight(factor_scores)  # 权重全零时退化等权，避免除零
 
         return weighted_sum / weight_sum
 
@@ -115,11 +115,12 @@ class MultiFactorScorer:
         """
         # 1. 计算IC加权评分
         if ic_weights:
-            ic_score = self.icir_weight(factor_scores, ic_weights)
+            ic_score = self.icir_weight(factor_scores, ic_weights)  # ICIR比IC更稳定，IC除以标准差降低噪声因子权重
         else:
             ic_score = self.equal_weight(factor_scores)
 
         # 2. 标准化ML预测 (z-score)
+        # ML输出量纲与IC评分不同，必须对齐尺度才能融合
         ml_score = ml_predictions.copy()
         ml_mean = ml_score.mean()
         ml_std = ml_score.std()
@@ -150,6 +151,7 @@ class MultiFactorScorer:
             result = self._fuse_simple(ic_aligned, ml_aligned, ic_weight_total, ml_weight)
 
         # 保留不在ML预测中的股票 (仅IC评分)
+        # ML模型可能因缺失值无法预测部分股票，这些股票仍用IC评分兜底
         missing_idx = ic_score.index.difference(ml_score.index)
         if len(missing_idx) > 0:
             result = pd.concat([result, ic_score.loc[missing_idx]])
@@ -183,12 +185,13 @@ class MultiFactorScorer:
         动态权重融合
         根据IC和ML评分的分散度动态调整权重
         分散度越高(信息含量越大)的信号获得更大权重
+        核心思想: 信号区分度强时更可信，区分度弱(趋同)时降低其权重
         """
         ic_dispersion = ic_score.std()
         ml_dispersion = ml_score.std()
 
         if ic_dispersion + ml_dispersion > 0:
-            # 按分散度比例分配权重
+            # 按分散度比例分配权重，1e-8防止除零
             ic_adj = ic_base_weight * (ic_dispersion / (ic_dispersion + ml_dispersion + 1e-8))
             ml_adj = ml_base_weight * (ml_dispersion / (ic_dispersion + ml_dispersion + 1e-8))
             total = ic_adj + ml_adj
@@ -216,10 +219,11 @@ class MultiFactorScorer:
         pool_mask = ic_score >= threshold
 
         result = ic_score.copy()
-        if pool_mask.sum() > 10:
+        if pool_mask.sum() > 10:  # 池内至少10只股票才用ML精排，样本过少ML排序不可靠
             # 池内: ML评分排序 (保留相对排序)
             pool_ml = ml_score.loc[pool_mask]
             # 将ML评分映射到IC评分的池内范围
+            # 映射尺度而非直接替换，保证池内外评分可比
             ic_pool_min = ic_score.loc[pool_mask].min()
             ic_pool_max = ic_score.loc[pool_mask].max()
             ml_min = pool_ml.min()
@@ -284,6 +288,7 @@ class MultiFactorScorer:
             return self.equal_weight(factor_scores)
 
         # 计算滚动IC均值
+        # 滚动IC比全历史IC更能捕捉因子有效性时变特征
         recent_ic = ic_history.tail(lookback)
         ic_means = recent_ic.groupby('factor_code')['ic'].mean()
 
@@ -330,6 +335,7 @@ class MultiFactorScorer:
         recent_dates = set(all_dates[-lookback:])
 
         # 向量化: merge因子和收益，一次计算所有IC
+        # 替代逐因子逐日期三重循环，性能提升显著
         merged = pd.merge(
             factor_df[factor_df['trade_date'].isin(recent_dates)][['trade_date', 'security_id', 'factor_code', 'value']],
             return_df[['trade_date', 'security_id', 'forward_return']],
@@ -341,7 +347,7 @@ class MultiFactorScorer:
 
         # 按factor_code+trade_date分组计算IC
         def _calc_ic(g):
-            if len(g) < 10:
+            if len(g) < 10:  # 截面样本不足10时IC不可靠，跳过
                 return np.nan
             valid = g['value'].notna() & g['forward_return'].notna()
             if valid.sum() < 10:
@@ -371,6 +377,8 @@ class MultiFactorScorer:
                     weights[fc] = 0
 
         # 归一化: 只保留正权重
+        # IC/ICIR为负说明因子反向有效，应反向使用而非直接丢弃，
+        # 但此处归一化阶段只保留正权重，反向因子在预处理阶段已通过direction翻转
         positive_weights = {k: v for k, v in weights.items() if v > 0}
         if not positive_weights:
             return weights
@@ -406,14 +414,14 @@ class MultiFactorScorer:
             'objective': 'lambdarank',
             'metric': 'ndcg',
             'learning_rate': 0.05,
-            'max_depth': 4,
-            'num_leaves': 15,
-            'min_data_in_leaf': 50,
-            'feature_fraction': 0.8,
-            'bagging_fraction': 0.8,
+            'max_depth': 4,       # 浅树防止过拟合，A股截面数据噪声大
+            'num_leaves': 15,     # 与max_depth=4匹配，2^4=16
+            'min_data_in_leaf': 50,  # 叶节点最少样本，避免在小盘股上过拟合
+            'feature_fraction': 0.8,  # 列采样降低因子间共线性风险
+            'bagging_fraction': 0.8,  # 行采样增强鲁棒性
             'bagging_freq': 5,
-            'lambda_l1': 0.1,
-            'lambda_l2': 0.1,
+            'lambda_l1': 0.1,    # L1正则化，自动做因子选择
+            'lambda_l2': 0.1,    # L2正则化，抑制共线性因子权重过大
             'verbosity': -1,
         }
 
@@ -422,13 +430,15 @@ class MultiFactorScorer:
         X_train = factor_scores.loc[valid_mask].values
         y_train = returns.loc[valid_mask].values
 
-        if len(X_train) < 100:
+        if len(X_train) < 100:  # 样本不足100时ML模型不可靠，退化等权
             return self.equal_weight(factor_scores)
 
         # 将收益率转换为排名标签
+        # LambdaRank用相对排序而非绝对收益训练，对异常值更鲁棒
         y_rank = pd.Series(y_train).rank(pct=True).values
 
         # 单调约束
+        # 强制模型在指定因子上单调递增/递减，保证经济逻辑不被ML破坏
         if monotone_constraints:
             constraints = []
             for col in factor_scores.columns:
@@ -516,15 +526,14 @@ class MultiFactorScorer:
         oof_df = pd.DataFrame(oof_predictions, index=factor_scores.index)
         valid_mask = oof_df.notna().all(axis=1) & returns.notna()
 
-        if valid_mask.sum() < 20:
-            # 样本不足，退化为简单平均
+        if valid_mask.sum() < 20:  # OOF样本不足20时元学习器不可靠，退化为简单平均
             return oof_df.mean(axis=1)
 
         try:
             from sklearn.linear_model import Ridge
             meta_X = oof_df.loc[valid_mask].values
             meta_y = returns.loc[valid_mask].values
-            meta_learner = Ridge(alpha=1.0)
+            meta_learner = Ridge(alpha=1.0)  # Ridge做元学习器而非OLS，正则化防止对单一基模型过拟合
             meta_learner.fit(meta_X, meta_y)
 
             # 用元学习器组合基模型的完整预测
@@ -551,6 +560,8 @@ class MultiFactorScorer:
                                test_data: pd.DataFrame,
                                factor_cols: List[str],
                                threshold_auc: float = 0.55) -> Dict:
+        # AUC=0.5表示无法区分，>0.55即认为存在可检测的分布漂移
+        # 阈值设0.55而非0.5是为了容忍轻微噪声，避免误报
         """
         对抗性验证
         检测训练集和测试集的分布漂移，识别失效因子
@@ -587,7 +598,7 @@ class MultiFactorScorer:
         feature_importance = dict(zip(factor_cols, clf.feature_importances_))
         drifted_factors = [
             f for f, imp in sorted(feature_importance.items(), key=lambda x: -x[1])
-            if imp > 1.0 / len(factor_cols) * 2  # 重要性超过平均2倍
+            if imp > 1.0 / len(factor_cols) * 2  # 重要性超过平均2倍视为漂移因子
         ]
 
         return {
@@ -623,6 +634,7 @@ class MultiFactorScorer:
         scorer.db = None
 
         # 排除非因子列
+        # 这些元数据列不是因子得分，参与加权计算会导致结果错误
         skip_cols = {'security_id', 'ts_code', 'trade_date', 'data_source', 'amount_is_estimated'}
         factor_cols = [c for c in factor_df.columns if c not in skip_cols]
         scores_matrix = factor_df[factor_cols].copy()
@@ -711,6 +723,7 @@ class MultiFactorScorer:
             series = pd.Series({v.security_id: v.value for v in values})
 
             # 预处理
+            # direction=1因子越大越好，direction=-1因子越小越好，预处理时会翻转
             direction = fw.direction or factor.direction or 1
             series = preprocess_factor_values(series, direction=direction)
 
@@ -800,7 +813,7 @@ class MultiFactorScorer:
         elif method == 'score':
             # 分数加权 (ADD 10.3.2节)
             scores = top_stocks['total_score']
-            scores = scores - scores.min() + 0.01
+            scores = scores - scores.min() + 0.01  # +0.01避免最低分股票权重为零
             weights = scores / scores.sum()
         elif method == 'benchmark_enhanced':
             # 基准增强权重 (ADD 10.3.3节) - 简化实现
@@ -837,7 +850,7 @@ class MultiFactorScorer:
             result = optimizer.mean_cvar_optimize(
                 expected_returns=expected_returns.values,
                 cov_matrix=cov_matrix,
-                max_weight=1.0 / len(top_stocks) * 2,
+                max_weight=1.0 / len(top_stocks) * 2,  # 单只股票权重上限为等权的2倍，兼顾集中度与灵活性
             )
             if 'weights' in result:
                 return pd.Series(result['weights'], index=top_stocks.index)
@@ -880,7 +893,7 @@ class MultiFactorScorer:
 
         # 如果换手率过高，向prev_weights收缩
         if turnover > 0 and penalty > 0:
-            shrinkage = min(penalty * turnover, 0.5)  # 最多收缩50%
+            shrinkage = min(penalty * turnover, 0.5)  # 最多收缩50%，防止过度锚定上期权重丧失调仓能力
             adjusted = weights * (1 - shrinkage) + prev_weights.reindex(weights.index).fillna(0) * shrinkage
             # 归一化
             if adjusted.sum() > 0:
@@ -920,7 +933,7 @@ class MultiFactorScorer:
             if daily_volumes.loc[idx] > 0:
                 participation = trade_amount.loc[idx] / daily_volumes.loc[idx]
                 vol = volatilities.get(idx, 0.02)
-                impact.loc[idx] = vol * np.sqrt(participation / 0.1)  # 平方根法则
+                impact.loc[idx] = vol * np.sqrt(participation / 0.1)  # 平方根法则，0.1为参与率归一化基准
 
         return impact
 
@@ -963,11 +976,12 @@ class MultiFactorScorer:
 
     def _get_forward_return_data(self, trade_date: date,
                                   forward_period: int = 20) -> pd.DataFrame:
+        # forward_period=20对应约1个月交易日，是因子预测的典型时间窗口
         """获取前瞻收益数据 (向量化计算，避免逐股票循环)"""
         try:
             from app.models.market import StockDaily
             from datetime import timedelta
-            end_date = trade_date + timedelta(days=forward_period + 30)
+            end_date = trade_date + timedelta(days=forward_period + 30)  # +30天缓冲确保覆盖自然日中非交易日
             stocks = self.db.query(StockDaily).filter(
                 StockDaily.trade_date >= trade_date,
                 StockDaily.trade_date <= end_date,
@@ -980,6 +994,7 @@ class MultiFactorScorer:
                 'close': float(s.close) if s.close else np.nan,
             } for s in stocks])
             # 向量化计算前瞻收益
+            # 按股票分组shift，避免逐股票循环，性能显著提升
             price_df = price_df.dropna(subset=['close']).sort_values(['security_id', 'trade_date'])
             price_df['fwd_close'] = price_df.groupby('security_id')['close'].shift(-forward_period)
             price_df['forward_return'] = price_df['fwd_close'] / price_df['close'] - 1

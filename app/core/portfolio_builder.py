@@ -23,9 +23,11 @@ logger = logging.getLogger(__name__)
 # 常量
 # ─────────────────────────────────────────────
 
-TOP_N = 60  # 持仓数量
+TOP_N = 60  # 持仓数量 # 为什么60：A股增强策略60只约覆盖2%个股，平衡超额收益与交易成本，过少集中度过高
 
 # 分层赋权倍率
+# 为什么分三层：1-10名高确信度给予1.5x权重，11-30名中确信度1.2x，31-60名低确信度1.0x
+# 1.5x上限避免单股过度集中，同时保证头部alpha信号获得应有权重
 TIER_MULTIPLIERS = {
     "tier1": {"range": (1, 10), "multiplier": 1.5},
     "tier2": {"range": (11, 30), "multiplier": 1.2},
@@ -33,10 +35,11 @@ TIER_MULTIPLIERS = {
 }
 
 # 风险折扣系数
+# 为什么极端风险0.00：ST/*ST/退市风险股必须完全排除，A股个股黑天鹅风险不可度量
 RISK_DISCOUNT = {
     "low": 1.00,      # 低风险
-    "medium": 0.85,   # 中风险
-    "high": 0.60,     # 高风险
+    "medium": 0.85,   # 中风险 # 为什么0.85：中等风险（如高质押率）15%折扣，温和减仓而非直接排除
+    "high": 0.60,     # 高风险 # 为什么0.60：高风险（如ST摘帽不确定性）40%折扣，大幅减仓
     "extreme": 0.00,  # 极高风险(黑名单)
 }
 
@@ -48,20 +51,23 @@ LIQUIDITY_DISCOUNT = {
 }
 
 # 调仓缓冲区
+# 为什么需要缓冲区：A股换仓成本高（印花税+滑点），排名微小波动不应触发买卖，缓冲区降低换手率
 REBALANCE_BUFFER = {
-    "hold_top": 75,       # 当前持仓排名≤75继续持有
-    "buy_top": 50,        # 新买入需排名≤50
-    "min_weight_pct": 0.20,  # 最小持仓权重0.20%
+    "hold_top": 75,       # 当前持仓排名≤75继续持有 # 为什么75>60：持仓股排名小幅下滑时不急于卖出，避免反复交易
+    "buy_top": 50,        # 新买入需排名≤50 # 为什么50<60：新买入门槛更高，确保新入股票Alpha信号足够强
+    "min_weight_pct": 0.20,  # 最小持仓权重0.20% # 为什么0.20%：低于此权重的持仓对组合贡献可忽略，交易成本反而侵蚀收益
 }
 
 # 行业约束
+# 为什么20%上限：A股行业轮动快，单一行业超20%在行业下跌10%时拖累组合2%+
+# 为什么5%偏离限制：控制跟踪误差，增强策略不应在行业配置上过度偏离基准
 INDUSTRY_CONSTRAINTS = {
     "max_single_industry": 0.20,  # 单行业最大20%
     "max_deviation": 0.05,        # 偏离基准最大5%
 }
 
 # 交易单位
-LOT_SIZE = 100  # A股100股整数倍
+LOT_SIZE = 100  # A股100股整数倍 # 为什么100：A股交易规则要求最低买入100股且须为100的整数倍（科创板除外）
 
 
 class PortfolioMode(str, Enum):
@@ -144,6 +150,7 @@ class PortfolioBuilder:
             return 0.0
         shares = int(target_value / price)
         # 向下取整到100股整数倍
+        # 为什么向下取整而非四舍五入：实盘中不足100股的部分无法买入，向下取整确保资金不超限
         shares = (shares // LOT_SIZE) * LOT_SIZE
         adjusted_value = shares * price
         return adjusted_value / total_capital if total_capital > 0 else 0.0
@@ -165,6 +172,7 @@ class PortfolioBuilder:
         简化实现: 按Alpha得分排序, 风险惩罚后等权
         """
         # 应用风险惩罚
+        # 为什么系数0.35：经验值，约1/3的风险惩罚力度，避免过度惩罚导致选股过于保守
         if risk_penalty is not None:
             adjusted_scores = scores - 0.35 * risk_penalty
         else:
@@ -390,6 +398,7 @@ class PortfolioBuilder:
             excess_weight += ind_weight * (1 - scale)
 
         # 将释放的权重按比例分配给未超限行业 (使用缩放前权重作为基准)
+        # 为什么用缩放前权重：缩放后行业内股票权重已变，用原始权重分配更符合"原持仓偏好"的业务逻辑
         if excess_weight > 0:
             under_limit = ind_weights[ind_weights <= max_single]
             if not under_limit.empty:

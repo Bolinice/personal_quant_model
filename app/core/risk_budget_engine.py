@@ -44,14 +44,14 @@ class RiskAction(str, Enum):
 @dataclass
 class RiskLimit:
     """风险限制配置"""
-    max_portfolio_vol: float = 0.20       # 组合最大年化波动率
-    max_factor_exposure: float = 1.0      # 单因子最大暴露
-    max_industry_weight: float = 0.30     # 单行业最大权重
-    max_single_position: float = 0.08     # 单股最大权重
-    max_drawdown: float = 0.10            # 最大回撤
-    var_limit_95: float = 0.02            # 95% VaR限制(日频)
-    cvar_limit_95: float = 0.03          # 95% CVaR限制(日频)
-    max_turnover: float = 0.30           # 单次最大换手率
+    max_portfolio_vol: float = 0.20       # 组合最大年化波动率 # 为什么0.20：增强策略目标年化15-20%，波动约束在此范围内平衡收益与回撤
+    max_factor_exposure: float = 1.0      # 单因子最大暴露 # 为什么1.0：标准化后暴露1.0约等于1倍标准差，超过则因子风险过于集中
+    max_industry_weight: float = 0.30     # 单行业最大权重 # 为什么0.30：A股行业轮动剧烈，单一行业超30%在行业下跌时回撤不可控
+    max_single_position: float = 0.08     # 单股最大权重 # 为什么0.08：60只持仓中等权约1.67%，8%约为5倍集中度，兼顾超额与分散
+    max_drawdown: float = 0.10            # 最大回撤 # 为什么0.10：机构增强策略回撤容忍度通常10-15%，超过需强制降仓
+    var_limit_95: float = 0.02            # 95% VaR限制(日频) # 为什么0.02：日频2%对应年化约30%波动率的5%分位，与组合波动约束匹配
+    cvar_limit_95: float = 0.03          # 95% CVaR限制(日频) # 为什么0.03：CVaR是VaR的尾部平均，0.03比VaR宽50%容纳厚尾
+    max_turnover: float = 0.30           # 单次最大换手率 # 为什么0.30：A股双边佣金+印花税约0.15%，30%换手约4.5bp成本，控制成本侵蚀
 
 
 class RiskBudgetEngine:
@@ -70,7 +70,7 @@ class RiskBudgetEngine:
     def allocate_risk_budget(self,
                               factor_risk_contrib: Dict[str, float],
                               factor_icir: Dict[str, float],
-                              target_total_risk: float = 0.15,
+                              target_total_risk: float = 0.15,  # 为什么0.15：增强策略目标波动15%，对应1.5倍基准波动，兼顾超额空间与下行保护
                               method: str = 'icir_proportional') -> Dict[str, float]:
         """
         风险预算分配
@@ -92,7 +92,8 @@ class RiskBudgetEngine:
 
         elif method == 'icir_proportional':
             # ICIR正比分配: 高ICIR因子获得更多风险预算
-            abs_icir = {f: max(abs(factor_icir.get(f, 0)), 0.01) for f in factors}
+            # 为什么用ICIR而非IC：ICIR=IC均值/IC标准差，同时考虑预测能力和稳定性，避免给高IC但不稳定的因子过多预算
+            abs_icir = {f: max(abs(factor_icir.get(f, 0)), 0.01) for f in factors}  # 下限0.01防止零除
             total_icir = sum(abs_icir.values())
             if total_icir > 0:
                 return {f: target_total_risk * abs_icir[f] / total_icir for f in factors}
@@ -246,6 +247,7 @@ class RiskBudgetEngine:
 
         # 因子风险约束: |portfolio_exposure_k| <= budget_k
         # 用两个线性约束替代abs()非线性约束, 提升SLSQP收敛性
+        # 为什么拆成两个线性约束：SLSQP对线性约束求解效率远高于非线性，拆分后每次迭代只需矩阵运算
         for i, factor_name in enumerate(factor_exposures.columns):
             budget = risk_budget.get(factor_name, 0.5)
             constraints.append({
@@ -328,6 +330,7 @@ class RiskBudgetEngine:
             return weights  # CVaR在限制内
 
         # CVaR超标: 缩减高Beta资产权重
+        # 为什么用Beta贡献而非等比例缩减：高Beta资产在极端下跌中贡献更多尾部风险，针对性缩减更有效
         # 计算各资产对CVaR的贡献
         asset_cvar_contrib = np.zeros(len(common))
         for i in range(len(common)):
@@ -343,6 +346,7 @@ class RiskBudgetEngine:
         total_contrib = asset_cvar_contrib.sum()
         if total_contrib > 0:
             # 缩减比例: 使CVaR回到限制内
+            # 为什么上限0.5：单次最多缩减50%，避免过度调仓导致市场冲击和偏离原Alpha信号
             shrinkage = min(0.5, (cvar - cvar_limit) / cvar)
             adjusted_w = w.copy()
             for i in range(len(common)):
@@ -412,6 +416,7 @@ class RiskBudgetEngine:
             violations.append('max_factor_exposure')
 
         # 决策
+        # 为什么3项违触即强平：多项同时超标说明系统性风险失控，渐进式调整已不够，必须快速降仓保全本金
         if len(violations) >= 3:
             action = RiskAction.FORCE_LIQUIDATE
         elif 'max_drawdown' in violations or 'cvar_95' in violations:
@@ -507,18 +512,20 @@ class RiskBudgetEngine:
     # ==================== V2: 5信号4档择时 ====================
 
     # 4档仓位映射
+    # 为什么分4档而非连续：离散档位降低调仓频率，避免择时信号微幅波动导致频繁交易，A股T+0调仓成本高
     POSITION_TIERS = {
         'strong_positive': 1.00,   # 强正面 → 100%
-        'positive': 0.80,          # 正面 → 80%
-        'neutral': 0.60,           # 中性 → 60%
-        'negative': 0.30,          # 负面 → 30%
+        'positive': 0.80,          # 正面 → 80%  # 为什么80%而非100%：保留20%现金缓冲，应对A股突发利空（如停牌、黑天鹅）
+        'neutral': 0.60,           # 中性 → 60%  # 为什么60%：中性时保持六成仓位，攻守兼备，A股择时信号噪声大不宜轻易空仓
+        'negative': 0.30,          # 负面 → 30%  # 为什么30%而非0%：完全空仓错过反弹风险大，30%底仓保证不踏空
     }
 
     # 回撤保护阈值
+    # 为什么5%/8%/12%三级递进：A股历史上5%回撤是正常波动，8%进入局部调整，12%以上往往意味着系统性风险
     DRAWDOWN_THRESHOLDS = {
-        'level1': 0.05,   # >5% 降一档
-        'level2': 0.08,   # >8% 再降一档
-        'level3': 0.12,   # >12% 最低30%
+        'level1': 0.05,   # >5% 降一档 # 第一道防线：提醒性降仓，避免情绪化操作
+        'level2': 0.08,   # >8% 再降一档 # 第二道防线：确认性降仓，回撤已超正常波动范围
+        'level3': 0.12,   # >12% 最低30% # 第三道防线：保护性降仓，强制降到最低档，防止深度回撤
     }
 
     def timing_signal_trend(self, index_data: pd.DataFrame,
@@ -548,9 +555,9 @@ class RiskBudgetEngine:
 
         score = 0
         if ma20 > ma60:
-            score += 1
+            score += 1  # 短期均线上穿中期均线：中期趋势转多（金叉逻辑）
         if ma60 > ma120:
-            score += 1
+            score += 1  # 中期均线上穿长期均线：长期趋势确认（牛熊分界线逻辑）
         return score
 
     def timing_signal_breadth(self, stock_data: pd.DataFrame,
@@ -567,13 +574,13 @@ class RiskBudgetEngine:
 
         pct = stock_data[pct_col].dropna()
         if len(pct) < 100:
-            return 0
+            return 0  # 为什么100：A股全市场约5000只，100只是最低代表性样本量
 
         up_ratio = (pct > 0).mean()
         if up_ratio > 0.60:
-            return 1
+            return 1  # 60%以上个股上涨：市场参与度广，赚钱效应强
         elif up_ratio < 0.45:
-            return -1
+            return -1  # 45%以下上涨：市场普遍下跌，系统性风险较高
         return 0
 
     def timing_signal_volatility(self, index_data: pd.DataFrame,
@@ -706,6 +713,7 @@ class RiskBudgetEngine:
             signals['northbound'] = 0
 
         # 综合信号得分
+        # 为什么>=3为强正面：5个信号满分4分(趋势0-2+其余各±1)，3分以上意味着多数信号共振
         total_score = sum(signals.values())
 
         # 映射到4档仓位

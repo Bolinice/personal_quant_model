@@ -1,6 +1,13 @@
 """
 AKShare 数据源适配器
 免费开源金融数据接口
+
+与Tushare的核心差异:
+1. 无PIT公告日字段，财务数据无法做精确PIT对齐，因子计算需注意未来函数风险
+2. 无TTM指标（需本地滚动计算），无pe_ttm/ps_ttm等预计算字段
+3. 没有统一字段命名规范，不同接口返回中文/英文列名混杂
+4. 无全市场每日快照接口(daily_basic)，需逐只获取或用实时行情替代
+5. 成交额需本地估算（成交价*成交量），精度低于Tushare的实际成交额
 """
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -22,7 +29,7 @@ class AKShareDataSource(BaseDataSource):
         try:
             import akshare as ak
             self._ak = ak
-            # 测试连接 - 使用腾讯接口（更稳定）
+            # 测试连接 - 使用腾讯接口（更稳定），新浪源频繁限流不稳定
             df = ak.stock_zh_a_hist_tx(symbol='sh600000', start_date='2024-01-01', end_date='2024-01-10')
             self._connected = not df.empty
             if self._connected:
@@ -37,7 +44,7 @@ class AKShareDataSource(BaseDataSource):
         return self._connected
 
     def _format_code(self, ts_code: str) -> str:
-        """将 ts_code 转换为 AKShare 格式"""
+        """将 ts_code 转换为 AKShare 格式 — AKShare不用'市场后缀'，只用6位代码"""
         # 600000.SH -> 600000
         if '.' in ts_code:
             return ts_code.split('.')[0]
@@ -79,7 +86,7 @@ class AKShareDataSource(BaseDataSource):
             # 重命名列
             df = df.rename(columns={
                 'date': 'trade_date',
-                'amount': 'volume',  # 腾讯的 amount 是成交量
+                'amount': 'volume',  # 腾讯接口的'amount'实际是成交量(手)，不是成交额，必须重命名避免混淆
             })
 
             # 格式化日期
@@ -88,7 +95,7 @@ class AKShareDataSource(BaseDataSource):
             # 计算涨跌幅和昨收
             df['pre_close'] = df['close'].shift(1)
             df['pct_chg'] = (df['close'] / df['pre_close'] - 1) * 100
-            df['amount'] = df['volume'] * df['close']  # 估算成交额
+            df['amount'] = df['volume'] * df['close']  # 估算成交额=成交量*收盘价，仅为近似值（Tushare返回真实成交额）
 
             # 选择需要的列
             result_cols = ['trade_date', 'open', 'high', 'low', 'close',
@@ -142,7 +149,7 @@ class AKShareDataSource(BaseDataSource):
             # 计算涨跌幅
             df['pct_chg'] = df['close'].pct_change() * 100
             df['pre_close'] = df['close'].shift(1)
-            df['amount'] = df['volume'] * df['close']  # 估算成交额
+            df['amount'] = df['volume'] * df['close']  # 估算成交额=成交量*收盘价，仅为近似值
 
             return df[['trade_date', 'open', 'high', 'low', 'close',
                       'volume', 'amount', 'pct_chg', 'pre_close']]
@@ -179,19 +186,20 @@ class AKShareDataSource(BaseDataSource):
             if df.empty:
                 return pd.DataFrame()
 
-            # 重命名列 (AKShare 返回中文列名)
+            # 重命名列 (AKShare 返回中文列名，Tushare返回英文，这里统一映射为英文)
             df = df.rename(columns={
                 '代码': 'symbol',
                 '名称': 'name',
             })
 
-            # 过滤掉北交所股票 (bj开头) 和非主板股票
+            # 过滤掉北交所股票 (bj开头) 和非主板股票 — 北交所流动性差，不在选股池内
             df = df[~df['symbol'].str.startswith('bj')]
 
             # 移除 symbol 中的 sh/sz 前缀
             df['symbol'] = df['symbol'].str.replace('^(sh|sz)', '', regex=True)
 
             # 构建 ts_code: 6开头为沪市，其他为深市
+            # AKShare的新浪源不带上市日期和行业信息，设为None后续通过其他接口补全
             df['market'] = df['symbol'].apply(lambda x: 'SH' if x.startswith('6') else 'SZ')
             df['ts_code'] = df['symbol'] + '.' + df['market']
             df['status'] = 'L'
@@ -226,6 +234,7 @@ class AKShareDataSource(BaseDataSource):
                 return []
 
             # 获取成分股代码
+            # AKShare中证指数接口返回的列名为中文'成分券代码'，不同接口列名不同
             codes = df['成分券代码'].tolist() if '成分券代码' in df.columns else df.iloc[:, 0].tolist()
 
             # 转换为 ts_code 格式
@@ -260,8 +269,8 @@ class AKShareDataSource(BaseDataSource):
             # 筛选日期范围
             df = df[(df['trade_date'] >= start_date) & (df['trade_date'] <= end_date)]
 
-            df['is_open'] = 1
-            df['pretrade_date'] = df['trade_date'].shift(1)
+            df['is_open'] = 1  # AKShare交易日历只有交易日列表，非交易日不存在记录，故is_open恒为1
+            df['pretrade_date'] = df['trade_date'].shift(1)  # 近似前一交易日，未精确跳过节假日
 
             return df[['trade_date', 'is_open', 'pretrade_date']]
 
@@ -285,7 +294,8 @@ class AKShareDataSource(BaseDataSource):
             if df.empty:
                 return pd.DataFrame()
 
-            # 重命名列
+            # 重命名列 — AKShare的财务指标接口返回中文列名，映射到Tushare兼容的英文字段
+            # 注意: AKShare缺少ann_date(公告日)字段，无法做PIT对齐，用于回测可能引入未来函数
             column_map = {
                 '日期': 'end_date',
                 '净资产收益率': 'roe',
@@ -386,7 +396,7 @@ class AKShareDataSource(BaseDataSource):
     # ==================== 复权数据 ====================
 
     def get_adj_factor(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
-        """获取复权因子"""
+        """获取复权因子 — AKShare无直接复权因子接口，需用前复权价/不复权价反算"""
         if not self._connected:
             return pd.DataFrame()
 
@@ -424,6 +434,7 @@ class AKShareDataSource(BaseDataSource):
                 suffixes=('_qfq', '_raw')
             )
 
+            # adj_factor = 前复权价 / 不复权价，首日应为1.0，受除权除息影响后续偏离
             merged['adj_factor'] = merged['收盘_qfq'] / merged['收盘_raw']
 
             return merged[['trade_date', 'adj_factor']]
@@ -484,6 +495,8 @@ class AKShareDataSource(BaseDataSource):
 
     def get_margin_detail(self, trade_date: str) -> pd.DataFrame:
         """获取融资融券明细"""
+        # AKShare将沪深两融分成了不同接口，需依次尝试；
+        # Tushare的margin接口统一返回沪深数据，无需此处理
         # 尝试上交所
         try:
             df = self._ak.stock_margin_detail_sse(date=trade_date)

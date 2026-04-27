@@ -39,8 +39,8 @@ class TimingEngine:
     # ==================== 1. 均线择时 (ADD 9.1节) ====================
 
     def ma_cross_signal(self, close: pd.Series,
-                        short_window: int = 20,
-                        long_window: int = 60) -> pd.Series:
+                        short_window: int = 20,  # 为什么20日：约1个月交易日的均线，捕捉月级别短期趋势
+                        long_window: int = 60) -> pd.Series:  # 为什么60日：约1个季度交易日，过滤短期噪声，识别中期趋势
         """
         均线交叉择时 (ADD 9.1节)
         短均线上穿长均线 → 看多
@@ -51,11 +51,12 @@ class TimingEngine:
 
         signal = pd.Series(TimingSignalType.NEUTRAL, index=close.index)
 
-        # 金叉
+        # 金叉：短期均线上穿长期均线，代表中期趋势由空转多
+        # 为什么shift(1)比较：检测"穿越"而非"处于上方"，穿越是趋势反转信号，单纯处于上方可能是持续状态
         golden_cross = (short_ma > long_ma) & (short_ma.shift(1) <= long_ma.shift(1))
         signal[golden_cross] = TimingSignalType.LONG
 
-        # 死叉
+        # 死叉：短期均线下穿长期均线，代表中期趋势由多转空
         death_cross = (short_ma < long_ma) & (short_ma.shift(1) >= long_ma.shift(1))
         signal[death_cross] = TimingSignalType.SHORT
 
@@ -93,7 +94,7 @@ class TimingEngine:
 
     def breadth_signal(self, advance_count: pd.Series,
                        decline_count: pd.Series,
-                       window: int = 20) -> pd.Series:
+                       window: int = 20) -> pd.Series:  # 为什么20日：平滑单日噪声，A股涨跌家数日波动大
         """
         市场宽度择时 (ADD 9.2节)
         上涨家数占比 > 阈值 → 看多
@@ -106,8 +107,8 @@ class TimingEngine:
         breadth_ma = breadth.rolling(window).mean()
 
         signal = pd.Series(TimingSignalType.NEUTRAL, index=breadth.index)
-        signal[breadth_ma > 0.6] = TimingSignalType.LONG
-        signal[breadth_ma < 0.4] = TimingSignalType.SHORT
+        signal[breadth_ma > 0.6] = TimingSignalType.LONG   # 60%以上个股上涨：市场参与面广，赚钱效应扩散
+        signal[breadth_ma < 0.4] = TimingSignalType.SHORT  # 40%以下上涨：多数个股下跌，系统性风险偏高
 
         logger.info(
             "Breadth signal computed",
@@ -131,12 +132,12 @@ class TimingEngine:
 
     def volatility_signal(self, close: pd.Series,
                           window: int = 20,
-                          low_vol_threshold: float = 0.12,
-                          high_vol_threshold: float = 0.25) -> pd.Series:
+                          low_vol_threshold: float = 0.12,   # 为什么0.12：A股沪深300正常年化波动约20-25%，12%以下属于低波动
+                          high_vol_threshold: float = 0.25) -> pd.Series:  # 为什么0.25：25%以上说明市场处于恐慌或剧烈调整
         """
         波动率择时 (ADD 9.3节)
-        低波动 → 看多（适合持有）
-        高波动 → 看空（适合减仓）
+        低波动 → 看多（适合持有） # 为什么低波动看多：低波动意味着市场分歧小、趋势稳定，A股低波动期往往伴随缓慢上涨
+        高波动 → 看空（适合减仓） # 为什么高波动看空：高波动往往出现在恐慌阶段，A股高波动期下跌概率大于上涨
         """
         returns = close.pct_change()
         realized_vol = returns.rolling(window).std() * np.sqrt(252)
@@ -148,8 +149,8 @@ class TimingEngine:
         return signal
 
     def vix_signal(self, vix: pd.Series,
-                   low_threshold: float = 15,
-                   high_threshold: float = 25) -> pd.Series:
+                   low_threshold: float = 15,   # 为什么15：A股iVIX正常区间20-25，15以下极度平静
+                   high_threshold: float = 25) -> pd.Series:  # 为什么25：25以上对应恐慌加剧，历史上看25+往往伴随大跌
         """
         VIX择时（A股可用中国波指iVIX替代）
         """
@@ -161,8 +162,8 @@ class TimingEngine:
     # ==================== 4. 回撤控制择时 (ADD 9.4节) ====================
 
     def drawdown_control_signal(self, close: pd.Series,
-                                max_drawdown: float = 0.10,
-                                recovery_threshold: float = 0.03) -> pd.Series:
+                                max_drawdown: float = 0.10,      # 为什么0.10：A股增强策略回撤超10%意味着择时/选股已失效
+                                recovery_threshold: float = 0.03) -> pd.Series:  # 为什么0.03：反弹3%才确认恢复，避免假突破导致过早加仓
         """
         回撤控制择时 (ADD 9.4节)
         回撤超过阈值 → 减仓
@@ -242,6 +243,7 @@ class TimingEngine:
             combined = signal_df.mean(axis=1)
 
         # 转换回信号类型
+        # 为什么阈值0.2而非0：0.2过滤微弱信号，避免信号在0附近频繁切换导致过度交易
         result = pd.Series(TimingSignalType.NEUTRAL, index=combined.index)
         result[combined > 0.2] = TimingSignalType.LONG
         result[combined < -0.2] = TimingSignalType.SHORT
@@ -265,9 +267,9 @@ class TimingEngine:
 
     def _bayesian_fuse(self, signal_df: pd.DataFrame,
                         returns: Optional[pd.Series] = None,
-                        prior_alpha: float = 5.0,
+                        prior_alpha: float = 5.0,  # 为什么5.0：Beta(5,5)先验均值0.5，方差0.02，代表"不确定但偏中性"的先验信念
                         prior_beta: float = 5.0,
-                        decay: float = 0.98) -> pd.Series:
+                        decay: float = 0.98) -> pd.Series:  # 为什么0.98：约50个交易日半衰期，让近期表现权重逐渐增大但不过度遗忘
         """
         顺序Beta共轭更新+指数遗忘
         每个信号维护(alpha_k, beta_k)参数:
@@ -355,9 +357,9 @@ class TimingEngine:
         short_mask = signal == TimingSignalType.SHORT
         neutral_mask = signal == TimingSignalType.NEUTRAL
 
-        exposure[long_mask] = max_exposure
-        exposure[short_mask] = min_exposure
-        exposure[neutral_mask] = base_exposure * 0.5
+        exposure[long_mask] = max_exposure       # 看多：满仓
+        exposure[short_mask] = min_exposure      # 看空：空仓或最低仓位
+        exposure[neutral_mask] = base_exposure * 0.5  # 为什么0.5：中性信号时半仓，A股择时信号噪声大，半仓攻守兼备
 
         return exposure
 
@@ -376,11 +378,11 @@ class TimingEngine:
         regime = pd.Series(MarketRegime.SIDEWAYS, index=close.index)
 
         # 牛市：价格在均线上方，波动率较低
-        bull = (close > ma) & (vol < 0.2)
+        bull = (close > ma) & (vol < 0.2)   # 为什么vol<0.2：牛市特征是"缓涨"，波动率反而不高
         regime[bull] = MarketRegime.BULL
 
         # 熊市：价格在均线下方，波动率较高
-        bear = (close < ma) & (vol > 0.25)
+        bear = (close < ma) & (vol > 0.25)  # 为什么vol>0.25：熊市特征是"急跌"，波动率飙升
         regime[bear] = MarketRegime.BEAR
 
         return regime
@@ -420,7 +422,7 @@ class TimingEngine:
         if len(X_valid) < 100:
             logger.warning(
                 "HMM regime detection: insufficient valid data",
-                extra={"n_valid": len(X_valid), "min_required": 100},
+                extra={"n_valid": len(X_valid), "min_required": 100},  # 为什么100：HMM需足够样本估计转移矩阵和发射概率，100是经验下限
             )
             return pd.Series(MarketRegime.SIDEWAYS, index=features.index)
 
@@ -464,7 +466,7 @@ class TimingEngine:
                                   threshold: float = 0.0) -> pd.Series:
         """
         北向资金择时信号
-        北向资金是A股最有效的择时信号之一
+        北向资金是A股最有效的择时信号之一 # 为什么最有效：北向资金代表外资，信息优势+定价权，历史上与沪深300走势高度相关
 
         Args:
             north_flow: 北向资金净流入序列
@@ -486,7 +488,8 @@ class TimingEngine:
                                 policy_events: Optional[List[Dict[str, Any]]] = None) -> pd.Series:
         """
         政策日历择时
-        A股政策事件(两会、政治局会议等)对市场有可预测影响
+        # A股政策事件(两会、政治局会议等)对市场有可预测影响
+        # 为什么政策择时有效：A股是政策市，重大会议前后市场往往有维稳预期和方向性政策
 
         Args:
             trade_dates: 交易日期序列
@@ -556,12 +559,15 @@ class TimingEngine:
                 continue
 
             # 春季躁动(1-2月): 偏多
+            # 为什么春季躁动：年初银行放贷、两会政策预期、资金面宽松，A股1-2月上涨概率超70%
             if month in [1, 2]:
                 signal.iloc[i] = TimingSignalType.LONG
             # Sell in May效应(5-9月): 偏空
+            # 为什么5-9月偏空：A股"五穷六绝七翻身"规律，银行半年度考核导致流动性收紧
             elif month in [5, 6, 7, 8, 9]:
                 signal.iloc[i] = TimingSignalType.SHORT
             # 年末效应(12月): 基金排名效应，偏多
+            # 为什么12月偏多：公募基金年底排名战，重仓股拉升效应
             elif month == 12:
                 signal.iloc[i] = TimingSignalType.LONG
 
@@ -569,8 +575,8 @@ class TimingEngine:
 
     def fuse_signals_dma(self, signals: Dict[str, pd.Series],
                           returns: Optional[pd.Series] = None,
-                          forgetting_factor: float = 0.95,
-                          min_evidence: int = 30) -> pd.Series:
+                          forgetting_factor: float = 0.95,  # 为什么0.95：约20个交易日半衰期，平衡适应速度和稳定性
+                          min_evidence: int = 30) -> pd.Series:  # 为什么30：至少一个半月数据才评估信号质量，避免短期噪声主导权重
         """
         动态模型平均 (Dynamic Model Averaging, DMA)
         根据各信号近期表现动态调整权重，比等权/固定权重更适应市场变化
@@ -643,9 +649,9 @@ class TimingEngine:
 
     def fuse_signals_bayesian(self, signals: Dict[str, pd.Series],
                                returns: Optional[pd.Series] = None,
-                               prior_alpha: float = 10.0,
+                               prior_alpha: float = 10.0,  # 为什么10.0：比贝叶斯融合的5.0更保守，Beta(10,10)更集中在0.5附近
                                prior_beta: float = 10.0,
-                               lookback: int = 60) -> pd.Series:
+                               lookback: int = 60) -> pd.Series:  # 为什么60：约一个季度交易日，与因子IC评估周期对齐
         """
         贝叶斯共轭更新信号融合
         对每个信号维护Beta分布的命中率，用后验均值作为权重
@@ -684,6 +690,7 @@ class TimingEngine:
             valid = (signal_dir != 0) & actual_dir.notna()
 
             if valid.sum() < 10:
+                # 为什么10：至少10次有效信号才评估，样本过少时先验主导，避免偶然命中获得过高权重
                 bayesian_weights[col] = prior_alpha / (prior_alpha + prior_beta)
                 continue
 
@@ -855,7 +862,7 @@ class TimingEngine:
         # 根据信号调整收益
         adjusted_returns = returns.copy()
         short_mask = signal == TimingSignalType.SHORT
-        adjusted_returns[short_mask] = 0  # 空仓时收益为0
+        adjusted_returns[short_mask] = 0  # 空仓时收益为0 # A股无做空机制，看空信号对应空仓而非做空
 
         # 计算净值
         nav = (1 + adjusted_returns).cumprod()

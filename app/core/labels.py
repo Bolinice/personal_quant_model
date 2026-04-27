@@ -23,7 +23,7 @@ class LabelBuilder:
     def excess_return(self, price_df: pd.DataFrame,
                       benchmark_df: pd.DataFrame = None,
                       benchmark_col: str = 'close',
-                      horizon: int = 5,
+                      horizon: int = 5,  # 默认5日: 与周度调仓周期对齐
                       code_col: str = 'ts_code',
                       date_col: str = 'trade_date',
                       price_col: str = 'close',
@@ -63,6 +63,7 @@ class LabelBuilder:
                 benchmark_df, horizon, date_col, benchmark_col
             )
             # 合并: 每只股票的excess_return = stock_fwd - benchmark_fwd
+            # 超额收益而非原始收益: 避免模型学习到市场beta而非选股alpha
             merged = pd.merge(
                 stock_fwd, bench_fwd,
                 on=date_col, how='left',
@@ -74,6 +75,7 @@ class LabelBuilder:
         else:
             # 无基准时, 用全市场平均收益作为基准
             # 排除指定股票, 避免被评估股票自身参与基准计算导致循环依赖
+            # 循环依赖: 若股票i也是基准成分, 则超额收益被自身拉低, 导致标签有偏
             merged = stock_fwd.copy()
             if exclude_codes:
                 bench_pool = merged[~merged[code_col].isin(exclude_codes)]
@@ -97,7 +99,7 @@ class LabelBuilder:
 
     def industry_neutral_return(self, price_df: pd.DataFrame,
                                  industry_df: pd.DataFrame = None,
-                                 horizon: int = 10,
+                                 horizon: int = 10,  # 默认10日: 行业轮动偏中期, 5日噪声太大
                                  code_col: str = 'ts_code',
                                  date_col: str = 'trade_date',
                                  price_col: str = 'close',
@@ -124,7 +126,7 @@ class LabelBuilder:
             return pd.DataFrame()
 
         if industry_df is None or industry_df.empty:
-            # 无行业数据时, 用全市场平均
+            # 无行业数据时, 用全市场平均 (退而求其次, 仍有beta对冲效果)
             merged = stock_fwd.copy()
             market_avg = merged.groupby(date_col)['fwd_return'].mean()
             merged['industry_return'] = merged[date_col].map(market_avg)
@@ -156,7 +158,7 @@ class LabelBuilder:
 
     def style_adjusted_return(self, price_df: pd.DataFrame,
                                style_exposures: pd.DataFrame = None,
-                               horizon: int = 20,
+                               horizon: int = 20,  # 默认20日: 风格因子暴露衰减慢, 需更长周期才能观测纯alpha
                                code_col: str = 'ts_code',
                                date_col: str = 'trade_date',
                                price_col: str = 'close',
@@ -182,6 +184,7 @@ class LabelBuilder:
 
         if style_cols is None:
             style_cols = ['size', 'beta', 'residual_volatility']
+            # size: 去除小盘效应; beta: 去除市场暴露; residual_vol: 去除低波动异象
 
         available_cols = [c for c in style_cols if c in style_exposures.columns]
         if not available_cols:
@@ -194,11 +197,13 @@ class LabelBuilder:
         )
 
         # 对每个交易日做截面回归取残差
+        # 残差即为剥离风格后的纯alpha, 截面回归而非时间序列: 每天独立回归避免未来函数
         result_parts = []
         for dt, group in merged.groupby(date_col):
             group = group.copy()  # 避免SettingWithCopyWarning
             valid = group.dropna(subset=['fwd_return'] + available_cols)
             if len(valid) < len(available_cols) + 10:
+                # 样本不足时退回原始收益, 避免回归系数不稳定
                 group['style_adjusted_return'] = group['fwd_return']
                 result_parts.append(group)
                 continue
@@ -237,7 +242,7 @@ class LabelBuilder:
         多周期标签 (GPT设计16.3节)
 
         同时计算5d/10d/20d三个周期的超额收益标签，
-        后续可做horizon ensemble
+        后续可做horizon ensemble — 短周期捕捉快速反转, 长周期捕捉趋势持续
 
         Args:
             horizons: 预测周期列表
@@ -306,6 +311,7 @@ class LabelBuilder:
         df['fwd_return'] = fwd_price / df[price_col] - 1
 
         # 清理: 去掉最后horizon个交易日(没有完整前瞻数据)
+        # 这是标签构造的关键边界: 未来数据不足的样本必须剔除, 否则引入存活偏差
         valid = df.dropna(subset=['fwd_return'])
 
         if valid.empty:

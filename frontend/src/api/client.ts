@@ -21,11 +21,15 @@ client.interceptors.request.use(
 );
 
 // 响应拦截器：统一解包 + 401自动刷新（仅一次，防死循环）
+// 并发401场景：多个请求同时收到401时，isRefreshing保证只发起一次token刷新，
+// 其余请求await同一个refreshPromise，避免刷新接口被并发调用导致token失效
 let isRefreshing = false;
 let refreshPromise: Promise<string | null> | null = null;
 
 client.interceptors.response.use(
   (response) => {
+    // 后端统一响应格式 {code, message, data}，code=0表示成功，直接解包取出data
+    // 非零code视为业务错误，抛出message
     const data = response.data;
     if (data && typeof data === 'object' && 'code' in data && 'data' in data) {
       if (data.code === 0) {

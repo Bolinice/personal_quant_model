@@ -17,18 +17,19 @@ from app.core.config import settings
 
 
 # A股交易成本常量 (ADD 11节)
-DEFAULT_COMMISSION_RATE = 0.00025  # 佣金率 万2.5
-DEFAULT_STAMP_TAX_RATE = 0.001     # 印花税率 千1（仅卖出）
-DEFAULT_TRANSFER_FEE_RATE = 0.00001  # 过户费率
-DEFAULT_SLIPPAGE_RATE = 0.001      # 默认滑点 0.1%
-MIN_COMMISSION = 5.0               # 最低佣金5元
+DEFAULT_COMMISSION_RATE = 0.00025  # 万2.5，当前主流券商机构费率
+DEFAULT_STAMP_TAX_RATE = 0.001     # 千1，A股单边征收（仅卖出），2023年减半后现行税率
+DEFAULT_TRANSFER_FEE_RATE = 0.00001  # 过户费率，十万分之一
+DEFAULT_SLIPPAGE_RATE = 0.001      # 固定滑点0.1%，兜底值；有成交量和波动率时使用参与率模型
+MIN_COMMISSION = 5.0               # 交易所规定每笔最低佣金5元
 
 # 涨跌停限制 (ADD 12.4节)
+# 各板块涨跌停幅度不同，必须按板块分别判断，否则会误判停板状态
 # 注意: pct_chg在数据源中为百分比形式(如10.0表示10%), 以下常量也使用百分比
 MAIN_BOARD_LIMIT_PCT = 10.0   # 主板 10%
-GEM_LIMIT_PCT = 20.0         # 创业板 20%
-STAR_LIMIT_PCT = 20.0        # 科创板 20%
-ST_LIMIT_PCT = 5.0          # ST 5%
+GEM_LIMIT_PCT = 20.0         # 创业板 20% — 2020年注册制改革后由10%放宽
+STAR_LIMIT_PCT = 20.0        # 科创板 20% — 首日不设限，此后20%
+ST_LIMIT_PCT = 5.0          # ST 5% — 风险警示股流动性更差，涨跌停更窄
 NORTH_LIMIT_PCT = 30.0       # 北交所 30%
 
 # 保留旧常量名(小数形式)以兼容外部引用
@@ -39,7 +40,7 @@ ST_LIMIT = 0.05
 NORTH_LIMIT = 0.30
 
 # 交易单位
-LOT_SIZE = 100  # A股最小交易单位100股
+LOT_SIZE = 100  # A股最小交易单位100股，不足100股无法下单
 
 
 # ==================== 事件驱动架构 ====================
@@ -130,8 +131,8 @@ class TransactionCost:
     slippage_rate: float = DEFAULT_SLIPPAGE_RATE
     min_commission: float = MIN_COMMISSION
     # 参与率滑点参数
-    impact_coefficient: float = 0.3  # 市场冲击系数
-    base_spread: float = 0.0005  # 基础价差 5bps
+    impact_coefficient: float = 0.3  # 市场冲击系数 — Almgren-Chriss模型简化参数
+    base_spread: float = 0.0005  # 基础价差 5bps — 即使参与率极低也无法避免的买卖价差
 
     def calc_buy_cost(self, amount: float,
                       daily_volume: Optional[float] = None,
@@ -144,11 +145,13 @@ class TransactionCost:
         transfer_fee = amount * self.transfer_fee_rate
 
         # 滑点: 参与率模型或固定比率
+        # 参与率模型: slippage = base_spread + impact * vol * sqrt(participation)
+        # 模拟真实市场冲击 — 成交额占日成交比例越高，价格越不利
         if daily_volume is not None and daily_volume > 0 and volatility is not None:
             participation_rate = amount / daily_volume
             slippage = amount * (self.base_spread + self.impact_coefficient * volatility * np.sqrt(participation_rate))
         else:
-            slippage = amount * self.slippage_rate
+            slippage = amount * self.slippage_rate  # 无成交数据时退化为固定滑点
 
         total = commission + transfer_fee + slippage
         return {
@@ -193,8 +196,8 @@ class Position:
     weight: float = 0.0
     board_type: str = 'main'  # main, gem, star, st
     entry_date: Optional[date] = None  # 首次买入日期
-    shares_bought_today: int = 0  # 当日买入股数(T+1: 当日买入部分不可卖出)
-    dividend_income: float = 0.0  # 累计分红收入(现金分红)
+    shares_bought_today: int = 0  # 当日买入股数 — T+1规则：当日买入不可当日卖出，需跟踪隔离
+    dividend_income: float = 0.0  # 累计分红收入(现金分红) — 用于计算含分红总收益
 
 
 @dataclass
@@ -244,13 +247,14 @@ class ABShareBacktestEngine:
             pos = state.positions[ts_code]
 
             # 计算持股期限对应的税率 (移到最外层，避免仅送股时tax_rate未定义)
+            # A股红利税差异化征收：持股>1年免税，>1月10%，≤1月20%
             holding_days = (trade_date - pos.entry_date).days if pos.entry_date else 0
             if holding_days > 365:
-                tax_rate = 0.0
+                tax_rate = 0.0  # 长期持股免税，鼓励价值投资
             elif holding_days > 30:
                 tax_rate = 0.10
             else:
-                tax_rate = 0.20
+                tax_rate = 0.20  # 短线交易惩罚性税率
 
             # 现金分红: 每股现金分红 × 持仓股数
             cash_div_per_share = div_info.get('cash_div', 0)
@@ -270,7 +274,7 @@ class ABShareBacktestEngine:
             total_new_shares = (bonus_per_share + converted_per_share) * pos.shares
 
             if total_new_shares > 0:
-                # 送股部分也需要扣税(红股按面值1元计税)
+                # 送股部分也需要扣税(红股按面值1元计税) — A股规定送股按每股面值1元征红利税
                 bonus_tax = bonus_per_share * 1.0 * tax_rate * pos.shares
                 state.cash -= bonus_tax  # 扣税从现金中扣除
 
@@ -278,7 +282,7 @@ class ABShareBacktestEngine:
                 old_shares = pos.shares
                 old_cost = pos.cost_price
                 pos.shares = old_shares + int(total_new_shares)
-                # 成本价不变(总成本不变，但股数增加)
+                # 成本价不变(总成本不变，但股数增加) — 除权后成本摊薄，总投入不变
                 pos.cost_price = (old_cost * old_shares) / pos.shares
 
                 logger.debug(
@@ -316,7 +320,7 @@ class ABShareBacktestEngine:
         pct_chg为百分比形式(如10.0表示10%)
         """
         limit_pct = self.get_limit_pct(board_type, is_st)
-        return pct_chg >= (limit_pct - 0.01)  # 允许0.01%误差
+        return pct_chg >= (limit_pct - 0.01)  # 允许0.01%误差 — 浮点精度和数据源四舍五入可能导致略低于理论涨停
 
     def is_limit_down(self, pct_chg: float, board_type: str = 'main',
                       is_st: bool = False) -> bool:
@@ -351,10 +355,10 @@ class ABShareBacktestEngine:
         is_st = stock_data.get('is_st', False)
 
         if action == 'buy' and self.is_limit_up(pct_chg, board_type, is_st):
-            return False, "涨停无法买入"
+            return False, "涨停无法买入"  # 涨停时买盘排队，实际无法成交
 
         if action == 'sell' and self.is_limit_down(pct_chg, board_type, is_st):
-            return False, "跌停无法卖出"
+            return False, "跌停无法卖出"  # 跌停时卖盘排队，持仓被冻结无法脱手
 
         # 退市整理检查
         if stock_data.get('is_delist', False):
@@ -384,15 +388,16 @@ class ABShareBacktestEngine:
             return None
 
         # 计算可买入金额（考虑成本）
+        # 必须预留交易成本，否则会出现现金透支
         max_amount = state.cash / (1 + self.cost_model.commission_rate + self.cost_model.transfer_fee_rate + self.cost_model.slippage_rate)
         buy_amount = min(target_amount, max_amount)
 
         if buy_amount <= 0:
             return None
 
-        # 计算股数（100股整数倍）
+        # 计算股数（100股整数倍） — A股必须整手交易，零股只能卖出不能买入
         shares = self.round_lot(buy_amount / price)
-        if shares < LOT_SIZE:
+        if shares < LOT_SIZE:  # 不足一手则放弃，无法买入零股
             return None
 
         # 计算成交金额和成本
@@ -412,6 +417,7 @@ class ABShareBacktestEngine:
             pos.cost_price = (pos.cost_price * pos.shares + amount) / total_shares
             pos.shares = total_shares
             # T+1: 记录当日新买入股数，原有持仓仍可卖出
+            # 增持时需累加，不能覆盖之前的当日买入量
             pos.shares_bought_today += shares
         else:
             state.positions[ts_code] = Position(
@@ -449,7 +455,7 @@ class ABShareBacktestEngine:
 
         pos = state.positions[ts_code]
 
-        # T+1检查: 只能卖出非当日买入的部分
+        # T+1检查: 只能卖出非当日买入的部分 — A股T+1制度核心约束
         sellable_shares = pos.shares - pos.shares_bought_today
         if sellable_shares <= 0:
             logger.debug(
@@ -645,6 +651,7 @@ class ABShareBacktestEngine:
         cum_return = nav_series.iloc[-1] - 1
 
         # 年化收益 (修正: 使用nav_series.iloc[-1]/nav_series.iloc[0]而非nav_series.iloc[-1])
+        # 不能直接用 (最终nav-1)，因为nav是累计净值比率，需要复利年化
         total_days = len(nav_series)
         annual_return = (nav_series.iloc[-1] / nav_series.iloc[0]) ** (252 / total_days) - 1 if total_days > 0 else 0
 
@@ -675,6 +682,7 @@ class ABShareBacktestEngine:
         calmar = annual_return / abs(max_drawdown) if max_drawdown != 0 else 0
 
         # 换手率 (双边: 买入+卖出)
+        # 除以2因为买卖双向计算会重复，再年化以统一不同回测长度的比较
         total_buy = sum(t.get('amount', 0) for t in trade_records if t.get('action') == 'buy')
         total_sell = sum(t.get('amount', 0) for t in trade_records if t.get('action') == 'sell')
         avg_nav = nav_df['total_value'].mean()
@@ -688,7 +696,7 @@ class ABShareBacktestEngine:
         losses = returns[returns < 0]
         pl_ratio = profits.mean() / abs(losses.mean()) if len(losses) > 0 and losses.mean() != 0 else 0
 
-        # 成本侵蚀率
+        # 成本侵蚀率 — 衡量交易成本对收益的消耗程度，过高说明换手过于频繁
         total_cost = sum(t.get('total_cost', 0) for t in trade_records)
         value_change = nav_df['total_value'].iloc[-1] - nav_df['total_value'].iloc[0]
         cost_erosion = total_cost / abs(value_change) if abs(value_change) > 1e-6 else 0
@@ -750,17 +758,17 @@ class ABShareBacktestEngine:
         if freq == 'daily':
             return True
         elif freq == 'weekly':
-            return trade_date.weekday() == 4  # 周五
+            return trade_date.weekday() == 4  # 周五调仓 — 确保周末前完成建仓
         elif freq == 'biweekly':
             # 双周：每两周的周五
             if trade_date.weekday() != 4:
                 return False
             if trading_days:
                 idx = trading_days.index(trade_date) if trade_date in trading_days else -1
-                return idx >= 0 and idx % 10 == 0
-            return trade_date.day <= 7  # 简化：每月前7天内的周五
+                return idx >= 0 and idx % 10 == 0  # 每10个交易日(约双周)触发一次
+            return trade_date.day <= 7  # 简化：每月前7天内的周五（无交易日历时的退避方案）
         elif freq == 'monthly':
-            # 月频：每月最后一个交易日
+            # 月频：每月最后一个交易日 — 避免跨月持仓不确定性
             if trading_days:
                 idx = trading_days.index(trade_date) if trade_date in trading_days else -1
                 if idx >= 0 and idx + 1 < len(trading_days):
@@ -774,7 +782,7 @@ class ABShareBacktestEngine:
     def walk_forward_validation(self, nav_series: pd.Series,
                                  train_window: int = 504,
                                  test_window: int = 63,
-                                 gap: int = 20,
+                                 gap: int = 20,  # 间隔期 — 隔离训练集和测试集，防止因子回看期信息泄漏
                                  min_periods: int = 252) -> Dict[str, Any]:
         """
         Walk-Forward滚动窗口验证
@@ -799,7 +807,7 @@ class ABShareBacktestEngine:
 
         while start + train_window + gap + test_window <= T:
             train_end = start + train_window
-            test_start = train_end + gap
+            test_start = train_end + gap  # gap隔离期：训练集末尾到测试集开始的间隔，防止信息泄漏
             test_end = test_start + test_window
 
             train_nav = nav_series.iloc[start:train_end]
@@ -822,7 +830,7 @@ class ABShareBacktestEngine:
                     'cum_return': round(test_nav.iloc[-1] / test_nav.iloc[0] - 1, 4),
                 })
 
-            start += test_window  # 滚动
+            start += test_window  # 滚动 — 非重叠，每个窗口独立测试
 
         if not results:
             return {'error': 'No valid walk-forward windows'}
@@ -839,7 +847,7 @@ class ABShareBacktestEngine:
             'std_sharpe': round(np.std(sharpes), 2),
             'avg_max_drawdown': round(np.mean(drawdowns), 4),
             'avg_return': round(np.mean(returns_list), 4),
-            'consistency': round(sum(1 for s in sharpes if s > 0) / len(sharpes), 4),  # 正Sharpe比例
+            'consistency': round(sum(1 for s in sharpes if s > 0) / len(sharpes), 4),  # 正Sharpe比例 — 衡量策略稳定性，越高越好
         }
 
     def monte_carlo_permutation_test(self, strategy_returns: pd.Series,
@@ -856,7 +864,7 @@ class ABShareBacktestEngine:
         """
         actual_sharpe = strategy_returns.mean() / strategy_returns.std() * np.sqrt(252) if strategy_returns.std() > 0 else 0
 
-        # 块置换: 保持时间序列结构
+        # 块置换: 保持时间序列结构 — 普通随机打乱会破坏自相关，导致显著性检验失真
         n = len(strategy_returns)
         permuted_sharpes = []
 
@@ -884,7 +892,7 @@ class ABShareBacktestEngine:
         return {
             'actual_sharpe': round(actual_sharpe, 2),
             'p_value': round(p_value, 4),
-            'is_significant': p_value < 0.05,
+            'is_significant': p_value < 0.05,  # 5%显著性水平，低于此则拒绝"策略无效"零假设
             'permuted_sharpe_mean': round(np.mean(permuted_sharpes), 2),
             'permuted_sharpe_std': round(np.std(permuted_sharpes), 2),
             'n_permutations': n_permutations,
@@ -909,9 +917,11 @@ class ABShareBacktestEngine:
         from scipy.stats import norm
 
         # 期望最大Sharpe(在零假设下)
+        # 多次测试会导致最佳Sharpe虚高，DSR修正此偏差
         # E[max_SR] = (1 - gamma) * Phi^{-1}(1 - 1/N) + gamma * Phi^{-1}(1 - 1/(N*e))
         # 简化: E[max_SR] ≈ sqrt(var(SR)) * sqrt(2 * ln(N))
         var_sr = (1 - skewness * sharpe + (kurtosis - 1) / 4 * sharpe**2) / max(backtest_length_years, 0.5)
+        # 0.5年下限 — 过短的回测期导致Sharpe方差估计不可靠
         expected_max_sr = np.sqrt(var_sr) * np.sqrt(2 * np.log(max(n_trials, 2)))
 
         # DSR = Phi((SR - E[max_SR]) / SE(SR))
@@ -925,7 +935,7 @@ class ABShareBacktestEngine:
             'sharpe': round(sharpe, 2),
             'expected_max_sharpe': round(expected_max_sr, 2),
             'dsr': round(dsr, 4),
-            'is_significant': dsr > 0.95,
+            'is_significant': dsr > 0.95,  # DSR>0.95表示即使考虑多次测试，Sharpe仍有统计显著性
             'n_trials': n_trials,
             'backtest_years': backtest_length_years,
         }
@@ -936,11 +946,12 @@ class ABShareBacktestEngine:
         回测太短则Sharpe不可信
 
         MinBTL = (z_alpha / SR)^2
+        若实际回测长度不足MinBTL，则观测到的Sharpe可能只是随机波动
         """
         from scipy.stats import norm
         z = norm.ppf(confidence)
 
-        if abs(sharpe) < 0.01:
+        if abs(sharpe) < 0.01:  # Sharpe接近零时MinBTL趋向无穷，说明策略不具统计意义
             return {'min_years': float('inf'), 'is_sufficient': False}
 
         min_years = (z / sharpe) ** 2
@@ -1018,9 +1029,9 @@ class ABShareBacktestEngine:
                                train_start: date,
                                train_end: date,
                                test_end: date,
-                               retrain_freq: int = 63,
+                               retrain_freq: int = 63,  # 约1个季度重训练一次，平衡模型时效性与计算成本
                                train_window: int = 504,
-                               gap: int = 60,
+                               gap: int = 60,  # 60个交易日间隔 — 覆盖最大因子回看期，杜绝训练数据泄漏到测试期
                                initial_capital: float = 1000000.0,
                                universe: Optional[List[str]] = None,
                                price_data: Optional[Dict[Tuple[str, date], Dict[str, Any]]] = None,
@@ -1093,7 +1104,7 @@ class ABShareBacktestEngine:
 
             # 测试期回测
             window_trading_days = [td for td in trading_days if actual_test_start <= td <= current_test_end]
-            if len(window_trading_days) < 5:
+            if len(window_trading_days) < 5:  # 少于5个交易日无法计算有效统计量
                 break
 
             try:
@@ -1170,9 +1181,9 @@ class ABShareBacktestEngine:
                      initial_capital: float = 1000000.0,
                      trading_days: Optional[List[date]] = None,
                      price_data: Optional[Dict[Tuple[str, date], Dict[str, Any]]] = None,
-                     max_turnover: float = 1.0,
+                     max_turnover: float = 1.0,  # 单次最大换手率，1.0=无限制；设低可模拟流动性约束
                      benchmark_nav: Optional[List[Dict[str, Any]]] = None,
-                     use_next_day_open: bool = True) -> Dict[str, Any]:
+                     use_next_day_open: bool = True) -> Dict[str, Any]:  # 默认True — 实盘中信号收盘后才生成，只能在次日开盘执行
         """
         回测主循环 (机构级: 完整信号→权重→交易→NAV流程)
 
@@ -1224,6 +1235,7 @@ class ABShareBacktestEngine:
                 continue
 
             # 每日开盘: 重置shares_bought_today (T+1限制只针对当日买入，在日初统一重置)
+            # 前一日买入的股份在新一天变为可卖出状态
             for pos in state.positions.values():
                 pos.shares_bought_today = 0
 
@@ -1241,44 +1253,45 @@ class ABShareBacktestEngine:
                 if target_weights:
                     target_w = pd.Series(target_weights)
 
-                    # 换手率控制
+                    # 换手率控制 — 防止单次调仓换手过大导致冲击成本失控
                     if not prev_weights.empty and max_turnover < 1.0:
                         turnover = (target_w.subtract(prev_weights, fill_value=0).abs().sum()) / 2
                         if turnover > max_turnover:
-                            alpha = max_turnover / turnover
+                            alpha = max_turnover / turnover  # 按比例缩减偏离，使换手恰好等于上限
                             target_w = prev_weights.reindex(target_w.index, fill_value=0) + alpha * (
                                 target_w - prev_weights.reindex(target_w.index, fill_value=0)
                             )
-                            # 归一化
+                            # 归一化 — 缩减后总权重<1，剩余权重按比例分配给所有持仓 — 缩减后权重之和可能不再为1，需重新归一
                             if target_w.sum() > 0:
                                 target_w = target_w / target_w.sum()
 
                     # 确定成交日期和价格:
                     # 机构实盘: 信号T日收盘生成 → T+1日开盘价成交
-                    # 简化回测: 信号T日收盘生成 → T日收盘价成交 (use_next_day_open=False)
+                    # 这是A股回测的关键约束——收盘后才能看到数据并决策，次日开盘才能执行
+                    # 简化回测: 信号T日收盘生成 → T日收盘价成交 (use_next_day_open=False，存在前视偏差)
                     if use_next_day_open:
                         # 查找下一交易日
                         current_idx = trading_day_to_idx.get(trade_date, -1)
                         if current_idx >= 0 and current_idx + 1 < len(trading_days):
                             exec_date = trading_days[current_idx + 1]
                         else:
-                            exec_date = trade_date  # 回退到当日
+                            exec_date = trade_date  # 回退到当日 — 最后一日无次日数据时的兜底
                     else:
                         exec_date = trade_date
 
-                    # 执行交易: 先卖后买
+                    # 执行交易: 先卖后买 — 先释放现金再用于买入，避免现金不足
                     # 计算当前持仓市值
                     current_total = state.cash + sum(
                         pos.market_value for pos in state.positions.values()
                     )
 
-                    # 卖出: 不在目标组合中的持仓
+                    # 卖出: 不在目标组合中的持仓 — 目标权重为零或极低则清仓
                     for ts_code in list(state.positions.keys()):
-                        if ts_code not in target_w or target_w[ts_code] < 1e-6:
+                        if ts_code not in target_w or target_w[ts_code] < 1e-6:  # 1e-6阈值过滤浮点噪声
                             pos = state.positions[ts_code]
                             stock_key = (ts_code, exec_date)
                             stock_info = price_data.get(stock_key, {}) if price_data else {}
-                            # 使用次日开盘价成交(实盘真实)，回退到收盘价
+                            # 使用次日开盘价成交(实盘真实)，回退到收盘价 — 开盘价缺失时用收盘价兜底
                             if use_next_day_open:
                                 sell_price = stock_info.get('open', stock_info.get('close', pos.cost_price))
                             else:
@@ -1286,9 +1299,9 @@ class ABShareBacktestEngine:
                             self.execute_sell(state, ts_code, pos.shares, sell_price,
                                             exec_date, stock_info)
 
-                    # 买入: 目标组合中的持仓
+                    # 买入: 目标组合中的持仓 — 按目标权重分配资金
                     for ts_code, weight in target_w.items():
-                        if weight < 1e-6:
+                        if weight < 1e-6:  # 权重极低则跳过，避免无效交易
                             continue
 
                         target_amount = weight * current_total
@@ -1309,7 +1322,7 @@ class ABShareBacktestEngine:
                             current_amount = state.positions[ts_code].shares * buy_price
 
                         # 只在需要增仓时买入
-                        if target_amount > current_amount * 1.05:  # 5%缓冲避免微小交易
+                        if target_amount > current_amount * 1.05:  # 5%缓冲 — 偏离不足5%不调仓，降低摩擦成本和无效换手
                             self.execute_buy(state, ts_code, target_amount - current_amount,
                                            buy_price, exec_date, stock_info)
 
@@ -1379,6 +1392,7 @@ class ABShareBacktestEngine:
                 return False
 
         # 跟踪误差 = L2范数(current - target)
+        # 比固定频率更贴近机构实盘 — 只有偏离足够大才值得承担交易成本调仓
         common = current_weights.index.intersection(target_weights.index)
         if len(common) == 0:
             return True
@@ -1392,7 +1406,7 @@ class ABShareBacktestEngine:
 
     def check_industry_constraints(self, target_weights: pd.Series,
                                     industry_data: Dict[str, str],
-                                    max_industry_weight: float = 0.30) -> Dict[str, Any]:
+                                    max_industry_weight: float = 0.30) -> Dict[str, Any]:  # 30%上限 — 防止单行业过度集中，合规风控要求
         """
         行业权重约束检查
         单个行业权重不超过阈值
@@ -1415,13 +1429,13 @@ class ABShareBacktestEngine:
 
         adjusted = target_weights.copy()
         if not is_valid:
-            # 按行业缩放: 超限行业按比例缩减
+            # 按行业缩放: 超限行业按比例缩减 — 同行业内各股票等比例削减，避免人为选择偏差
             for industry, total_w in violations.items():
                 scale = max_industry_weight / total_w
                 for ts_code in target_weights.index:
                     if industry_data.get(ts_code) == industry:
                         adjusted[ts_code] *= scale
-            # 归一化
+            # 归一化 — 缩减后总权重<1，剩余权重按比例分配给所有持仓
             if adjusted.sum() > 0:
                 adjusted = adjusted / adjusted.sum()
 
@@ -1497,6 +1511,7 @@ class EventDrivenBacktestEngine(ABShareBacktestEngine):
                 continue
 
             # 每日开盘: 重置shares_bought_today (T+1限制只针对当日买入，在日初统一重置)
+            # 前一日买入的股份在新一天变为可卖出状态
             for pos in state.positions.values():
                 pos.shares_bought_today = 0
 
@@ -1543,7 +1558,7 @@ class EventDrivenBacktestEngine(ABShareBacktestEngine):
                         pos.market_value for pos in state.positions.values()
                     )
 
-                    # T+1执行: 信号T日收盘生成 → T+1日开盘价成交
+                    # T+1执行: 信号T日收盘生成 → T+1日开盘价成交 — 消除前视偏差的核心机制
                     if use_next_day_open:
                         current_idx = trading_day_to_idx.get(trade_date, -1)
                         if current_idx >= 0 and current_idx + 1 < len(trading_days):
@@ -1605,7 +1620,7 @@ class EventDrivenBacktestEngine(ABShareBacktestEngine):
                         if ts_code in state.positions:
                             current_amount = state.positions[ts_code].shares * buy_price
 
-                        if target_amount > current_amount * 1.05:
+                        if target_amount > current_amount * 1.05:  # 5%缓冲 — 与基础引擎一致，偏离不足5%不调仓
                             order = Order(
                                 order_id=f"buy_{ts_code}_{exec_date}",
                                 ts_code=ts_code, direction='buy',
@@ -1685,7 +1700,7 @@ class EventDrivenBacktestEngine(ABShareBacktestEngine):
             'total_days': len(state.nav_history),
             'total_filled_orders': total_filled,
             'total_rejected_orders': total_rejected,
-            'order_fill_rate': round(total_filled / (total_filled + total_rejected), 4) if (total_filled + total_rejected) > 0 else 1.0,
+            'order_fill_rate': round(total_filled / (total_filled + total_rejected), 4) if (total_filled + total_rejected) > 0 else 1.0,  # 成交率过低说明策略在涨跌停/停牌时频繁受阻
         }
 
     # ==================== 多组合并行回测 ====================

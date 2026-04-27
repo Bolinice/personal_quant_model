@@ -10,9 +10,12 @@ import { monitorApi } from '@/api';
 import type { MonitorFactorHealth, MonitorModelHealth, MonitorAlert, Regime } from '@/api';
 import { PageHeader, GlassPanel, GlassTable, NeonChip, MetricCard } from '@/components/ui';
 
+// regimeLabel：后端regime枚举到中文的映射，trending/range_bound/defensive/aggressive
+// 对应趋势/震荡/防御/进攻四种市场状态，regime模块根据波动率和趋势强度判定
 const regimeLabel: Record<string, string> = {
   trending: '趋势', range_bound: '震荡', defensive: '防御', aggressive: '进攻',
 };
+// regimeColor：防御(红)表示应降低仓位，进攻(绿)表示可加仓，震荡(橙)表示需谨慎
 const regimeColor: Record<string, string> = {
   trending: '#22d3ee', range_bound: '#f59e0b', defensive: '#f43f5e', aggressive: '#10b981',
 };
@@ -112,7 +115,7 @@ export default function MonitorDashboard() {
                   <TableCell>因子名称</TableCell>
                   <TableCell>覆盖率</TableCell>
                   <TableCell>IC均值</TableCell>
-                  <TableCell>IR</TableCell>
+                  <TableCell>ICIR</TableCell>
                   <TableCell>PSI</TableCell>
                   <TableCell>状态</TableCell>
                 </TableRow>
@@ -124,7 +127,8 @@ export default function MonitorDashboard() {
                     <TableCell sx={{ fontFamily: 'monospace' }}>{h.factor_name}</TableCell>
                     <TableCell>{h.coverage_rate != null ? `${(h.coverage_rate * 100).toFixed(1)}%` : '-'}</TableCell>
                     <TableCell>{h.ic_mean != null ? h.ic_mean.toFixed(4) : '-'}</TableCell>
-                    <TableCell>{h.ir != null ? h.ir.toFixed(4) : '-'}</TableCell>
+                    {/* ICIR=IC均值/IC标准差，即信息比率，衡量因子预测稳定性；可为负值，负值说明因子方向性差或预测不稳定 */}
+                    <TableCell>{h.icir != null ? h.icir.toFixed(2) : '-'}</TableCell>
                     <TableCell>{h.psi != null ? h.psi.toFixed(4) : '-'}</TableCell>
                     <TableCell>
                       <NeonChip

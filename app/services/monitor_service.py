@@ -26,7 +26,7 @@ class MonitorService:
         limit: int = 100,
     ) -> List[Dict[str, Any]]:
         """查询因子健康状态 — 优先预计算表，其次实时计算截面IC"""
-        # 先查预计算表
+        # 优先查预计算表，避免实时计算的高开销（截面IC需遍历全市场数据）
         query = db.query(MonitorFactorHealth)
         if trade_date:
             query = query.filter(MonitorFactorHealth.trade_date == trade_date)
@@ -44,12 +44,12 @@ class MonitorService:
                 "missing_rate": float(r.missing_rate) if r.missing_rate is not None else None,
                 "ic_rolling": float(r.ic_rolling) if r.ic_rolling is not None else None,
                 "ic_mean": float(r.ic_mean) if r.ic_mean is not None else None,
-                "ir": float(r.ir) if r.ir is not None else None,
+                "icir": float(r.icir) if r.icir is not None else None,
                 "psi": float(r.psi) if r.psi is not None else None,
                 "health_status": r.health_status,
             } for r in records]
 
-        # 预计算表无数据 → 实时计算
+        # 预计算表无数据时降级为实时计算，代价较高但保证功能可用
         return MonitorService._compute_factor_health_realtime(db, trade_date, factor_name, health_status, limit)
 
     @staticmethod
@@ -74,17 +74,18 @@ class MonitorService:
             return MonitorService._fallback_factor_health(db, trade_date)
         latest_date = latest_date[0]
 
-        # 按成交额取前300只股票
+        # 按成交额取前300只股票 — 近似沪深300大市值池，兼顾代表性和计算性能
+        # 成交额排名比市值更稳定，避免停牌/新股等干扰
         top_stocks = db.query(StockDaily.ts_code).filter(
             StockDaily.trade_date == latest_date,
             StockDaily.amount.isnot(None),
         ).order_by(desc(StockDaily.amount)).limit(300).all()
         stock_pool = [s[0] for s in top_stocks]
 
-        if len(stock_pool) < 50:
+        if len(stock_pool) < 50:  # 截面IC统计意义要求至少50个截面数据点，否则Spearman相关不可靠
             return MonitorService._fallback_factor_health(db, trade_date)
 
-        # 取股票池内最近20个交易日的数据
+        # 取20个交易日的数据用于滚动IC计算 — 20日约1个月，兼顾统计显著性与因子时效性
         recent_dates = db.query(StockDaily.trade_date).filter(
             StockDaily.ts_code.in_(stock_pool),
         ).order_by(
@@ -95,7 +96,8 @@ class MonitorService:
         if not date_list:
             return MonitorService._fallback_factor_health(db, trade_date)
 
-        # 构建截面数据 — 确保所有值为float（避免Decimal与numpy冲突）
+        # 构建截面数据 — 显式转float避免Decimal与numpy/scipy运算冲突
+        # PostgreSQL返回Decimal类型，scipy.spearmanr无法处理Decimal
         rows = db.query(
             StockDaily.ts_code,
             StockDaily.trade_date,
@@ -125,17 +127,17 @@ class MonitorService:
         if not factors:
             return []
 
-        # 定义截面因子映射
+        # 截面因子定义：用日线字段近似构造，因子代码到截面因子的映射见 map_factor_to_section
         截面因子定义 = {
             'momentum': lambda m: m['pct_chg'].fillna(0),
             'volatility': lambda m: m['vol'].fillna(m['vol'].median()),
-            'reversal': lambda m: -m['pct_chg'].fillna(0),
-            'volume_price': lambda m: (m['amount'] / m['close']).fillna(0),
-            'size': lambda m: m['close'].fillna(m['close'].median()),
+            'reversal': lambda m: -m['pct_chg'].fillna(0),  # 反转=动量的反向
+            'volume_price': lambda m: (m['amount'] / m['close']).fillna(0),  # 近似换手率
+            'size': lambda m: m['close'].fillna(m['close'].median()),  # 价格作为市值代理
             'liquidity': lambda m: m['amount'].fillna(m['amount'].median()),
         }
 
-        # 因子代码 → 截面因子映射
+        # 因子代码 → 截面因子的启发式映射，基于代码关键词和类别推断
         def map_factor_to_section(f):
             code = f.factor_code.upper() if f.factor_code else ''
             cat = (f.category or '').lower()
@@ -152,28 +154,28 @@ class MonitorService:
             elif any(k in code for k in ['PE', 'PB', 'PS', 'VAL']):
                 return 'volume_price'
             elif any(k in code for k in ['ROE', 'ROA', 'PROF', 'EAR', 'EPS']):
-                return 'size'
+                return 'size'  # 盈利因子样本量特征类似size，暂归同类
             elif cat == 'price':
                 return 'momentum'
             elif cat == 'fundamental':
                 return 'volume_price'
             return 'momentum'
 
-        # 按日期计算截面IC
+        # 按日期计算截面IC：Spearman秩相关，对单调非线性变换鲁棒
         ic_records: Dict[str, List[float]] = {}  # factor_code → [ic_values across dates]
         coverage_records: Dict[str, List[float]] = {}
         psi_records: Dict[str, float] = {}
 
-        # 参考分布（最早5天的因子值）用于PSI计算
+        # 参考分布（最早5天的因子值）用于PSI计算 — 5天作为基准期，与当前分布对比检测漂移
         ref_dates = date_list[-5:] if len(date_list) >= 5 else date_list
         ref_rows = df[df['trade_date'].isin(ref_dates)]
 
-        for i, current_date in enumerate(date_list[:10]):
+        for i, current_date in enumerate(date_list[:10]):  # 取最近10天计算IC，平衡计算量与覆盖面
             day_df = df[df['trade_date'] == current_date].copy()
             if len(day_df) < 50:
                 continue
 
-            # 下期收益
+            # 下期收益 — 用次日截面收益率作为因变量，确保IC是预测性而非同步性
             if i + 1 >= len(date_list):
                 continue
             next_date = date_list[i + 1]
@@ -206,11 +208,11 @@ class MonitorService:
                         ic_records[code].append(ic_val)
                         coverage_records[code].append(coverage)
 
-            # PSI计算（用截面因子整体）
+            # PSI计算：比较当前截面分布与参考分布的差异，>=0.25视为显著漂移
             for section_name, section_fn in 截面因子定义.items():
                 current_vals = section_fn(merged).dropna()
-                ref_vals = section_fn(ref_rows).dropna() if len(ref_rows) > 30 else current_vals
-                if len(current_vals) >= 30 and len(ref_vals) >= 30:
+                ref_vals = section_fn(ref_rows).dropna() if len(ref_rows) > 30 else current_vals  # 参考样本不足时退化为当前值，PSI≈0
+                if len(current_vals) >= 30 and len(ref_vals) >= 30:  # PSI需要至少30个样本才具统计意义
                     from app.core.factor_monitor import FactorMonitor
                     monitor = FactorMonitor()
                     psi_val = monitor.psi(current_vals, ref_vals)
@@ -226,17 +228,20 @@ class MonitorService:
 
             if ics:
                 ic_mean = round(np.mean(ics), 4)
-                ic_std = np.std(ics) if len(ics) > 1 else 0.001
-                ir = round(ic_mean / ic_std, 4) if ic_std > 0 else 0.0
+                ic_std = np.std(ics) if len(ics) > 1 else 0.001  # 单期时设最小值避免除零
+                # ICIR = IC均值/IC标准差，可正可负；负ICIR意味着因子预测方向与实际相反，应反向使用或标记失效
+                icir = round(ic_mean / ic_std, 4) if ic_std > 0 else 0.0
                 coverage = round(np.mean(coverages), 4)
             else:
                 ic_mean = None
-                ir = None
+                icir = None
                 coverage = None
 
             psi_val = psi_records.get(section)
 
-            # 健康状态判定
+            # 健康状态判定：基于绝对IC均值和PSI分级
+            # |IC|<0.02 为弱势因子(warning)，|IC|<0.01 近乎无预测力(critical)
+            # PSI>=0.25 表示因子分布发生显著漂移(warning)
             status = 'healthy'
             if ic_mean is not None and abs(ic_mean) < 0.02:
                 status = 'warning'
@@ -254,7 +259,7 @@ class MonitorService:
                 "missing_rate": round(1.0 - (coverage or 0), 4) if coverage is not None else None,
                 "ic_rolling": ics[-1] if ics else None,
                 "ic_mean": ic_mean,
-                "ir": ir,
+                "icir": icir,
                 "psi": psi_val,
                 "health_status": status,
             })
@@ -282,9 +287,9 @@ class MonitorService:
             "missing_rate": None,
             "ic_rolling": None,
             "ic_mean": None,
-            "ir": None,
+            "icir": None,
             "psi": None,
-            "health_status": "healthy",
+            "health_status": "healthy",  # 降级时默认healthy，避免无数据时误报critical
         } for f in factors]
 
     @staticmethod
@@ -310,7 +315,7 @@ class MonitorService:
         """获取市场状态 — 从数据库读取指数日线数据，调用RegimeDetector"""
         from app.core.regime import RegimeDetector
 
-        # 查询沪深300指数最近120天日线数据
+        # 查询沪深300最近120天 — 120天约半年，覆盖一个完整市场周期，RegimeDetector据此判断趋势/震荡
         hs300_rows = db.query(IndexDaily).filter(
             IndexDaily.index_code == '000300.SH'
         ).order_by(IndexDaily.trade_date.desc()).limit(120).all()

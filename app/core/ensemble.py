@@ -43,21 +43,21 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────
 
 DEFAULT_WEIGHTS: Dict[str, float] = {
-    "quality_growth": 0.35,
-    "expectation": 0.30,
-    "residual_momentum": 0.25,
-    "flow_confirm": 0.10,
+    "quality_growth": 0.35,   # 最高权重: 质量因子长期IC最稳定, A股超额主要来源
+    "expectation": 0.30,      # 次高: 分析师修正信号对短期收益预测力强
+    "residual_momentum": 0.25, # 中等: 残差动量比原始动量更纯, 但衰减快
+    "flow_confirm": 0.10,     # 最低: 资金流噪音大, 仅作确认信号避免虚假突破
 }
 
 # 权重边界: 单模块权重 ∈ [MIN_WEIGHT, MAX_WEIGHT]
-MIN_WEIGHT = 0.10
-MAX_WEIGHT = 0.45
+MIN_WEIGHT = 0.10  # 防止任一模块完全失效, 保留最低信号贡献
+MAX_WEIGHT = 0.45  # 防止单模块独大导致集中度风险
 
 # 动态收缩系数: w = SHRINK_BASE * w_base + (1 - SHRINK_BASE) * w_dynamic
-SHRINK_BASE = 0.70
+SHRINK_BASE = 0.70  # 0.7基线权重收缩: 信任历史基线多于短期IC, 避免过拟合近期
 
 # 风险惩罚系数
-RISK_LAMBDA = 0.35
+RISK_LAMBDA = 0.35  # 惩罚强度: 使风险厌恶与alpha激励大致等量级
 
 
 # ─────────────────────────────────────────────
@@ -113,7 +113,7 @@ class EnsembleEngine:
                 module_scores[name] = scores
             except Exception as e:
                 logger.error(f"[Ensemble] 模块 {name} 计算失败: {e}")
-                module_scores[name] = pd.Series(0.0, index=df.index)
+                module_scores[name] = pd.Series(0.0, index=df.index)  # 模块失败不阻断, 零分中性化处理
         return module_scores
 
     def compute_risk_penalty(self, df: pd.DataFrame, **kwargs) -> pd.Series:
@@ -152,6 +152,7 @@ class EnsembleEngine:
         for name, base_w in base_weights.items():
             ic = ic_dict.get(name, 0.0)
             # IC调整幅度: IC * 0.3 (IC=0.1 → +3%)
+            # 系数0.3控制IC对权重的边际影响, 避免短期IC噪声导致权重剧烈漂移
             adjustment = ic * 0.3
             dynamic_weights[name] = base_w + adjustment
 
@@ -186,7 +187,7 @@ class EnsembleEngine:
         收缩公式: w = shrink_base * w_base + (1 - shrink_base) * w_dynamic
         """
         if module_corr is None:
-            # 无相关性信息时, 轻微收缩
+            # 无相关性信息时, 轻微收缩 (保守策略: 缺少数据时更依赖基线)
             shrunk = {}
             for name, w in weights.items():
                 base_w = self.base_weights.get(name, 0.25)
@@ -208,7 +209,7 @@ class EnsembleEngine:
 
         avg_corr = total_corr / count if count > 0 else 0.0
 
-        # 相关性越高, 收缩越强
+        # 相关性越高, 收缩越强 (高相关意味着模块信号冗余, 应更信任基线权重)
         effective_shrink = min(1.0, self.shrink_base + 0.3 * avg_corr)
 
         shrunk = {}
@@ -300,7 +301,7 @@ class EnsembleEngine:
         raw_score = pd.Series(0.0, index=df.index)
         for name, w in weights.items():
             if name in module_scores:
-                raw_score += w * module_scores[name]
+                raw_score += w * module_scores[name]  # 加权求和: 各模块得分已归一化, 直接加权即可
 
         meta["raw_score_stats"] = {
             "mean": float(raw_score.mean()),
@@ -309,7 +310,7 @@ class EnsembleEngine:
             "max": float(raw_score.max()),
         }
 
-        # 风险惩罚独立扣分
+        # 风险惩罚独立扣分: 不参与加权融合, 避免风险因子与alpha因子互相稀释
         if apply_risk_penalty:
             risk_penalty = self.compute_risk_penalty(df, **kwargs)
             final_score = raw_score - self.risk_lambda * risk_penalty

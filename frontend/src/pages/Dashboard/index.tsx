@@ -16,6 +16,8 @@ import { factorApi, modelApi, monitorApi } from '@/api';
 import type { Regime, MonitorAlert, MonitorFactorHealth } from '@/api';
 import { PageHeader, GlassPanel, NeonChip, MetricCard } from '@/components/ui';
 
+// regimeLabel：映射后端regime枚举到中文，兼容新旧两种枚举值
+// mean_reverting/range_bound均映射为"震荡"，risk_on/aggressive均映射为"进攻"
 const regimeLabel: Record<string, string> = {
   trending: '趋势', mean_reverting: '震荡', range_bound: '震荡', defensive: '防御', risk_on: '进攻', aggressive: '进攻',
 };
@@ -49,10 +51,15 @@ export default function Dashboard() {
 
   useEffect(() => {
     Promise.all([
+      // 获取因子总数（limit=1只取首条以获取total计数，避免全量拉取）
       factorApi.list({ limit: 1 }).then((res) => setFactorCount(res.data.total ?? res.data.length ?? 0)).catch(() => {}),
+      // 获取模型总数（同上，limit=1用于计数）
       modelApi.list({ limit: 1 }).then((res) => setModelCount(res.data.total ?? res.data.length ?? 0)).catch(() => {}),
+      // 获取当前市场状态（趋势/震荡/防御/进攻），用于顶部状态卡片和详情面板
       monitorApi.getRegime().then((res) => setRegime(res.data)).catch(() => {}),
+      // 获取最近5条未解决告警，用于告警预览面板
       monitorApi.getAlerts({ page_size: 5, resolved: false }).then((res) => setAlerts(res.data)).catch(() => {}),
+      // 获取因子健康状态，用于健康概览面板（健康/警告/异常计数和健康率）
       monitorApi.getFactorHealth().then((res) => setFactorHealth(res.data)).catch(() => {}),
     ]).finally(() => setLoading(false));
   }, []);

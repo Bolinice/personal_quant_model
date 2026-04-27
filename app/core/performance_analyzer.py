@@ -110,6 +110,7 @@ class PerformanceAnalyzer:
         return max_dd, start_idx, end_idx
 
     def calc_var(self, returns: pd.Series, confidence: float = 0.95) -> float:
+        # 为什么用历史模拟法而非参数法：A股收益分布非正态（厚尾+偏度），参数法低估极端损失
         """计算VaR（Value at Risk）"""
         return np.percentile(returns, (1 - confidence) * 100)
 
@@ -121,8 +122,9 @@ class PerformanceAnalyzer:
     # ==================== 风险调整收益指标 ====================
 
     def calc_sharpe_ratio(self, returns: pd.Series, risk_free_rate: float = 0.03) -> float:
+        # 为什么risk_free_rate=0.03：中国10年期国债收益率约2.5-3.5%，取3%作为A股无风险利率近似
         """计算夏普比率"""
-        excess_returns = returns - risk_free_rate / 252
+        excess_returns = returns - risk_free_rate / 252  # 日频无风险利率=年化/252交易日
 
         if excess_returns.std() == 0:
             return 0
@@ -130,6 +132,7 @@ class PerformanceAnalyzer:
         return excess_returns.mean() / excess_returns.std() * np.sqrt(252)
 
     def calc_sortino_ratio(self, returns: pd.Series, risk_free_rate: float = 0.03) -> float:
+        # 为什么用下行波动率而非总波动率：A股收益分布右偏+尖峰厚尾，Sortino只惩罚下行风险，更符合投资者感知
         """计算索提诺比率"""
         excess_returns = returns - risk_free_rate / 252
         downside_vol = self.calc_downside_volatility(returns)
@@ -305,6 +308,7 @@ class PerformanceAnalyzer:
 
         # 如果有基准数据
         if benchmark_nav is not None and len(benchmark_nav) > 0:
+            # 为什么默认用沪深300做基准：增强策略的基准是指数本身，沪深300是最常见的增强基准
             benchmark_returns = benchmark_nav.pct_change().dropna()
 
             # 对齐数据
@@ -405,6 +409,8 @@ class PerformanceAnalyzer:
         """
         Brinson归因分解
         超额收益 = 分配效应 + 选择效应 + 交互效应
+        # 业务含义：分配效应=超配/低配行业带来的收益(仓位选择)，选择效应=同行业内选股带来的收益(个股选择)
+        # 交互效应=超配行业且该行业选股优异的协同收益(通常较小)
 
         Args:
             portfolio_weights_t: 组合权重 (行业/因子)
@@ -424,9 +430,9 @@ class PerformanceAnalyzer:
         wb = benchmark_weights_t.reindex(common).fillna(0)
         rb = benchmark_returns_t.reindex(common).fillna(0)
 
-        allocation = ((wp - wb) * rb).sum()
-        selection = (wb * (rp - rb)).sum()
-        interaction = ((wp - wb) * (rp - rb)).sum()
+        allocation = ((wp - wb) * rb).sum()    # 分配效应：权重偏离×基准收益，衡量超配/低配行业的贡献
+        selection = (wb * (rp - rb)).sum()      # 选择效应：基准权重×收益偏离，衡量同行业内选股超额
+        interaction = ((wp - wb) * (rp - rb)).sum()  # 交互效应：权重偏离×收益偏离，分配与选择的协同
 
         return {
             'allocation_effect': round(allocation, 6),
@@ -445,6 +451,7 @@ class PerformanceAnalyzer:
         因子收益归因
         R_portfolio = w'*X*f + w'*u
         各因子贡献 = Σ_i w_i * X_i_k * f_k
+        # 业务含义：将组合收益分解为各风险因子的贡献+特质收益，判断超额收益来源是因子暴露还是选股能力
         """
         common = portfolio_weights.index.intersection(factor_exposures.index)
         if len(common) == 0:
@@ -472,7 +479,7 @@ class PerformanceAnalyzer:
             'total': round(sum(factor_contributions.values()) + specific_contribution, 6),
         }
 
-    def rolling_performance(self, returns: pd.Series, window: int = 60,
+    def rolling_performance(self, returns: pd.Series, window: int = 60,  # 为什么60：约一个季度交易日，滚动绩效需足够样本计算统计量
                              risk_free_rate: float = 0.03) -> pd.DataFrame:
         """
         滚动绩效指标 (向量化: pandas rolling替代逐窗口循环)
@@ -528,7 +535,7 @@ class PerformanceAnalyzer:
         for regime in aligned_regime.unique():
             regime_returns = aligned_returns[aligned_regime == regime]
             if len(regime_returns) < 5:
-                continue
+                continue  # 为什么5：少于5个交易日的状态样本不足以计算有意义的统计量
             sharpe = regime_returns.mean() / regime_returns.std() * np.sqrt(252) if regime_returns.std() > 0 else 0
             cum = (1 + regime_returns).cumprod()
             max_dd = ((cum - cum.cummax()) / cum.cummax()).min()
@@ -550,6 +557,8 @@ class PerformanceAnalyzer:
         评估策略在A股极端市场环境下的表现
         """
         if stress_periods is None:
+            # A股历史极端事件：覆盖股灾、熔断、贸易战、疫情、双减、地缘冲突等典型压力场景
+            # 为什么选这些事件：这些是A股近10年最大回撤区间，检验策略在极端环境下的韧性
             stress_periods = [
                 {'name': '2015股灾', 'start': '2015-06-15', 'end': '2015-08-26'},
                 {'name': '2016熔断', 'start': '2016-01-04', 'end': '2016-01-28'},

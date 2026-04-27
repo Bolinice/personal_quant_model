@@ -15,7 +15,7 @@ class MonitorFactorHealth(Base):
     missing_rate = Column(Numeric(6, 4), comment="缺失率")
     ic_rolling = Column(Numeric(10, 6), comment="滚动IC")
     ic_mean = Column(Numeric(10, 6), comment="IC均值")
-    ir = Column(Numeric(10, 6), comment="ICIR")
+    icir = Column(Numeric(10, 6), comment="ICIR(IC信息比率)")
     psi = Column(Numeric(10, 6), comment="PSI(群体稳定性指数)")
     health_status = Column(String(20), default="healthy", comment="健康状态: healthy/warning/critical")
 

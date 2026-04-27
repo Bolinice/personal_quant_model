@@ -15,11 +15,19 @@ from app.core.logging import logger
 class RiskModel:
     """风险模型 - 符合ADD 10节"""
 
-    # Barra风格因子定义 (ADD 10.1节)
+    # Barra USE4风格因子定义 (ADD 10.1节)
+    # 行业因子由单独的行业分类处理，此处仅列风格因子
     BARRA_FACTORS = [
-        'beta', 'book_to_price', 'earnings_yield', 'growth',
-        'leverage', 'liquidity', 'momentum', 'non_linear_size',
-        'residual_volatility', 'size',
+        'beta',                   # 系统性风险暴露：个股对市场的敏感度
+        'book_to_price',          # 价值因子：BP越高越偏价值风格
+        'earnings_yield',         # 盈利因子：EP_TTM，高EP即低PE，价值维度补充
+        'growth',                 # 成长因子：营收同比增速
+        'leverage',               # 杠杆因子：资产负债率，高杠杆放大尾部风险
+        'liquidity',              # 流动性因子：20日换手率，低流动性股票有流动性溢价
+        'momentum',               # 动量因子：跳月12月动量，跳月避免短期反转污染
+        'non_linear_size',        # 规模非线性因子：size的立方项，捕捉大小盘风格切换的非对称效应
+        'residual_volatility',    # 残差波动率因子：剥离市场后的特质波动，高波动股票长期收益偏低
+        'size',                   # 规模因子：log(总市值)，对数变换使市值分布近似正态
     ]
 
     def __init__(self) -> None:
@@ -52,10 +60,10 @@ class RiskModel:
             # 目标: 缩放后的单位矩阵
             F = np.trace(S) / n * np.eye(n)
         elif shrinkage_target == 'diagonal':
-            # 目标: 对角矩阵
+            # 目标: 对角矩阵 — 假设资产间无条件相关，仅保留方差
             F = np.diag(np.diag(S))
         elif shrinkage_target == 'single_factor':
-            # 目标: 单因子模型
+            # 目标: 单因子模型 — 用市场因子解释共同运动，残差作为特质方差
             market_returns = returns.mean(axis=1)
             var_market = market_returns.var()
             if var_market > 0:
@@ -63,7 +71,7 @@ class RiskModel:
             else:
                 betas = np.ones(n)
             F = np.outer(betas, betas) * var_market + np.diag(np.diag(S) - betas**2 * var_market)
-            F = self._ensure_positive_definite(F)
+            F = self._ensure_positive_definite(F)  # 单因子模型可能产生负的特质方差，需强制正定
         else:
             F = np.trace(S) / n * np.eye(n)
 
@@ -85,6 +93,7 @@ class RiskModel:
 
         # Large N fallback: vectorized (T, N, N) tensor consumes too much memory
         # when N > 100 (e.g., N=500 => 125M elements). Use loop-based approach.
+        # N>100时向量化路径内存爆炸，切换逐时间步循环
         if n > 100:
             var_S = self._calc_var_S_loop(X, S, T, n)
         else:
@@ -96,6 +105,7 @@ class RiskModel:
         if diff_sq == 0:
             return 0.0
 
+        # alpha越接近1，越依赖结构化目标F；样本量不足时alpha自动升高
         alpha = min(var_S / diff_sq, 1.0)
         return alpha
 
@@ -131,6 +141,7 @@ class RiskModel:
         """确保矩阵正定"""
         try:
             eigenvalues, eigenvectors = np.linalg.eigh(matrix)
+            # 将负/近零特征值提升到1e-10，避免后续求逆时数值溢出
             eigenvalues = np.maximum(eigenvalues, 1e-10)
             return eigenvectors @ np.diag(eigenvalues) @ eigenvectors.T
         except np.linalg.LinAlgError:
@@ -141,6 +152,8 @@ class RiskModel:
         """
         指数加权移动平均协方差 (EWMA)
         近期数据权重更大
+        halflife=60对应衰减因子≈0.9885，与RiskMetrics标准(λ=0.94, halflife≈17)相比
+        更平滑，适合A股中低频策略减少交易噪音
         """
         ewm_result = returns.ewm(halflife=halflife).cov()
         # pandas ewm().cov()返回MultiIndex (date, asset), 取最后一个时间截面
@@ -169,6 +182,7 @@ class RiskModel:
             use_mle: 是否使用MLE估计GARCH参数 (True=arch包, False=硬编码)
         """
         T, N = returns.shape
+        # 数据不足时回退EWMA：GARCH参数估计至少需要30个观测点
         if T < 30 or N < 2:
             logger.info("DCC-GARCH: insufficient data, falling back to EWMA", extra={"T": T, "N": N})
             return self.ewma_covariance(returns, halflife)
@@ -185,7 +199,7 @@ class RiskModel:
                     if len(r) < 30:
                         conditional_vols[:, j] = r.std()
                         continue
-                    am = ConstantMean(r.values * 100)  # 缩放避免数值问题
+                    am = ConstantMean(r.values * 100)  # 缩放避免数值问题：收益率量级过小会导致GARCH优化器不收敛
                     am.volatility = GARCH(p=1, o=0, q=1)
                     am.distribution = Normal()
                     try:
@@ -249,9 +263,11 @@ class RiskModel:
 
     def _garch_hardcoded(self, returns: pd.DataFrame, T: int, N: int) -> np.ndarray:
         """硬编码GARCH参数(回退方案)"""
+        # 典型A股GARCH参数：alpha+beta=0.95表示波动率持久性较强
+        # omega*var[0]使长期方差回归到样本方差水平
         omega_garch = 0.01
-        alpha_garch = 0.05
-        beta_garch = 0.90
+        alpha_garch = 0.05  # 残差平方对条件方差的冲击
+        beta_garch = 0.90   # 条件方差的自回归系数
 
         conditional_vols = np.zeros((T, N))
         for j in range(N):
@@ -269,6 +285,7 @@ class RiskModel:
         DCC参数网格搜索
         最大化DCC对数似然: L = -0.5 * Σ [log(det(R_t)) + eps_t' * R_t^{-1} * eps_t]
         """
+        # 初始值取DCC文献典型范围：alpha小(新闻冲击弱)，beta大(相关性持久)
         best_alpha, best_beta = 0.02, 0.95
         best_ll = -np.inf
 
@@ -276,6 +293,7 @@ class RiskModel:
         N = std_residuals.shape[1]
 
         # 网格: alpha in [0.01, 0.05], beta in [0.90, 0.98]
+        # alpha+beta<1是DCC平稳性条件，超出则时变相关矩阵发散
         for a in np.arange(0.01, 0.06, 0.01):
             for b in np.arange(0.90, 0.99, 0.02):
                 if a + b >= 1.0:
@@ -341,6 +359,7 @@ class RiskModel:
             shrinkage: 特质方差压缩系数
         """
         T, N = returns.shape
+        # T<N时样本协方差奇异，直接用LW压缩避免过拟合
         if T < N + 10:
             return self.ledoit_wolf_shrinkage(returns)
 
@@ -361,7 +380,7 @@ class RiskModel:
 
         # 特质部分: 残差方差
         idio_var = np.diag(sample_cov) - np.diag(structured)
-        idio_var = np.maximum(idio_var, 1e-10)  # 确保正
+        idio_var = np.maximum(idio_var, 1e-10)  # PCA可能过度解释方差导致残差为负，截断为正值
 
         # 混合协方差
         hybrid = structured + np.diag(idio_var)
@@ -384,12 +403,13 @@ class RiskModel:
         """
         exposures = pd.DataFrame(index=stock_data.index)
 
-        # Size: log(总市值) — Barra标准
+        # Size: log(总市值) — Barra标准，对数变换压缩市值量级差异(大盘股可达小盘股万倍)
         cap_col = 'total_market_cap' if 'total_market_cap' in stock_data.columns else 'market_cap'
         if cap_col in stock_data.columns:
             exposures['size'] = np.log(stock_data[cap_col].clip(lower=1))
 
         # Non-linear Size: (size - mean_size)^3 — Barra USE4标准(立方, 非平方)
+        # 立方项捕捉大小盘风格切换的非对称性：大→小的切换比小→大更剧烈
         if 'size' in exposures.columns:
             mean_size = exposures['size'].mean()
             exposures['non_linear_size'] = (exposures['size'] - mean_size) ** 3
@@ -419,12 +439,14 @@ class RiskModel:
             exposures['liquidity'] = stock_data['turnover_20d']
 
         # Momentum: 跳月12月动量
+        # 跳过最近1个月避免短期反转效应污染中期动量信号(A股1个月反转显著)
         if 'ret_12m_skip1' in stock_data.columns:
             exposures['momentum'] = stock_data['ret_12m_skip1']
         elif 'ret_12m' in stock_data.columns:
             exposures['momentum'] = stock_data['ret_12m']
 
-        # Residual Volatility
+        # Residual Volatility: 优先用剥离市场后的特质波动率
+        # 特质波动率高(低波动异象)的股票长期收益偏低，与beta因子含义不同
         if 'idio_vol' in stock_data.columns:
             exposures['residual_volatility'] = stock_data['idio_vol']
         elif 'vol_60d' in stock_data.columns:
@@ -454,6 +476,8 @@ class RiskModel:
         r = returns.loc[common].values
 
         # WLS权重 = sqrt(市值)
+        # Barra标准：大市值股票定价更有效，给予更高权重提升因子收益估计精度
+        # 用sqrt而非线性权重，避免超级大盘股(如贵州茅台)完全主导回归
         if market_cap is not None:
             w = np.sqrt(market_cap.reindex(common).fillna(market_cap.median()).values)
             W = np.diag(w)
@@ -489,7 +513,8 @@ class RiskModel:
                                     eigenvalue_clip_pct: float = 0.05) -> pd.DataFrame:
         """
         估计因子协方差矩阵 (机构级: EWMA + 特征值裁剪)
-        Barra标准: halflife=168交易日(约8个月)
+        Barra标准: halflife=168交易日(约8个月)，比特质方差半衰期更长
+        因为因子收益时间序列更短且噪声更大，需要更长的记忆窗口
 
         Args:
             factor_returns_df: 因子收益时间序列 (T x K)
@@ -503,6 +528,8 @@ class RiskModel:
             return pd.DataFrame()
 
         # EWMA协方差
+        # decay=1-exp(-ln2/halflife)将半衰期转换为pandas ewm的alpha参数
+        # halflife=168对应衰减因子λ≈0.9959，约8个月的历史数据贡献一半权重
         decay = 1 - np.exp(-np.log(2) / halflife)
         ewm_result = factor_returns_df.ewm(alpha=decay).cov()
 
@@ -513,7 +540,8 @@ class RiskModel:
         else:
             cov = ewm_result.values
 
-        # 特征值裁剪
+        # 特征值裁剪：近零特征值会导致逆矩阵数值爆炸，在组合优化中产生极端权重
+        # 阈值设为最大特征值的5%，足够小不影响正常结构，但能消除数值不稳定
         try:
             eigenvalues, eigenvectors = np.linalg.eigh(cov)
             max_eigenvalue = eigenvalues.max()
@@ -532,7 +560,8 @@ class RiskModel:
                                           halflife: int = 84) -> pd.Series:
         """
         估计特质方差 (机构级: 从残差估计, 分行业EWMA)
-        Barra标准: halflife=84交易日(约4个月)
+        Barra标准: halflife=84交易日(约4个月)，短于因子协方差半衰期
+        因为个股特质波动变化比因子收益变化更快，需要更灵敏的响应
 
         Args:
             stock_returns: 股票收益 (T x N)
@@ -643,6 +672,7 @@ class RiskModel:
         """
         Student-t分布VaR
         比正态分布更好地捕捉厚尾特征
+        A股收益率峰度显著高于正态分布，用t分布可避免VaR低估
 
         Args:
             returns: 收益率序列
@@ -653,15 +683,15 @@ class RiskModel:
             # 用矩估计法估计自由度
             kurt = returns.kurtosis()
             if kurt > 0:
-                df = 6.0 / kurt + 4  # 超额峰度 = 6/(df-4)
-                df = max(df, 4.5)  # 至少4.5自由度
+                df = 6.0 / kurt + 4  # 超额峰度 = 6/(df-4)，反解自由度
+                df = max(df, 4.5)  # 至少4.5自由度 — 低于4时t分布方差无定义
             else:
-                df = 30.0  # 接近正态
+                df = 30.0  # 峰度接近0时t分布退化为正态
 
         mu = returns.mean()
         sigma = returns.std()
         t_quantile = sp_stats.t.ppf(1 - confidence, df=df)
-        # Student-t的VaR缩放因子
+        # Student-t的VaR缩放因子：调整t分布比正态更宽的分布到等方差尺度
         scale = sigma * np.sqrt((df - 2) / df)
         return -(mu + t_quantile * scale)
 
@@ -670,12 +700,13 @@ class RiskModel:
         """
         Copula尾部依赖估计
         衡量两个资产在极端情况下的共同运动程度
-        相关性在尾部会被低估，尾部依赖更准确
+        线性相关系数只度量线性关系且对尾部不敏感，
+        危机期间相关性系统性上升(相关性突变)，尾部依赖能直接捕捉这一现象
 
         Args:
             returns_a: 资产A收益率
             returns_b: 资产B收益率
-            threshold: 尾部阈值
+            threshold: 尾部阈值 — 0.05对应最极端5%的观测，兼顾样本量和尾部敏感性
         """
         common_idx = returns_a.index.intersection(returns_b.index)
         a = returns_a.loc[common_idx]
@@ -699,13 +730,13 @@ class RiskModel:
         return {
             'lower_tail_dependence': round(lower_tail_dep, 4),
             'upper_tail_dependence': round(upper_tail_dep, 4),
-            'asymmetry': round(lower_tail_dep - upper_tail_dep, 4),  # A股通常下尾>上尾
+            'asymmetry': round(lower_tail_dep - upper_tail_dep, 4),  # A股通常下尾>上尾：暴跌时同跌强于暴涨时同涨
         }
 
     def liquidity_adjusted_var(self, returns: pd.Series,
                                 position_size: float,
                                 daily_volume: float,
-                                spread: float = 0.001,
+                                spread: float = 0.001,  # A股典型买卖价差约10bp
                                 confidence: float = 0.95) -> Dict[str, float]:
         """
         流动性调整VaR (LVaR)
@@ -727,7 +758,7 @@ class RiskModel:
 
         # 市场冲击成本 (Almgren-Chriss简化)
         participation_rate = position_size / daily_volume if daily_volume > 0 else 0
-        impact_cost = 0.1 * np.sqrt(max(participation_rate, 0))  # 平方根法则
+        impact_cost = 0.1 * np.sqrt(max(participation_rate, 0))  # 平方根法则：冲击成本与参与率的平方根成正比
 
         lvar = var + spread_cost + impact_cost
 
@@ -848,7 +879,7 @@ class RiskModel:
             'expected_rate': round(expected_rate, 4),
             'kupiec_pof': kupiec,
             'christoffersen_independence': christoffersen,
-            'var_adequate': kupiec['p_value'] > 0.05 and christoffersen['p_value'] > 0.05,
+            'var_adequate': kupiec['p_value'] > 0.05 and christoffersen['p_value'] > 0.05,  # 两检验均不拒绝才认为VaR模型充分
         }
 
     def _kupiec_pof_test(self, n_violations: int, n_total: int,
@@ -940,7 +971,7 @@ class RiskModel:
             log_constrained += n_v * np.log(max(p, eps))
 
         lr: float = -2 * (log_constrained - log_unconstrained)
-        lr = max(lr, 0)  # 数值保护
+        lr = max(lr, 0)  # 数值保护：有限样本下似然比统计量理论上非负，浮点误差可能导致微小负值
 
         from scipy.stats import chi2
         p_value: float = 1 - chi2.cdf(lr, df=1)
@@ -968,6 +999,7 @@ def newey_west_se(series: pd.Series, max_lags: Optional[int] = None,
     """
     Newey-West标准误 (机构级: 修正序列自相关导致的t统计量高估)
     IC序列通常有显著自相关，朴素t统计量会高估显著性
+    不做NW调整可能导致因子IC显著性被虚增，误选无效因子
 
     Args:
         series: 时间序列 (如IC序列)
@@ -986,6 +1018,7 @@ def newey_west_se(series: pd.Series, max_lags: Optional[int] = None,
     gamma0 = ((series - mean) ** 2).mean()
 
     # 自动选择滞后期
+    # Bartlett核取n^(1/3)是经典选择，平衡偏差与方差
     if max_lags is None:
         if auto_lag_select == 'bartlett':
             max_lags = int(T ** (1 / 3))
@@ -993,7 +1026,8 @@ def newey_west_se(series: pd.Series, max_lags: Optional[int] = None,
             max_lags = int(4 * (T / 100) ** (2 / 9))
         max_lags = max(1, max_lags)
 
-    # Newey-West核权重 (Bartlett核)
+    # Newey-West核权重 (Bartlett核)：线性衰减权重，lag越大权重越小
+    # 乘以2是因为协方差项在方差公式中出现两次(对称性)
     nw_var = gamma0
     for lag in range(1, max_lags + 1):
         weight = 1 - lag / (max_lags + 1)

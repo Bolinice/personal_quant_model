@@ -1,6 +1,12 @@
 """
 高并发Tushare数据同步器
 使用 ThreadPoolExecutor 并发从Tushare代理API获取数据并批量写入PostgreSQL
+
+同步策略:
+- Phase 1 基础数据串行执行（数据量小，后续Phase依赖这些表）
+- Phase 2/3 批量数据按股票/日期并发（数据量大，IO密集，并发可大幅提速）
+- 已有数据的股票只增量同步最近30天，缺失的股票做全量同步
+- 每个worker持有独立DB session，避免多线程共享session的并发问题
 """
 
 import time
@@ -21,11 +27,13 @@ logger = logging.getLogger(__name__)
 
 
 def safe_float(val):
-    """安全转换为float"""
+    """安全转换为float — Tushare返回的数值可能含NaN/Inf/None，
+    直接写入PostgreSQL的float列会报错，必须过滤为None"""
     try:
         if pd.isna(val):
             return None
         v = float(val)
+        # np.inf/-inf出现在除零场景(如PE=价格/零eps)，PostgreSQL不接受Inf
         return v if np.isfinite(v) else None
     except (ValueError, TypeError):
         return None
@@ -41,7 +49,7 @@ class ConcurrentDataSyncer:
         self,
         token: Optional[str] = None,
         max_workers: int = 8,
-        rate_limit: float = 0.35,
+        rate_limit: float = 0.35,  # Tushare代理API限流：每分钟约200次，0.35s间隔≈170次/分，留余量
     ):
         self.token = token or settings.TUSHARE_TOKEN
         self.max_workers = max_workers
@@ -92,13 +100,15 @@ class ConcurrentDataSyncer:
         results: Dict[str, int] = {}
         t0 = time.time()
 
-        # Phase 1: 基础数据（串行，数据量小，后续步骤依赖）
+        # Phase 1: 基础数据（串行，数据量小，后续Phase依赖这些数据）
+        # stock_basic必须在最前面，后续Phase的_get_all_ts_codes()依赖它
         results["stock_basic"] = self._sync_stock_basic()
         results["trading_calendar"] = self._sync_trading_calendar(start_date, end_date)
         results["index_daily"] = self._sync_index_daily(start_date, end_date)
         results["index_components"] = self._sync_index_components(end_date)
 
-        # Phase 2: 高并发批量数据
+        # Phase 2: 高并发批量数据（IO密集，适合线程池并发）
+        # stock_daily/daily_basic数据量大，是同步耗时主力
         results["stock_daily"] = self._sync_stock_daily(start_date, end_date)
         results["daily_basic"] = self._sync_daily_basic(start_date, end_date)
         results["stock_financial"] = self._sync_stock_financial()
@@ -121,7 +131,7 @@ class ConcurrentDataSyncer:
     # ------------------------------------------------------------------
 
     def _sync_stock_basic(self) -> int:
-        """同步全A股基础信息 (新增 + 更新已有股票的变更属性)"""
+        """同步全A股基础信息 (增量：新增+更新变更，不做全量删除重建)"""
         logger.info("[stock_basic] 开始同步...")
         from app.models.market import StockBasic
 
@@ -165,6 +175,7 @@ class ConcurrentDataSyncer:
                     new_count += 1
                 else:
                     # 已有股票: 检查关键字段是否有变更, 有则更新
+                    # 股票更名/行业变更/退市(list_status变化)是常见场景，需及时同步
                     existing = existing_map[ts_code]
                     changed = False
 
@@ -252,7 +263,7 @@ class ConcurrentDataSyncer:
         indices = [
             "000001.SH", "399001.SZ", "000300.SH",
             "000905.SH", "000852.SH",
-        ]
+        ]  # 上证/深证/沪深300/中证500/中证1000 — 覆盖主要宽基指数，择时和benchmark依赖
         total = 0
         db = SessionLocal()
         try:
@@ -312,7 +323,7 @@ class ConcurrentDataSyncer:
         logger.info("[index_components] 开始同步...")
         from app.models.market import IndexComponent
 
-        indices = ["000300.SH", "000905.SH", "000852.SH"]
+        indices = ["000300.SH", "000905.SH", "000852.SH"]  # 只同步选股池相关的宽基指数成分，非全量指数
         total = 0
         db = SessionLocal()
         try:
@@ -380,9 +391,10 @@ class ConcurrentDataSyncer:
         )
         db.close()
 
-        # 优先同步还没有数据的股票
+        # 优先同步还没有数据的股票（全量拉取）
         missing = [c for c in ts_codes if c not in existing_codes]
-        # 已有数据的股票只同步增量（最近30天）
+        # 已有数据的股票只同步增量（最近30天），避免重复拉取历史数据
+        # 30天窗口覆盖最长节假日(春节7天+缓冲)，确保不遗漏交易日
         recent_start = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
 
         logger.info(
@@ -394,6 +406,7 @@ class ConcurrentDataSyncer:
         t0 = time.time()
 
         def fetch_one(ts_code: str, sd: str, ed: str) -> int:
+            # 每个线程独立DB session，避免SQLAlchemy session跨线程共享问题
             db2 = SessionLocal()
             try:
                 df = self.source.get_stock_daily(ts_code, sd, ed)
@@ -549,6 +562,8 @@ class ConcurrentDataSyncer:
             finally:
                 db2.close()
 
+        # daily_basic按交易日拉全市场快照，单次数据量大(~4000行/天)，
+        # 并发数限制为4，避免同时写入过多导致DB锁竞争
         with ThreadPoolExecutor(max_workers=min(self.max_workers, 4)) as executor:
             futures = {}
             for td in missing_dates:
@@ -566,7 +581,7 @@ class ConcurrentDataSyncer:
         return total
 
     def _sync_stock_financial(self) -> int:
-        """按股票并发同步财务数据"""
+        """按股票并发同步财务数据 — 财务数据按报告期去重，同股票不同报告期独立写入"""
         logger.info("[stock_financial] 开始并发同步...")
         from app.models.market import StockFinancial
 
@@ -734,6 +749,8 @@ class ConcurrentDataSyncer:
             finally:
                 db2.close()
 
+        # daily_basic按交易日拉全市场快照，单次数据量大(~4000行/天)，
+        # 并发数限制为4，避免同时写入过多导致DB锁竞争
         with ThreadPoolExecutor(max_workers=min(self.max_workers, 4)) as executor:
             futures = {}
             for td in trade_dates:
@@ -787,6 +804,8 @@ class ConcurrentDataSyncer:
                     td = str(row.get("trade_date", ""))
                     if td in existing:
                         continue
+                    # Tushare moneyflow接口返回买入/卖出分开的成交量/额，
+                    # 需做差得到净流入；超大/大/中/小单按金额阈值划分
                     new_records.append(
                         StockMoneyFlow(
                             ts_code=ts_code,
@@ -816,7 +835,7 @@ class ConcurrentDataSyncer:
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             futures = {}
-            for ts_code in ts_codes[:500]:  # 限制前500只，资金流数据量大
+            for ts_code in ts_codes[:500]:  # 限制前500只：资金流API单只耗时长，全量5000+只耗时超8小时
                 future = executor.submit(fetch_one, ts_code)
                 futures[future] = ts_code
                 time.sleep(self.rate_limit)

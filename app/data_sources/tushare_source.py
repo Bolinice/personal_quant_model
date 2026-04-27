@@ -90,7 +90,8 @@ class TushareDataSource(BaseDataSource):
                 ts.set_token(self.token)
             self._pro = ts.pro_api()
 
-            # 优先尝试代理API（全接口权限）
+            # 优先尝试代理API（全接口权限，无需积分），
+            # 官方API需较高积分才能调用fina_indicator/daily_basic等接口
             self._pro._DataApi__http_url = "http://tsy.xiaodefa.cn"
             try:
                 df = self._pro.stock_basic(exchange='', list_status='L', fields='ts_code')
@@ -123,7 +124,7 @@ class TushareDataSource(BaseDataSource):
         return self._connected
 
     def _format_date(self, date_str: str) -> str:
-        """将 YYYY-MM-DD 转换为 YYYYMMDD"""
+        """将 YYYY-MM-DD 转换为 YYYYMMDD — Tushare API要求YYYYMMDD格式"""
         if not date_str:
             return None
         return date_str.replace('-', '')
@@ -152,7 +153,7 @@ class TushareDataSource(BaseDataSource):
                 return pd.DataFrame()
 
             df = df.rename(columns={
-                'vol': 'volume',
+                'vol': 'volume',  # Tushare用'vol'，统一为'volume'以兼容AKShare和下游逻辑
                 'pct_chg': 'pct_chg'
             })
             df['trade_date'] = df['trade_date'].apply(self._format_date_back)
@@ -215,6 +216,8 @@ class TushareDataSource(BaseDataSource):
 
         try:
             df = self._pro.stock_basic(exchange='', list_status='L', fields='ts_code,symbol,name,area,industry,market,list_date,delist_date,is_hs')
+            # list_status='L'仅获取上市股票，已退市/暂停上市不纳入股票池
+            # delist_date用于判断即将退市的股票
 
             if df.empty:
                 return pd.DataFrame()
@@ -278,7 +281,8 @@ class TushareDataSource(BaseDataSource):
     # ==================== 财务数据 ====================
 
     def get_financial_indicator(self, ts_code: str, start_date: str = None, end_date: str = None) -> pd.DataFrame:
-        """获取财务指标"""
+        """获取财务指标 — 注意: Tushare返回的是报告期(end_date)，非公告日，
+        因子计算时必须按ann_date(公告日)对齐到PIT时点，否则引入未来函数"""
         if not self._connected:
             return pd.DataFrame()
 
@@ -295,6 +299,8 @@ class TushareDataSource(BaseDataSource):
             df['end_date'] = df['end_date'].apply(self._format_date_back)
 
             # 选择常用指标
+            # pe_ttm/ps_ttm等TTM指标由Tushare在服务端计算，使用最近4个季度滚动加总
+            # 相比本地手算TTM，Tushare的TTM已处理亏损/空值等边界情况
             columns = ['ts_code', 'end_date', 'ann_date', 'roe', 'roa',
                       'grossprofit_margin', 'netprofit_margin', 'debt_to_assets',
                       'current_ratio', 'quick_ratio', 'ocfps', 'eps', 'bps']
@@ -365,6 +371,7 @@ class TushareDataSource(BaseDataSource):
             return pd.DataFrame()
 
         try:
+            # 申万一级分类，因子中性化时按此行业分组
             df = self._pro.index_classify(level='L1', src='SW')
 
             if df.empty:
@@ -411,6 +418,9 @@ class TushareDataSource(BaseDataSource):
         1. 按交易日获取全市场: get_daily_basic(trade_date='2026-04-17')
         2. 按股票+日期范围: get_daily_basic(ts_code='000001.SZ', start_date='2026-01-01', end_date='2026-04-18')
 
+        注意: total_mv/circ_mv单位为万元，使用时需*10000转为元
+        pe_ttm为滚动市盈率（TTM），pb为静态市净率（最新报告期）
+
         Args:
             trade_date: 交易日期 YYYY-MM-DD（获取全市场快照）
             ts_code: 股票代码
@@ -426,6 +436,7 @@ class TushareDataSource(BaseDataSource):
         try:
             params = {
                 'fields': 'ts_code,trade_date,close,turnover_rate,turnover_rate_f,volume_ratio,pe,pe_ttm,pb,ps,ps_ttm,dv_ratio,dv_ttm,total_mv,circ_mv'
+                # turnover_rate_f为自由流通股换手率，比turnover_rate(总股本换手率)更能反映真实交易活跃度
             }
             if trade_date:
                 params['trade_date'] = self._format_date(trade_date)
@@ -666,13 +677,16 @@ class TushareDataSource(BaseDataSource):
     # ==================== 资产负债表(含商誉) ====================
 
     def get_balance_sheet_with_goodwill(self, ts_code: str, period: str = None) -> pd.DataFrame:
-        """获取资产负债表关键字段(含商誉)"""
+        """获取资产负债表关键字段(含商誉)
+        f_ann_date为首次公告日，比ann_date更早，PIT对齐应优先使用f_ann_date"""
         if not self._connected:
             return pd.DataFrame()
         try:
             params = {'ts_code': ts_code}
             if period:
                 params['period'] = self._format_date(period)
+            # f_ann_date(首次公告日)比ann_date更精确，用于PIT对齐
+            # goodwill/商誉是暴雷高发指标，需单独监控
             df = self._pro.balancesheet(
                 fields='ts_code,ann_date,f_ann_date,end_date,goodwill,total_assets,total_hldr_eqy_exc_min_int',
                 **params

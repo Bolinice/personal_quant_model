@@ -7,7 +7,7 @@ export interface MonitorFactorHealth {
   missing_rate: number | null;
   ic_rolling: number | null;
   ic_mean: number | null;
-  ir: number | null;
+  icir: number | null;
   psi: number | null;
   health_status: string;
 }

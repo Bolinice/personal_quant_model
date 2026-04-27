@@ -12,7 +12,7 @@ class FactorHealthResponse(BaseModel):
     missing_rate: Optional[float] = None
     ic_rolling: Optional[float] = None
     ic_mean: Optional[float] = None
-    ir: Optional[float] = None
+    icir: Optional[float] = None
     psi: Optional[float] = None
     health_status: str = "healthy"
 

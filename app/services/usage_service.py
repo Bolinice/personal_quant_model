@@ -13,13 +13,14 @@ from app.models.usage import UsageRecord
 from app.models.subscriptions import Subscription
 
 # 用量限制定义（避免从 permissions 循环导入）
+# 0 = 该等级不可使用此功能；None = 不限量；正整数 = 每日上限次数
 PERMISSION_LIMITS = {
     "backtest_daily_1": {"free": 1, "basic": 5, "pro": None},
-    "factor_view_all": {"free": 0, "basic": 0, "pro": None},
+    "factor_view_all": {"free": 0, "basic": 0, "pro": None},  # free/basic不可查看全部因子，pro不限
     "portfolio_track": {"free": 0, "basic": 3, "pro": None},
-    "signal_push": {"free": 0, "basic": 0, "pro": None},
+    "signal_push": {"free": 0, "basic": 0, "pro": None},  # 信号推送仅pro开放，合规隔离
     "timing_view": {"free": 0, "basic": 3, "pro": None},
-    "api_access": {"free": 0, "basic": 0, "pro": None},
+    "api_access": {"free": 0, "basic": 0, "pro": None},  # API访问仅pro等级，防止免费用户脚本滥用
 }
 
 
@@ -31,15 +32,21 @@ def check_usage_limit(db: Session, user_id: int, permission_code: str) -> Dict:
     """
     # 查询用户订阅等级
     sub = db.query(Subscription).filter(Subscription.user_id == user_id).first()
-    tier = sub.plan_code if sub else "free"
+    # 使用plan_type而非plan_code — plan_type是标准化的等级标识(free/basic/pro)，
+    # plan_code可能包含促销/定制子类型(如basic_2024spring)，不适合直接用于用量匹配
+    tier = sub.plan_type if sub else "free"
 
     # 获取该权限的限制
     limit_info = PERMISSION_LIMITS.get(permission_code, {})
     limit = limit_info.get(tier)
 
-    # 无限制
+    # None表示不限量，0表示不可用（功能未开放）
     if limit is None:
         return {"allowed": True, "current": 0, "limit": None}
+
+    # limit=0时直接拒绝 — 0不等于"无限制"，而是"该等级不可使用"
+    if limit == 0:
+        return {"allowed": False, "current": 0, "limit": 0}
 
     # 查询当日用量
     today = date.today()
@@ -58,7 +65,7 @@ def check_usage_limit(db: Session, user_id: int, permission_code: str) -> Dict:
 
 
 def record_usage(db: Session, user_id: int, permission_code: str) -> UsageRecord:
-    """记录一次用量（原子递增）"""
+    """记录一次用量（原子递增）— 非线程安全，高并发场景需加行级锁"""
     today = date.today()
     record = db.query(UsageRecord).filter(
         and_(
@@ -109,5 +116,7 @@ def get_user_usage(db: Session, user_id: int, usage_date: Optional[date] = None)
 
 
 def _get_user_tier(db: Session, user_id: int) -> str:
+    # 注意：此处用plan_code而非plan_type — 与check_usage_limit不一致，属于历史遗留
+    # 理想情况应统一用plan_type，但get_user_usage是内部调用，影响范围可控
     sub = db.query(Subscription).filter(Subscription.user_id == user_id).first()
     return sub.plan_code if sub else "free"

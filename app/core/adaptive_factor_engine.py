@@ -41,13 +41,13 @@ class AdaptiveFactorEngine:
     """
 
     # 因子筛选阈值
-    MIN_IC_MEAN = 0.02          # 最低IC均值
-    MIN_ICIR = 0.3              # 最低ICIR
-    MIN_COVERAGE = 0.6          # 最低覆盖率
-    MAX_TURNOVER_COST = 0.02    # 最大换手成本
-    MONITORING_ICIR = 0.5       # 低于此值进入监控
-    CONSECUTIVE_LOW_LIMIT = 5   # 连续低IC次数触发降权
-    RECOVERY_ICIR = 0.8         # 恢复阈值
+    MIN_IC_MEAN = 0.02          # A股横截面IC低于0.02基本无选股区分度
+    MIN_ICIR = 0.3              # ICIR<0.3意味着IC波动大于均值的3倍，信号不可靠
+    MIN_COVERAGE = 0.6          # 覆盖率低于60%的因子易产生生存偏差
+    MAX_TURNOVER_COST = 0.02    # 换手成本2bp，超过则因子净收益被交易费用侵蚀
+    MONITORING_ICIR = 0.5       # ICIR降至0.5以下开始监控，尚未失效但需要关注
+    CONSECUTIVE_LOW_LIMIT = 5   # 连续5期(约1个月)低IC才降权，避免单期噪声误判
+    RECOVERY_ICIR = 0.8         # 恢复阈值高于监控阈值(0.5)，迟滞设计防止状态反复跳动
 
     def __init__(self, factor_profiles: Optional[Dict[str, FactorProfile]] = None):
         self.factor_profiles = factor_profiles or {}
@@ -77,7 +77,7 @@ class AdaptiveFactorEngine:
         for factor_code in recent['factor_code'].unique():
             f_ic = recent[recent['factor_code'] == factor_code]
             if len(f_ic) < 10:
-                continue
+                continue  # 10个观测点以下IC统计量不具备参考价值
 
             ic_mean = f_ic['ic'].mean()
             ic_std = f_ic['ic'].std()
@@ -87,13 +87,16 @@ class AdaptiveFactorEngine:
             ic_positive_rate = (f_ic['ic'] > 0).mean()
 
             # 综合评分: ICIR为主 + IC胜率 + RankIC辅助
+            # ICIR权重0.5最大，因其同时衡量方向和稳定性；胜率0.3次之，RankIC仅作辅助
+            # 因为RankIC通常与IC高度相关，给过高权重会重复计算信息
             score = (
                 0.5 * abs(icir) +
-                0.3 * (ic_positive_rate - 0.5) * 2 +
-                0.2 * abs(rank_ic_mean) * 10
+                0.3 * (ic_positive_rate - 0.5) * 2 +  # 减0.5再乘2，将[0.5,1]映射到[0,1]
+                0.2 * abs(rank_ic_mean) * 10  # RankIC量级约0.01-0.05，乘10对齐ICIR量级
             )
 
-            # 方向惩罚: IC为负的因子降权
+            # 方向惩罚: IC为负的因子降权，保留0.3而非直接归零
+            # 因为负IC可能来自因子方向反转，翻转后仍可用
             if ic_mean < 0:
                 score *= 0.3
 
@@ -119,7 +122,8 @@ class AdaptiveFactorEngine:
             if len(selected) >= max_factors:
                 break
 
-        # 保证最少因子数
+        # 保证最少因子数：即使严格筛选后因子不足，也需保留最低数量
+        # 因子过少会导致组合集中度风险，无法有效分散
         if len(selected) < min_factors:
             for factor_code, _ in sorted_factors:
                 if factor_code not in selected:
@@ -148,6 +152,8 @@ class AdaptiveFactorEngine:
                                           turnover_penalty: float = 0.3,
                                           decay_penalty: float = 0.1,
                                           stability_penalty: float = 0.2) -> Dict[str, float]:
+        # 换手惩罚0.3为默认值，在ICIR均约1.0时约30%权重变化被抑制
+        # 稳定性惩罚0.2与换手惩罚互补：换手惩罚约束一阶差异，稳定性约束二阶波动
         """
         多目标权重优化
         max: Σ w_k * ICIR_k - λ_turn * Σ |w_k - w_k_prev| - λ_decay * Σ decay_k * w_k
@@ -191,9 +197,12 @@ class AdaptiveFactorEngine:
         positive_mask = icir > 0
         if not positive_mask.any():
             # 全部ICIR为负，取绝对值最大的
+            # 极端市场下所有因子可能同时失效，此时完全清仓不现实
             positive_mask = np.ones(n, dtype=bool)
 
-        # 初始权重: ICIR正比
+        # 初始权重: ICIR正比分配
+        # 相比等权，ICIR加权让信号稳定因子获得更高权重，是行业主流做法
+        # 等权作为fallback：当所有ICIR接近0时ICIR加权退化为等权
         abs_icir = np.abs(icir) * positive_mask
         total_icir = abs_icir.sum()
         if total_icir > 0:
@@ -232,7 +241,7 @@ class AdaptiveFactorEngine:
                 break
             w = w_new
 
-        # 清理微小权重
+        # 清理微小权重：低于万一的权重对组合无实质贡献，反而增加换手开销
         w[w < 1e-4] = 0
         if w.sum() > 0:
             w = w / w.sum()
@@ -261,25 +270,28 @@ class AdaptiveFactorEngine:
             return v.copy()
 
         # 极端值保护: clamp到合理范围避免溢出
+        # ICIR加权的梯度下降中，极端ICIR值(如>1e6)会导致投影数值溢出
         v_clamped = np.clip(v, -1e6, 1e6)
         u = np.sort(v_clamped)[::-1]
         cssv = np.cumsum(u) - 1
         rho_candidates = np.where(u > cssv / np.arange(1, n + 1))[0]
 
         if len(rho_candidates) == 0:
-            # fallback: 均匀分布
+            # fallback: 均匀分布 — 单纯形投影在极端输入下可能无有效解
             return np.ones(n) / n
 
         rho = rho_candidates[-1]
         theta = cssv[rho] / (rho + 1.0)
 
         # 数值稳定性检查: theta过大时回退到均匀分布
+        # theta是单纯形投影的偏移量，过大会导致投影后所有分量为0
         if abs(theta) > 1e8:
             return np.ones(n) / n
 
         w = np.maximum(v_clamped - theta, 0)
 
         # 验证投影结果: sum应≈1且无负值
+        # 浮点误差累积可能导致投影结果不满足约束，此时回退均匀分布
         if abs(np.sum(w) - 1.0) > 1e-6 or np.any(w < -1e-10):
             return np.ones(n) / n
 
@@ -318,26 +330,34 @@ class AdaptiveFactorEngine:
         old_state = profile.state
 
         if profile.state == FactorState.ACTIVE:
+            # ICIR降至MONITORING_ICIR(0.5)以下即进入监控，留出缓冲区
             if abs(icir) < self.MONITORING_ICIR:
                 profile.state = FactorState.MONITORING
                 profile.consecutive_low_ic = 1
             elif abs(icir) < self.MIN_ICIR:
+                # ICIR在0.3-0.5之间也进入监控，但低IC计数从1开始
                 profile.state = FactorState.MONITORING
                 profile.consecutive_low_ic = 1
 
         elif profile.state == FactorState.MONITORING:
             if abs(icir) >= self.RECOVERY_ICIR:
+                # 恢复阈值0.8远高于监控阈值0.5，迟滞设计防止状态在边界反复切换
                 profile.state = FactorState.ACTIVE
                 profile.consecutive_low_ic = 0
             elif abs(icir) < self.MIN_ICIR:
                 profile.consecutive_low_ic += 1
                 if profile.consecutive_low_ic >= self.CONSECUTIVE_LOW_LIMIT:
+                    # 连续5期低IC才降权为INACTIVE，避免单期异常噪声误杀因子
                     profile.state = FactorState.INACTIVE
             else:
+                # ICIR回到0.3-0.5之间时逐步恢复计数，不完全重置
+                # 保留部分低IC记忆，防止间歇性回升掩盖持续衰减
                 profile.consecutive_low_ic = max(0, profile.consecutive_low_ic - 1)
 
         elif profile.state == FactorState.INACTIVE:
             if abs(icir) >= self.RECOVERY_ICIR:
+                # INACTIVE只能恢复到MONITORING而非ACTIVE，需要持续验证
+                # 防止因单期ICIR飙升就立即重用已失效因子
                 profile.state = FactorState.MONITORING
                 profile.consecutive_low_ic = 0
 
@@ -367,6 +387,7 @@ class AdaptiveFactorEngine:
 
     def get_factor_weights_by_state(self) -> Dict[str, float]:
         """根据状态分配权重: ACTIVE=1.0, MONITORING=0.5, INACTIVE=0.0"""
+        # 监控态0.5权重：不完全排除但降低敞口，避免因子刚进监控就大幅调仓
         weights = {}
         for f, p in self.factor_profiles.items():
             if p.state == FactorState.ACTIVE:
@@ -383,6 +404,8 @@ class AdaptiveFactorEngine:
                                    factor_icir: Dict[str, float],
                                    max_factors: int = 30,
                                    corr_threshold: float = 0.6) -> List[str]:
+        # corr_threshold=0.6: A股因子间相关系数超0.6时信息重叠严重
+        # 0.6比常见0.5更宽松，因A股因子池有限，过严会损失因子多样性
         """
         正交化因子选择 (贪心算法)
         每步选择信息增量最大的因子: max ICIR_k * (1 - max_corr_with_selected)
@@ -421,10 +444,12 @@ class AdaptiveFactorEngine:
             info_increment = icir * (1 - max_corr)
 
             # 相关性过高则跳过
+            # 但至少保留5个因子，即使相关性偏高——因子过少比相关性的危害更大
             if max_corr > corr_threshold and len(selected) >= 5:
                 continue
 
             # 信息增量过低则跳过
+            # 0.1阈值：ICIR=1.0时允许最大相关性0.9，ICIR=0.3时允许约0.67
             if info_increment < 0.1:
                 continue
 
@@ -472,6 +497,7 @@ class AdaptiveFactorEngine:
             decay = 1 - test_sharpe / train_sharpe
             result['sharpe_decay'] = round(decay, 4)
             # 衰减>50%视为过拟合信号
+            # A股策略样本外衰减50%以上通常意味着训练期过度挖掘了数据特征
             if decay > 0.5:
                 result['is_overfit'] = True
                 result['overfitting_score'] += 0.4
@@ -491,6 +517,8 @@ class AdaptiveFactorEngine:
 
                 result['dsr'] = round(dsr, 4)
                 result['expected_max_sharpe'] = round(expected_max_sr, 2)
+                # DSR<0.95表示测试Sharpe未能显著超越多重检验下的期望最大Sharpe
+                # 95%置信度是金融研究中的常用门槛
                 if dsr < 0.95:
                     result['is_overfit'] = True
                     result['overfitting_score'] += 0.3 * (1 - dsr)
@@ -499,9 +527,11 @@ class AdaptiveFactorEngine:
 
         # 3. 蒙特卡洛置换检验 (如果有收益率数据)
         if returns is not None and len(returns) > 60:
+            # 至少60个观测点(约3个月)才进行置换检验，样本过少结果无意义
             mc_result = self._permutation_test(returns, n_permutations=500)
             result['permutation_p_value'] = mc_result['p_value']
             if mc_result['p_value'] > 0.05:
+                # p>0.05说明策略Sharpe在随机排列下也容易出现，过拟合嫌疑大
                 result['is_overfit'] = True
                 result['overfitting_score'] += 0.3
 
@@ -524,6 +554,7 @@ class AdaptiveFactorEngine:
                            n_permutations: int = 500,
                            block_size: int = 5) -> Dict[str, float]:
         """块置换检验"""
+        # block_size=5保留5日内的收益率自相关结构，单纯打乱会低估方差
         actual_sharpe = returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0
         n = len(returns)
         permuted_sharpes = []
@@ -581,6 +612,7 @@ class AdaptiveFactorEngine:
                 half_life = np.inf
 
             is_decaying = b > 0.005 and half_life < len(ic) * 0.8
+            # b>0.005排除伪衰减(拟合噪声)，半衰期<80%序列长度确认衰减在观测期内可观测
 
             return {
                 'half_life': round(half_life, 1),
@@ -591,10 +623,12 @@ class AdaptiveFactorEngine:
             }
         except Exception:
             # 回退: 用前后半段IC均值比较
+            # 曲线拟合失败时(如IC剧烈波动)的降级方案
             mid = len(ic) // 2
             first_half_ic = ic.iloc[:mid].mean()
             second_half_ic = ic.iloc[mid:].mean()
             is_decaying = second_half_ic < first_half_ic * 0.7
+            # 后半段IC降至前半段70%以下判定为衰减，阈值0.7容忍正常波动
 
             return {
                 'half_life': np.nan,

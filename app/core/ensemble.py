@@ -24,6 +24,7 @@ V2 Regime映射:
 """
 
 import logging
+from datetime import date
 
 import pandas as pd
 
@@ -324,6 +325,30 @@ class EnsembleEngine:
         }
 
         return final_score, meta
+
+    def combine(
+        self,
+        factor_df: pd.DataFrame,
+        factor_names: list[str],
+        trade_date: date | None = None,
+        regime: str = "trending",
+        ic_dict: dict[str, float] | None = None,
+        module_corr: pd.DataFrame | None = None,
+    ) -> tuple[pd.Series, dict[str, float]]:
+        """
+        便捷融合方法 — daily_pipeline调用入口
+
+        Returns:
+            (final_scores, final_weights) — 与fuse()不同, 只返回得分和权重
+        """
+        final_score, meta = self.fuse(
+            factor_df,
+            regime=regime,
+            ic_dict=ic_dict,
+            module_corr=module_corr,
+        )
+        final_weights = meta.get("step5_final_weights", {})
+        return final_score, final_weights
 
 
 # ─────────────────────────────────────────────

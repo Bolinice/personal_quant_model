@@ -1,376 +1,615 @@
 """
-日终流水线 V2
-==============
-V2 12步流程:
-1.  数据采集与PIT对齐
-2.  数据快照生成
-3.  股票池构建(含风险事件过滤)
-4.  因子预处理流水线(缺失值→MAD→Z-score→中性化)
-5.  五大模块打分
-6.  信号融合(5步: 基础→IC→Regime→收缩→归一化)
-7.  ML增强排序(可选, Walk-Forward)
-8.  Regime检测
-9.  择时仓位控制(5信号4档+回撤保护)
-10. 组合构建(分层赋权+风险折扣+行业约束)
-11. 因子健康检查与告警
-12. 结果存档与版本管理
+日终流水线 — 串联所有量化模块的12步执行引擎
+
+步骤:
+  1. 数据采集与PIT对齐
+  2. 数据快照
+  3. 股票池构建
+  4. 因子计算与预处理
+  5. 信号融合(Ensemble)
+  6. 市场状态检测(Regime)
+  7. ML增强评分
+  8. 组合构建与优化
+  9. 风险预算与择时
+  10. 回测验证
+  11. 因子健康检查
+  12. 结果存档
 """
 
+from __future__ import annotations
+
+import json
 import logging
-import uuid
-from datetime import date, datetime
+from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from app.core.alpha_modules import get_alpha_modules, get_risk_penalty_module
+from app.core.adaptive_factor_engine import AdaptiveFactorEngine
+from app.core.backtest_engine import ABShareBacktestEngine
 from app.core.ensemble import EnsembleEngine
+from app.core.factor_calculator import FactorCalculator
 from app.core.factor_monitor import FactorMonitor
+from app.core.factor_preprocess import FactorPreprocessor
+from app.core.labels import LabelBuilder
+from app.core.market_timer import MarketTimer
+from app.core.model_scorer import ModelScorer
+from app.core.model_trainer import ModelTrainer
+from app.core.pit_guard import PITGuard
 from app.core.portfolio_builder import PortfolioBuilder
+from app.core.portfolio_optimizer import PortfolioOptimizer
 from app.core.regime import RegimeDetector
 from app.core.risk_budget_engine import RiskBudgetEngine
+from app.core.risk_model import RiskModel
 from app.core.universe import UniverseBuilder
 
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class PipelineResult:
+    """流水线单步执行结果"""
+    step: int
+    name: str
+    status: str  # ok / error / skipped
+    message: str = ""
+    data: Any = None
+    duration_ms: float = 0.0
+
+
+@dataclass
+class PipelineContext:
+    """流水线上下文 — 在步骤间传递数据"""
+    trade_date: date
+    session: Session | None = None
+
+    # Step 1: 数据采集
+    price_df: pd.DataFrame | None = None
+    financial_df: pd.DataFrame | None = None
+    moneyflow_df: pd.DataFrame | None = None
+    index_df: pd.DataFrame | None = None
+    margin_df: pd.DataFrame | None = None
+    northflow_df: pd.DataFrame | None = None
+
+    # Step 2: 快照
+    snapshot_id: str | None = None
+
+    # Step 3: 股票池
+    universe: list[str] | None = None
+
+    # Step 4: 因子
+    factor_df: pd.DataFrame | None = None
+    factor_names: list[str] = field(default_factory=list)
+
+    # Step 5: 信号融合
+    ensemble_scores: pd.Series | None = None
+    ensemble_weights: dict[str, float] | None = None
+
+    # Step 6: 市场状态
+    regime_state: str | None = None
+    regime_confidence: float = 0.0
+
+    # Step 7: ML增强
+    ml_scores: pd.Series | None = None
+    final_scores: pd.Series | None = None
+
+    # Step 8: 组合
+    portfolio_weights: pd.Series | None = None
+    portfolio_stocks: list[str] = field(default_factory=list)
+
+    # Step 9: 风险与择时
+    risk_budget: dict[str, float] | None = None
+    timing_signal: str | None = None
+    position_ratio: float = 1.0
+
+    # Step 10: 回测
+    backtest_result: dict | None = None
+
+    # Step 11: 因子健康
+    factor_health: dict | None = None
+
+    # Step 12: 存档
+    archive_path: str | None = None
+
+
 class DailyPipeline:
-    """V2日终流水线"""
+    """日终流水线 — 12步串联执行"""
 
     def __init__(
         self,
-        universe_builder: UniverseBuilder | None = None,
-        ensemble_engine: EnsembleEngine | None = None,
-        regime_detector: RegimeDetector | None = None,
-        risk_budget_engine: RiskBudgetEngine | None = None,
-        portfolio_builder: PortfolioBuilder | None = None,
-        factor_monitor: FactorMonitor | None = None,
+        session: Session | None = None,
+        lookback_days: int = 250,
+        snapshot_dir: str = "data/snapshots",
     ):
-        self.universe_builder = universe_builder or UniverseBuilder()
-        self.ensemble_engine = ensemble_engine or EnsembleEngine()
-        self.regime_detector = regime_detector or RegimeDetector()
-        self.risk_budget_engine = risk_budget_engine or RiskBudgetEngine()
-        self.portfolio_builder = portfolio_builder or PortfolioBuilder()
-        self.factor_monitor = factor_monitor or FactorMonitor()
+        self.session = session
+        self.lookback_days = lookback_days
+        self.snapshot_dir = Path(snapshot_dir)
+        self.snapshot_dir.mkdir(parents=True, exist_ok=True)
 
-    def step1_data_collection(self, trade_date: date, **kwargs) -> dict[str, Any]:
-        """
-        Step 1: 数据采集与PIT对齐
+        # 初始化各模块
+        self.pit_guard = PITGuard()
+        self.universe_builder = UniverseBuilder()
+        self.factor_calculator = FactorCalculator()
+        self.factor_preprocessor = FactorPreprocessor()
+        self.ensemble_engine = EnsembleEngine()
+        self.regime_detector = RegimeDetector()
+        self.model_scorer = ModelScorer()
+        self.model_trainer = ModelTrainer()
+        self.portfolio_builder = PortfolioBuilder()
+        self.portfolio_optimizer = PortfolioOptimizer()
+        self.risk_model = RiskModel()
+        self.market_timer = MarketTimer()
+        self.risk_budget_engine = RiskBudgetEngine()
+        self.backtest_engine = ABShareBacktestEngine()
+        self.factor_monitor = FactorMonitor()
+        self.adaptive_engine = AdaptiveFactorEngine()
+        self.label_builder = LabelBuilder()
 
-        - 采集行情/财务/北向/资金流/事件数据
-        - PIT对齐: 按公告日取财务数据, 预告>快报>正式
-        """
-        # PIT对齐是防未来函数的第一道关: 财务数据必须按公告日而非报告期使用
-        logger.info(f"[Step 1] 数据采集与PIT对齐: {trade_date}")
-        return {
-            "status": "ok",
-            "trade_date": str(trade_date),
-            "pit_aligned": True,
-        }
+        self.results: list[PipelineResult] = []
 
-    def step2_snapshot(self, trade_date: date, **kwargs) -> dict[str, Any]:
-        """
-        Step 2: 数据快照生成
+    def run(self, trade_date: date | None = None) -> list[PipelineResult]:
+        """执行完整日终流水线"""
+        if trade_date is None:
+            trade_date = date.today()
 
-        - 生成当日数据快照, 记录到data_snapshot_registry
-        - 快照ID: snap_YYYYMMDD_xxxxxxxx
-        """
-        # 快照确保全流水线使用同一份数据, 防止中间数据更新导致不一致
-        snapshot_id = f"snap_{trade_date.strftime('%Y%m%d')}_{uuid.uuid4().hex[:8]}"
-        logger.info(f"[Step 2] 数据快照生成: {snapshot_id}")
-        return {
-            "status": "ok",
-            "snapshot_id": snapshot_id,
-        }
+        ctx = PipelineContext(trade_date=trade_date, session=self.session)
+        logger.info("========== 日终流水线启动 %s ==========", trade_date)
 
-    def step3_universe(self, trade_date: date, **kwargs) -> dict[str, Any]:
-        """
-        Step 3: 股票池构建(含风险事件过滤)
+        steps = [
+            (1, "数据采集与PIT对齐", self._step1_data_collection),
+            (2, "数据快照", self._step2_snapshot),
+            (3, "股票池构建", self._step3_universe),
+            (4, "因子计算与预处理", self._step4_factor_calc),
+            (5, "信号融合", self._step5_ensemble),
+            (6, "市场状态检测", self._step6_regime),
+            (7, "ML增强评分", self._step7_ml_scoring),
+            (8, "组合构建与优化", self._step8_portfolio),
+            (9, "风险预算与择时", self._step9_risk_timing),
+            (10, "回测验证", self._step10_backtest),
+            (11, "因子健康检查", self._step11_factor_health),
+            (12, "结果存档", self._step12_archive),
+        ]
 
-        - 核心池/扩展池
-        - V2: 风险事件过滤/黑名单硬过滤/交易可行性过滤
-        """
-        logger.info(f"[Step 3] 股票池构建: {trade_date}")
-        return {
-            "status": "ok",
-            "core_count": 0,
-            "extended_count": 0,
-        }
-
-    def step4_factor_preprocess(self, trade_date: date, **kwargs) -> dict[str, Any]:
-        """
-        Step 4: 因子预处理流水线
-
-        - 缺失值处理 → 去极值(MAD) → 标准化(Z-score) → 中性化(行业+市值)
-        """
-        # 顺序不可调换: MAD去极值必须在Z-score之前, 否则极端值会拉偏均值和标准差
-        # 中性化必须在最后, 因为它依赖已标准化的因子值做截面回归
-        logger.info(f"[Step 4] 因子预处理流水线: {trade_date}")
-        return {
-            "status": "ok",
-            "factors_processed": 0,
-        }
-
-    def step5_module_scoring(self, df: pd.DataFrame, **kwargs) -> dict[str, Any]:
-        """
-        Step 5: 五大模块打分
-
-        - 质量成长/预期修正/残差动量/资金流确认
-        - 风险惩罚(独立扣分)
-        """
-        logger.info("[Step 5] 五大模块打分")
-        alpha_modules = get_alpha_modules()
-        risk_module = get_risk_penalty_module()
-
-        module_scores = {}
-        for name, module in alpha_modules.items():
+        for step_num, step_name, step_fn in steps:
+            t0 = pd.Timestamp.now()
             try:
-                scores = module.compute_scores(df, **kwargs)
-                module_scores[name] = scores
-                logger.info(f"  模块 {name}: mean={scores.mean():.4f}, std={scores.std():.4f}")
-            except Exception as e:
-                logger.error(f"  模块 {name} 计算失败: {e}")
-                module_scores[name] = pd.Series(0.0, index=df.index)
-
-        try:
-            risk_penalty = risk_module.compute_scores(df, **kwargs)
-            module_scores["risk_penalty"] = risk_penalty
-        except Exception as e:
-            logger.error(f"  风险惩罚模块计算失败: {e}")
-            module_scores["risk_penalty"] = pd.Series(0.0, index=df.index)
-
-        return {
-            "status": "ok",
-            "module_scores": module_scores,
-        }
-
-    def step6_ensemble(
-        self,
-        df: pd.DataFrame,
-        regime: str = "trending",
-        precomputed_module_scores: dict[str, pd.Series] | None = None,
-        precomputed_risk_penalty: pd.Series | None = None,
-        **kwargs,
-    ) -> tuple[pd.Series, dict]:
-        """
-        Step 6: 信号融合
-
-        5步: 基础权重 → 动态IC → Regime调权 → 高相关收缩 → 归一化
-        + 风险惩罚独立扣分
-        """
-        logger.info(f"[Step 6] 信号融合 (regime={regime})")
-        final_scores, meta = self.ensemble_engine.fuse(
-            df,
-            regime=regime,
-            precomputed_module_scores=precomputed_module_scores,
-            precomputed_risk_penalty=precomputed_risk_penalty,
-            **kwargs,
-        )
-        return final_scores, meta
-
-    def step7_ml_enhancement(self, scores: pd.Series, **kwargs) -> pd.Series:
-        """
-        Step 7: ML增强排序(可选)
-
-        - Walk-Forward训练
-        - 三路融合: 规则30% + Ridge25% + LightGBM45%
-        - 无ML时直接返回规则得分
-        """
-        logger.info("[Step 7] ML增强排序 (跳过, 使用规则得分)")
-        return scores
-
-    def step8_regime_detection(self, **kwargs) -> dict[str, Any]:
-        """
-        Step 8: Regime检测
-
-        - 4维检测: 趋势/宽度/波动率/流动性
-        - 4状态: risk_on/trending/defensive/mean_reverting
-        """
-        logger.info("[Step 8] Regime检测")
-        market_data = kwargs.get("market_data", pd.DataFrame())
-        if market_data.empty:
-            # 无市场数据时默认震荡市
-            return {"regime": "mean_reverting"}
-        regime = self.regime_detector.detect(market_data)
-        return {"regime": regime}
-
-    def step9_timing_position(self, **kwargs) -> dict[str, Any]:
-        """
-        Step 9: 择时仓位控制
-
-        - 5信号4档: 指数趋势/市场宽度/波动率/北向资金/回撤保护
-        - 仓位: 强正面100%/正面80%/中性60%/负面30%
-        """
-        logger.info("[Step 9] 择时仓位控制")
-        # compute_timing_position不接受regime参数, 需过滤
-        timing_kwargs = {k: v for k, v in kwargs.items() if k != "regime"}
-        return self.risk_budget_engine.compute_timing_position(**timing_kwargs)
-
-    def step10_portfolio_build(self, scores: pd.Series, **kwargs) -> pd.DataFrame:
-        """
-        Step 10: 组合构建
-
-        - 分层赋权: 1-10名1.5x / 11-30名1.2x / 31-60名1.0x
-        - 风险折扣: D_risk + D_liq
-        - 行业约束: 单行业≤20%
-        - 100股整数倍
-        """
-        logger.info("[Step 10] 组合构建")
-        return self.portfolio_builder.build(scores, **kwargs)
-
-    def step11_factor_health_check(self, trade_date: date, **kwargs) -> dict[str, Any]:
-        """
-        Step 11: 因子健康检查与告警
-
-        - IC漂移/PSI/覆盖率/缺失率
-        - 模块间相关性检查
-        - 告警触发与推送
-        """
-        logger.info(f"[Step 11] 因子健康检查: {trade_date}")
-        return {
-            "status": "ok",
-            "healthy_factors": 0,
-            "warning_factors": 0,
-            "critical_factors": 0,
-        }
-
-    def step12_archive(self, trade_date: date, results: dict, **kwargs) -> dict[str, Any]:
-        """
-        Step 12: 结果存档与版本管理
-
-        - 保存组合/因子/监控数据
-        - 版本标记(Git commit + 配置版本)
-        """
-        logger.info(f"[Step 12] 结果存档: {trade_date}")
-        return {
-            "status": "ok",
-            "archived": True,
-        }
-
-    def run(self, trade_date: date, **kwargs) -> dict[str, Any]:
-        """
-        执行V2完整12步流水线
-
-        Returns:
-            完整流水线结果
-        """
-        pipeline_start = datetime.now()
-        logger.info(f"===== V2日终流水线开始: {trade_date} =====")
-
-        results = {"trade_date": str(trade_date), "steps": {}}
-
-        try:
-            # Step 1: 数据采集与PIT对齐
-            r1 = self.step1_data_collection(trade_date, **kwargs)
-            results["steps"]["step1_data_collection"] = r1
-
-            # Step 2: 数据快照
-            r2 = self.step2_snapshot(trade_date, **kwargs)
-            results["steps"]["step2_snapshot"] = r2
-
-            # Step 3: 股票池
-            r3 = self.step3_universe(trade_date, **kwargs)
-            results["steps"]["step3_universe"] = r3
-
-            # Step 4: 因子预处理
-            r4 = self.step4_factor_preprocess(trade_date, **kwargs)
-            results["steps"]["step4_factor_preprocess"] = r4
-
-            # Step 8: Regime检测 (提前到Step5之前, 以便Step6使用regime)
-            # Regime检测只依赖市场数据, 不依赖因子计算, 所以可以提前
-            r8 = self.step8_regime_detection(**kwargs)
-            results["steps"]["step8_regime"] = r8
-            # 从regime检测结果中提取regime标签, 供step6使用
-            if isinstance(r8, dict) and "regime" in r8:
-                kwargs = {**kwargs, "regime": r8["regime"]}
-
-            # Step 5: 五大模块打分 (需要DataFrame)
-            # 依赖Step4预处理的因子数据, 依赖Step3的股票池确定计算范围
-            df = kwargs.get("factor_df", pd.DataFrame())
-            module_scores = None
-            risk_penalty = None
-            if not df.empty:
-                r5 = self.step5_module_scoring(df, **kwargs)
-                module_scores = r5.get("module_scores")
-                risk_penalty = module_scores.pop("risk_penalty", None) if module_scores else None
-                # Store full module info including risk_penalty (which was already popped
-                # from module_scores for separate use in step6). Reconstruct the full
-                # list of module names for debugging clarity.
-                step5_module_names = list(module_scores.keys())
-                if risk_penalty is not None:
-                    step5_module_names.append("risk_penalty")
-                results["steps"]["step5_module_scoring"] = {
-                    "status": r5["status"],
-                    "modules": step5_module_names,
-                    "has_risk_penalty": risk_penalty is not None,
-                }
-            else:
-                results["steps"]["step5_module_scoring"] = {"status": "skipped", "reason": "no_data"}
-
-            # Step 6: 信号融合 (使用step5预计算结果, 避免重复计算)
-            # 依赖Step5的模块得分 + Step8的regime标签
-            if not df.empty and module_scores is not None:
-                regime = kwargs.get("regime", "trending")
-                scores, meta = self.step6_ensemble(
-                    df,
-                    regime=regime,
-                    precomputed_module_scores=module_scores,
-                    precomputed_risk_penalty=risk_penalty,
-                    **kwargs,
+                step_fn(ctx)
+                result = PipelineResult(
+                    step=step_num,
+                    name=step_name,
+                    status="ok",
+                    duration_ms=(pd.Timestamp.now() - t0).total_seconds() * 1000,
                 )
-                results["steps"]["step6_ensemble"] = {
-                    "status": "ok",
-                    "final_weights": meta.get("step5_final_weights", {}),
-                }
-            else:
-                scores = pd.Series(dtype=float)
-                results["steps"]["step6_ensemble"] = {"status": "skipped"}
+                logger.info("Step %2d %-20s OK (%.0fms)", step_num, step_name, result.duration_ms)
+            except Exception as e:
+                result = PipelineResult(
+                    step=step_num,
+                    name=step_name,
+                    status="error",
+                    message=str(e),
+                    duration_ms=(pd.Timestamp.now() - t0).total_seconds() * 1000,
+                )
+                logger.error("Step %2d %-20s ERROR: %s", step_num, step_name, e)
+                # 非关键步骤失败不中断流水线
+                if step_num in (1, 3, 4, 5, 8):
+                    raise
 
-            # Step 7: ML增强
-            # 依赖Step6的融合得分, 可选步骤, 无ML模型时直接透传
-            if not scores.empty:
-                enhanced_scores = self.step7_ml_enhancement(scores, **kwargs)
-                results["steps"]["step7_ml_enhancement"] = {"status": "ok"}
-            else:
-                enhanced_scores = scores
-                results["steps"]["step7_ml_enhancement"] = {"status": "skipped"}
+            self.results.append(result)
 
-            # Step 9: 择时仓位
-            # 依赖Step8的regime + 市场数据, 与个股得分独立, 决定整体仓位水平
-            r9 = self.step9_timing_position(**kwargs)
-            results["steps"]["step9_timing"] = r9
+        logger.info("========== 日终流水线完成 %s ==========", trade_date)
+        return self.results
 
-            # Step 10: 组合构建
-            # 依赖Step7得分(选什么) + Step9仓位(买多少) + Step3股票池(约束范围)
-            if not enhanced_scores.empty:
-                portfolio = self.step10_portfolio_build(enhanced_scores, **kwargs)
-                results["steps"]["step10_portfolio"] = {
-                    "status": "ok",
-                    "holdings_count": len(portfolio),
-                }
-            else:
-                results["steps"]["step10_portfolio"] = {"status": "skipped"}
+    # ──────────────────────────────────────────────
+    # Step 1: 数据采集与PIT对齐
+    # ──────────────────────────────────────────────
+    @staticmethod
+    def _load_table(session: Session, model_cls, start_date: date, end_date: date,
+                    date_col: str = "trade_date") -> pd.DataFrame | None:
+        """高效加载表数据 — 使用mappings()避免ORM序列化开销"""
+        stmt = (
+            select(model_cls)
+            .where(getattr(model_cls, date_col).between(start_date, end_date))
+            .order_by(getattr(model_cls, date_col))
+        )
+        rows = session.execute(stmt).mappings().all()
+        if rows:
+            return pd.DataFrame(dict(r) for r in rows)
+        return None
 
-            # Step 11: 因子健康检查
-            # 依赖Step4预处理后的因子数据, 与组合构建解耦: 即使组合未构建, 仍需监控因子质量
-            r11 = self.step11_factor_health_check(trade_date, **kwargs)
-            results["steps"]["step11_factor_health"] = r11
+    def _step1_data_collection(self, ctx: PipelineContext) -> None:
+        """从数据库读取行情/财务/资金流数据，PIT对齐财务数据"""
+        if ctx.session is None:
+            logger.warning("Step1: 无数据库会话，跳过数据采集")
+            return
 
-            # Step 12: 结果存档
-            # 放在最后: 确保全流水线结果(含各步骤元信息)都被持久化
-            r12 = self.step12_archive(trade_date, results, **kwargs)
-            results["steps"]["step12_archive"] = r12
+        start_date = ctx.trade_date - timedelta(days=self.lookback_days)
 
+        # 1. 行情数据
+        from app.models.market.stock_daily import StockDaily
+        ctx.price_df = self._load_table(ctx.session, StockDaily, start_date, ctx.trade_date)
+        logger.info("Step1: 行情数据 %d 条", len(ctx.price_df) if ctx.price_df is not None else 0)
+
+        # 2. 财务数据 — PIT对齐 (SQL层过滤ann_date <= trade_date)
+        from app.models.market.stock_financial import StockFinancial
+        stmt = (
+            select(StockFinancial)
+            .where(StockFinancial.ann_date <= ctx.trade_date.strftime("%Y%m%d"))
+            .order_by(StockFinancial.ann_date)
+        )
+        rows = ctx.session.execute(stmt).mappings().all()
+        if rows:
+            raw_fin = pd.DataFrame(dict(r) for r in rows)
+            ctx.financial_df = self.pit_guard.align(raw_fin, ctx.trade_date)
+        logger.info("Step1: 财务数据 %d 条(PIT对齐后)",
+                     len(ctx.financial_df) if ctx.financial_df is not None else 0)
+
+        # 3. 资金流数据
+        from app.models.market.stock_money_flow import StockMoneyFlow
+        ctx.moneyflow_df = self._load_table(ctx.session, StockMoneyFlow, start_date, ctx.trade_date)
+        logger.info("Step1: 资金流数据 %d 条", len(ctx.moneyflow_df) if ctx.moneyflow_df is not None else 0)
+
+        # 4. 指数数据
+        from app.models.market.index_daily import IndexDaily
+        ctx.index_df = self._load_table(ctx.session, IndexDaily, start_date, ctx.trade_date)
+        logger.info("Step1: 指数数据 %d 条", len(ctx.index_df) if ctx.index_df is not None else 0)
+
+        # 5. 融资融券数据
+        try:
+            from app.models.market.stock_margin import StockMargin
+            ctx.margin_df = self._load_table(ctx.session, StockMargin, start_date, ctx.trade_date)
         except Exception as e:
-            logger.error(f"流水线执行失败: {e}", exc_info=True)
-            results["status"] = "error"
-            results["error"] = str(e)
-            return results
+            logger.warning("Step1: 融资融券数据读取失败: %s", e)
+        logger.info("Step1: 融资融券数据 %d 条", len(ctx.margin_df) if ctx.margin_df is not None else 0)
 
-        pipeline_end = datetime.now()
-        duration = (pipeline_end - pipeline_start).total_seconds()
-        results["status"] = "ok"
-        results["duration_seconds"] = duration
+        # 6. 北向资金数据
+        try:
+            from app.models.market.stock_northbound import StockNorthbound
+            ctx.northflow_df = self._load_table(ctx.session, StockNorthbound, start_date, ctx.trade_date)
+        except Exception as e:
+            logger.warning("Step1: 北向资金数据读取失败: %s", e)
+        logger.info("Step1: 北向资金数据 %d 条", len(ctx.northflow_df) if ctx.northflow_df is not None else 0)
 
-        logger.info(f"===== V2日终流水线完成: {trade_date}, 耗时{duration:.1f}s =====")
-        return results
+    # ──────────────────────────────────────────────
+    # Step 2: 数据快照
+    # ──────────────────────────────────────────────
+    def _step2_snapshot(self, ctx: PipelineContext) -> None:
+        """生成数据快照ID和文件，用于可复现性"""
+        snapshot_id = f"snapshot_{ctx.trade_date.strftime('%Y%m%d')}_{datetime.now().strftime('%H%M%S')}"
+        ctx.snapshot_id = snapshot_id
+
+        snapshot_data = {}
+        for attr in ("price_df", "financial_df", "moneyflow_df", "index_df", "margin_df", "northflow_df"):
+            df = getattr(ctx, attr, None)
+            if df is not None:
+                snapshot_data[attr] = df.to_json(orient="records", date_format="iso")
+
+        snapshot_path = self.snapshot_dir / f"{snapshot_id}.json"
+        with open(snapshot_path, "w", encoding="utf-8") as f:
+            json.dump(snapshot_data, f, ensure_ascii=False)
+
+        logger.info("Step2: 快照 %s 已保存 (%.1fKB)", snapshot_id, snapshot_path.stat().st_size / 1024)
+
+    # ──────────────────────────────────────────────
+    # Step 3: 股票池构建
+    # ──────────────────────────────────────────────
+    def _step3_universe(self, ctx: PipelineContext) -> None:
+        """构建核心股票池 — 流动性/上市天数/ST过滤"""
+        if ctx.price_df is None or ctx.price_df.empty:
+            raise ValueError("Step3: 无行情数据，无法构建股票池")
+
+        ctx.universe = self.universe_builder.build_core_pool(
+            price_df=ctx.price_df,
+            trade_date=ctx.trade_date,
+        )
+        logger.info("Step3: 股票池 %d 只", len(ctx.universe) if ctx.universe else 0)
+
+    # ──────────────────────────────────────────────
+    # Step 4: 因子计算与预处理
+    # ──────────────────────────────────────────────
+    def _step4_factor_calc(self, ctx: PipelineContext) -> None:
+        """计算5+1模块因子并预处理（去极值/标准化/中性化）"""
+        if ctx.price_df is None or ctx.price_df.empty:
+            raise ValueError("Step4: 无行情数据，无法计算因子")
+
+        # 4a. 因子计算
+        ctx.factor_df = self.factor_calculator.calculate_all(
+            price_df=ctx.price_df,
+            financial_df=ctx.financial_df,
+            moneyflow_df=ctx.moneyflow_df,
+            index_df=ctx.index_df,
+            margin_df=ctx.margin_df,
+            northflow_df=ctx.northflow_df,
+            trade_date=ctx.trade_date,
+            universe=ctx.universe,
+        )
+
+        if ctx.factor_df is not None and not ctx.factor_df.empty:
+            ctx.factor_names = [c for c in ctx.factor_df.columns
+                                if c not in ("ts_code", "trade_date")]
+            logger.info("Step4a: 因子计算完成 %d 因子 x %d 股票",
+                         len(ctx.factor_names), len(ctx.factor_df))
+
+            # 4b. 因子预处理: 缺失值→去极值(MAD)→标准化(Z-score)→中性化
+            ctx.factor_df = self.factor_preprocessor.preprocess_dataframe(
+                ctx.factor_df, factor_columns=ctx.factor_names
+            )
+            logger.info("Step4b: 因子预处理完成")
+        else:
+            logger.warning("Step4: 因子计算结果为空")
+
+    # ──────────────────────────────────────────────
+    # Step 5: 信号融合
+    # ──────────────────────────────────────────────
+    def _step5_ensemble(self, ctx: PipelineContext) -> None:
+        """动态IC加权 + Regime调权信号融合"""
+        if ctx.factor_df is None or ctx.factor_df.empty:
+            raise ValueError("Step5: 无因子数据，无法融合信号")
+
+        ctx.ensemble_scores, ctx.ensemble_weights = self.ensemble_engine.combine(
+            factor_df=ctx.factor_df,
+            factor_names=ctx.factor_names,
+            trade_date=ctx.trade_date,
+        )
+        logger.info("Step5: 信号融合完成, 权重数=%d",
+                     len(ctx.ensemble_weights) if ctx.ensemble_weights else 0)
+
+    # ──────────────────────────────────────────────
+    # Step 6: 市场状态检测
+    # ──────────────────────────────────────────────
+    def _step6_regime(self, ctx: PipelineContext) -> None:
+        """检测市场状态: 趋势/震荡/防御/进攻"""
+        if ctx.index_df is None or ctx.index_df.empty:
+            logger.warning("Step6: 无指数数据，使用默认市场状态")
+            ctx.regime_state = "normal"
+            ctx.regime_confidence = 0.5
+            return
+
+        ctx.regime_state, ctx.regime_confidence = self.regime_detector.detect(
+            index_df=ctx.index_df,
+            trade_date=ctx.trade_date,
+        )
+        logger.info("Step6: 市场状态=%s 置信度=%.2f", ctx.regime_state, ctx.regime_confidence)
+
+    # ──────────────────────────────────────────────
+    # Step 7: ML增强评分
+    # ──────────────────────────────────────────────
+    def _step7_ml_scoring(self, ctx: PipelineContext) -> None:
+        """ML模型增强评分 + 自适应因子引擎"""
+        if ctx.ensemble_scores is None:
+            logger.warning("Step7: 无融合信号，跳过ML增强")
+            ctx.final_scores = ctx.ensemble_scores
+            return
+
+        # 7a. ML模型评分
+        try:
+            ctx.ml_scores = self.model_scorer.predict(
+                factor_df=ctx.factor_df,
+                trade_date=ctx.trade_date,
+            )
+        except Exception as e:
+            logger.warning("Step7a: ML评分失败(%s)，使用融合信号", e)
+            ctx.ml_scores = None
+
+        # 7b. 自适应因子引擎 — 更新因子画像
+        try:
+            self.adaptive_engine.update_profiles(
+                factor_df=ctx.factor_df,
+                factor_names=ctx.factor_names,
+                trade_date=ctx.trade_date,
+            )
+        except Exception as e:
+            logger.warning("Step7b: 自适应引擎更新失败: %s", e)
+
+        # 7c. 融合ML评分与Ensemble评分
+        if ctx.ml_scores is not None and not ctx.ml_scores.empty:
+            # ML权重根据regime调整: 防御状态下降低ML权重
+            ml_weight = 0.3
+            if ctx.regime_state in ("defensive", "crisis"):
+                ml_weight = 0.15
+            elif ctx.regime_state in ("aggressive", "trending"):
+                ml_weight = 0.4
+
+            # 对齐索引
+            common_idx = ctx.ensemble_scores.index.intersection(ctx.ml_scores.index)
+            ctx.final_scores = (
+                (1 - ml_weight) * ctx.ensemble_scores.loc[common_idx]
+                + ml_weight * ctx.ml_scores.loc[common_idx]
+            )
+            logger.info("Step7: ML增强完成 (ml_weight=%.2f, n=%d)", ml_weight, len(common_idx))
+        else:
+            ctx.final_scores = ctx.ensemble_scores
+            logger.info("Step7: 使用纯Ensemble信号 (n=%d)", len(ctx.final_scores))
+
+    # ──────────────────────────────────────────────
+    # Step 8: 组合构建与优化
+    # ──────────────────────────────────────────────
+    def _step8_portfolio(self, ctx: PipelineContext) -> None:
+        """构建组合 + 优化权重"""
+        if ctx.final_scores is None or ctx.final_scores.empty:
+            raise ValueError("Step8: 无评分数据，无法构建组合")
+
+        # 8a. 初始组合构建
+        ctx.portfolio_stocks = self.portfolio_builder.build(
+            scores=ctx.final_scores,
+            universe=ctx.universe,
+            regime_state=ctx.regime_state,
+            trade_date=ctx.trade_date,
+        )
+
+        # 8b. 组合权重优化
+        if ctx.factor_df is not None and not ctx.factor_df.empty:
+            ctx.portfolio_weights = self.portfolio_optimizer.optimize(
+                factor_df=ctx.factor_df,
+                scores=ctx.final_scores,
+                selected_stocks=ctx.portfolio_stocks,
+                regime_state=ctx.regime_state,
+            )
+        else:
+            # 等权fallback
+            n = len(ctx.portfolio_stocks)
+            ctx.portfolio_weights = pd.Series(
+                1.0 / n, index=ctx.portfolio_stocks
+            ) if n > 0 else pd.Series(dtype=float)
+
+        logger.info("Step8: 组合构建完成 %d 只股票", len(ctx.portfolio_stocks))
+
+    # ──────────────────────────────────────────────
+    # Step 9: 风险预算与择时
+    # ──────────────────────────────────────────────
+    def _step9_risk_timing(self, ctx: PipelineContext) -> None:
+        """风险预算分配 + 市场择时信号"""
+        # 9a. 风险预算
+        if ctx.portfolio_weights is not None and not ctx.portfolio_weights.empty:
+            try:
+                ctx.risk_budget = self.risk_budget_engine.allocate(
+                    weights=ctx.portfolio_weights,
+                    factor_df=ctx.factor_df,
+                    regime_state=ctx.regime_state,
+                )
+            except Exception as e:
+                logger.warning("Step9a: 风险预算分配失败: %s", e)
+
+        # 9b. 市场择时
+        if ctx.index_df is not None and not ctx.index_df.empty:
+            try:
+                ctx.timing_signal, ctx.position_ratio = self.market_timer.get_signal(
+                    index_df=ctx.index_df,
+                    trade_date=ctx.trade_date,
+                    regime_state=ctx.regime_state,
+                )
+            except Exception as e:
+                logger.warning("Step9b: 择时信号失败: %s", e)
+                ctx.timing_signal = "hold"
+                ctx.position_ratio = 1.0
+
+        # 9c. 根据择时信号调整仓位
+        if ctx.portfolio_weights is not None and ctx.position_ratio != 1.0:
+            ctx.portfolio_weights = ctx.portfolio_weights * ctx.position_ratio
+            logger.info("Step9: 仓位调整 ratio=%.2f signal=%s", ctx.position_ratio, ctx.timing_signal)
+        else:
+            logger.info("Step9: 风险预算与择时完成")
+
+    # ──────────────────────────────────────────────
+    # Step 10: 回测验证
+    # ──────────────────────────────────────────────
+    def _step10_backtest(self, ctx: PipelineContext) -> None:
+        """对当前组合做快速回测验证"""
+        if ctx.price_df is None or ctx.price_df.empty:
+            logger.warning("Step10: 无行情数据，跳过回测验证")
+            return
+
+        try:
+            ctx.backtest_result = self.backtest_engine.run(
+                price_df=ctx.price_df,
+                portfolio_weights=ctx.portfolio_weights,
+                trade_date=ctx.trade_date,
+                universe=ctx.universe,
+            )
+            if ctx.backtest_result:
+                metrics = ctx.backtest_result.get("metrics", {})
+                logger.info("Step10: 回测完成 sharpe=%.2f max_dd=%.2f%%",
+                             metrics.get("sharpe_ratio", 0),
+                             metrics.get("max_drawdown", 0) * 100)
+        except Exception as e:
+            logger.warning("Step10: 回测验证失败: %s", e)
+
+    # ──────────────────────────────────────────────
+    # Step 11: 因子健康检查
+    # ──────────────────────────────────────────────
+    def _step11_factor_health(self, ctx: PipelineContext) -> None:
+        """因子衰减与漂移监控: IC漂移/PSI/KS"""
+        if ctx.factor_df is None or ctx.factor_df.empty:
+            logger.warning("Step11: 无因子数据，跳过健康检查")
+            return
+
+        try:
+            ctx.factor_health = self.factor_monitor.check_all_modules(
+                factor_df=ctx.factor_df,
+                factor_names=ctx.factor_names,
+                trade_date=ctx.trade_date,
+            )
+            if ctx.factor_health:
+                unhealthy = [k for k, v in ctx.factor_health.items()
+                             if v.get("status") == "unhealthy"]
+                if unhealthy:
+                    logger.warning("Step11: 不健康因子: %s", unhealthy)
+                else:
+                    logger.info("Step11: 所有因子健康")
+        except Exception as e:
+            logger.warning("Step11: 因子健康检查失败: %s", e)
+
+    # ──────────────────────────────────────────────
+    # Step 12: 结果存档
+    # ──────────────────────────────────────────────
+    def _step12_archive(self, ctx: PipelineContext) -> None:
+        """保存组合/因子/监控结果到数据库和文件"""
+        archive_dir = Path("data/archive") / ctx.trade_date.strftime("%Y%m%d")
+        archive_dir.mkdir(parents=True, exist_ok=True)
+
+        archive_data = {
+            "trade_date": str(ctx.trade_date),
+            "snapshot_id": ctx.snapshot_id,
+            "universe_count": len(ctx.universe) if ctx.universe else 0,
+            "factor_count": len(ctx.factor_names),
+            "regime_state": ctx.regime_state,
+            "regime_confidence": ctx.regime_confidence,
+            "timing_signal": ctx.timing_signal,
+            "position_ratio": ctx.position_ratio,
+            "portfolio_stocks": ctx.portfolio_stocks,
+            "factor_health": ctx.factor_health,
+            "ensemble_weights": ctx.ensemble_weights,
+            "risk_budget": ctx.risk_budget,
+        }
+
+        # 保存组合权重
+        if ctx.portfolio_weights is not None and not ctx.portfolio_weights.empty:
+            archive_data["portfolio_weights"] = ctx.portfolio_weights.to_dict()
+
+        # 保存回测结果摘要
+        if ctx.backtest_result and "metrics" in ctx.backtest_result:
+            archive_data["backtest_metrics"] = ctx.backtest_result["metrics"]
+
+        # 写入JSON存档
+        archive_path = archive_dir / "pipeline_result.json"
+        with open(archive_path, "w", encoding="utf-8") as f:
+            json.dump(archive_data, f, ensure_ascii=False, indent=2, default=str)
+
+        # 保存因子数据CSV
+        if ctx.factor_df is not None and not ctx.factor_df.empty:
+            ctx.factor_df.to_csv(archive_dir / "factors.csv", index=False)
+
+        ctx.archive_path = str(archive_path)
+        logger.info("Step12: 结果已存档到 %s", archive_path)
+
+        # 尝试写入数据库
+        if ctx.session is not None:
+            self._save_to_db(ctx)
+
+    def _save_to_db(self, ctx: PipelineContext) -> None:
+        """将流水线结果写入数据库"""
+        try:
+            from app.models.strategy import Strategy
+            strategy = Strategy(
+                name=f"daily_pipeline_{ctx.trade_date}",
+                params={
+                    "snapshot_id": ctx.snapshot_id,
+                    "regime_state": ctx.regime_state,
+                    "timing_signal": ctx.timing_signal,
+                    "position_ratio": ctx.position_ratio,
+                    "portfolio_stocks": ctx.portfolio_stocks,
+                    "factor_count": len(ctx.factor_names),
+                    "universe_count": len(ctx.universe) if ctx.universe else 0,
+                },
+            )
+            ctx.session.add(strategy)
+            ctx.session.commit()
+            logger.info("Step12: 策略结果已写入数据库")
+        except Exception as e:
+            logger.warning("Step12: 数据库写入失败: %s", e)
+            if ctx.session:
+                ctx.session.rollback()

@@ -187,28 +187,17 @@ class RegimeDetector:
         large_cap_df: pd.DataFrame = None,
         small_cap_df: pd.DataFrame = None,
         sector_returns: pd.DataFrame = None,
-    ) -> str:
+    ) -> tuple[str, float]:
         """
-        检测当前市场regime
-
-        基于多维度特征综合判断:
-        - 趋势强度 + 方向 → trending/mean_reverting
-        - 波动率 + 宽度 → defensive/risk_on
-        - 大小盘差 → 风格偏好
-
-        Args:
-            market_data: 指数行情(如沪深300)
-            large_cap_df: 大盘指数(可选)
-            small_cap_df: 小盘指数(可选)
-            sector_returns: 行业收益(可选)
+        检测当前市场regime并返回置信度
 
         Returns:
-            regime标签: trending/mean_reverting/defensive/risk_on
+            (regime标签, 置信度): 如 ("trending", 0.7)
         """
         features = self.market_features(market_data)
 
         if not features:
-            return REGIME_MEAN_REVERTING  # 默认震荡市 — 无数据时保守选择, 震荡权重最均衡
+            return REGIME_MEAN_REVERTING, 0.3  # 默认震荡市 — 无数据时保守选择, 震荡权重最均衡
 
         # 综合评分
         trend_score = 0.0
@@ -276,10 +265,18 @@ class RegimeDetector:
         else:
             regime = REGIME_MEAN_REVERTING
 
+        # 计算置信度: 特征越偏离中性，置信度越高
+        trend_20d_abs = abs(features.get("market_trend_20d", 0))
+        vol_ratio_val = features.get("vol_ratio", 1.0)
+        breadth_val = features.get("breadth", 0.5)
+        confidence = min((trend_20d_abs * 10 + abs(vol_ratio_val - 1.0) * 2 + abs(breadth_val - 0.5) * 2) / 3, 1.0)
+        confidence = max(confidence, 0.3)
+
         logger.info(
             "Regime detected",
             extra={
                 "regime": regime,
+                "confidence": round(confidence, 3),
                 "trend_score": round(trend_score, 3),
                 "vol_score": round(vol_score, 3),
                 "breadth_score": round(breadth_score, 3),
@@ -289,7 +286,7 @@ class RegimeDetector:
             },
         )
 
-        return regime
+        return regime, confidence
 
     def get_weight_adjustments(self, regime: str, base_weights: dict[str, float]) -> dict[str, float]:
         """

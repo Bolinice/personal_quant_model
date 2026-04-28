@@ -1,11 +1,14 @@
-from sqlalchemy import Boolean, Column, Date, Index, Integer, Numeric, String
+from sqlalchemy import Boolean, Column, Date, Index, Integer, Numeric, String, UniqueConstraint
 
 from app.db.base import Base
 
 
 class StockDaily(Base):
     __tablename__ = "stock_daily"
-    __table_args__ = (Index("ix_sd_code_date", "ts_code", "trade_date"),)
+    __table_args__ = (
+        UniqueConstraint("ts_code", "trade_date", name="uq_sd_code_date"),
+        Index("ix_sd_code_date", "ts_code", "trade_date"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     ts_code = Column(String(16), index=True)

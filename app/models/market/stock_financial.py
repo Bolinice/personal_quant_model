@@ -61,7 +61,6 @@ class StockFinancial(Base):
     debt_to_assets = Column(Float, nullable=True, comment="资产负债率(%)")
     equity_multiplier = Column(Float, nullable=True, comment="权益乘数")
 
-    goodwill = Column(Float, nullable=True, comment="商誉")
     # === 估值快照字段 ===
     total_market_cap = Column(Float, nullable=True, comment="总市值(万元)")
     circ_market_cap = Column(Float, nullable=True, comment="流通市值(万元)")
@@ -71,6 +70,6 @@ class StockFinancial(Base):
     dividend_yield = Column(Float, nullable=True, comment="股息率(%)")
 
     __table_args__ = (
-        UniqueConstraint("ts_code", "end_date", name="uq_financial_code_date"),
-        Index("ix_financial_end_date", "end_date"),
+        UniqueConstraint("ts_code", "ann_date", "end_date", name="uq_financial_code_ann_end"),
+        Index("ix_financial_ann_date", "ann_date"),
     )

@@ -1,722 +1,339 @@
 """
-Tushare 数据源适配器
-专业金融数据接口
+Tushare 数据源适配器 — 带重试、断路器、数据校验
 
-注意: macOS 系统代理会导致 tushare 请求超时,
-此处通过 monkey-patch DataApi.query 使用显式 no-proxy 的 Session 绕过系统代理。
+特性:
+  - 指数退避重试 (3次)
+  - 断路器保护 (连续5次失败后熔断30s)
+  - 数据校验 (价格非负、日期合法、去重)
+  - AKShare fallback
 """
 
 from __future__ import annotations
 
-import os
+import logging
+import time
+from datetime import date, datetime, timedelta
+from functools import wraps
+from typing import Any, Callable
 
 import pandas as pd
-import requests as _requests
 
-from app.core.logging import logger
-from app.data_sources.base import BaseDataSource
+from app.core.circuit_breaker import CircuitBreaker
 
-# 清除代理环境变量，防止 requests 通过 env 读取代理
-for _k in ["http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"]:
-    os.environ.pop(_k, None)
+logger = logging.getLogger(__name__)
 
-# 全局 Session: trust_env=False + 显式 no-proxy，彻底绕过 macOS 系统代理
-_NO_PROXY_SESSION = _requests.Session()
-_NO_PROXY_SESSION.trust_env = False
-_NO_PROXY_PROXIES = {"http": None, "https": None}
+# ──────────────────────────────────────────────
+# 重试装饰器
+# ──────────────────────────────────────────────
 
-
-def _patch_tushare_query():
-    """Monkey-patch tushare DataApi.query, 使用显式 no-proxy 的 requests Session
-
-    macOS 系统代理 (127.0.0.1:7897) 会导致 tushare 请求转发超时。
-    requests 默认 trust_env=True，会通过 getproxies() 读取 macOS 系统偏好设置中的代理。
-    patch 后改用 trust_env=False + proxies={http:None, https:None} 彻底绕过。
-    """
-    try:
-        import json
-
-        from tushare.pro.client import DataApi
-
-        def patched_query(self, api_name, fields="", **kwargs):
-            # 读取实例属性（connect() 设置的代理URL），fallback 到类属性
-            http_url = getattr(self, "_DataApi__http_url", DataApi._DataApi__http_url)
-            timeout = getattr(self, "_DataApi__timeout", 30)
-            token = getattr(self, "_DataApi__token", "")
-
-            kwargs.setdefault("ts_type_name", http_url)
-            req_params = {
-                "api_name": api_name,
-                "token": token,
-                "params": kwargs,
-                "fields": fields,
-            }
-
-            url = f"{http_url}/{api_name}"
-            res = _NO_PROXY_SESSION.post(
-                url,
-                json=req_params,
-                timeout=timeout,
-                proxies=_NO_PROXY_PROXIES,
-            )
-            if res and res.status_code == 200:
-                result = json.loads(res.text)
-                if result["code"] != 0:
-                    raise Exception(result["msg"])
-                data = result["data"]
-                columns = data["fields"]
-                items = data["items"]
-                return pd.DataFrame(items, columns=columns)
-            return pd.DataFrame()
-
-        DataApi.query = patched_query
-        logger.info("Tushare DataApi.query patched with no-proxy session")
-    except Exception as e:
-        logger.warning(f"Failed to patch tushare DataApi: {e}")
+def retry_with_backoff(
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+    max_delay: float = 30.0,
+    exceptions: tuple = (Exception,),
+):
+    """指数退避重试装饰器"""
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_error = None
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    last_error = e
+                    if attempt < max_retries - 1:
+                        delay = min(base_delay * (2 ** attempt), max_delay)
+                        logger.warning(
+                            "重试 %s 第%d次 (等待%.1fs): %s",
+                            func.__name__, attempt + 1, delay, e,
+                        )
+                        time.sleep(delay)
+            raise last_error
+        return wrapper
+    return decorator
 
 
-# 启动时自动 patch
-_patch_tushare_query()
+# ──────────────────────────────────────────────
+# 数据校验
+# ──────────────────────────────────────────────
+
+def _validate_dataframe(df: pd.DataFrame, data_type: str = "price") -> pd.DataFrame:
+    """通用数据校验"""
+    if df.empty:
+        return df
+
+    original_len = len(df)
+
+    # 价格类数据校验
+    if data_type == "price":
+        price_cols = [c for c in ("open", "high", "low", "close", "pre_close") if c in df.columns]
+        for col in price_cols:
+            mask = df[col] < 0
+            if mask.any():
+                logger.warning("%s校验: %s 有 %d 条负值已置NaN", data_type, col, mask.sum())
+                df.loc[mask, col] = pd.NA
+
+    # 日期校验
+    date_cols = [c for c in ("trade_date", "ann_date", "end_date") if c in df.columns]
+    for col in date_cols:
+        if df[col].dtype == object:
+            try:
+                df[col] = pd.to_datetime(df[col], format="mixed")
+            except Exception:
+                pass
+
+    # 去重
+    dedup_cols = [c for c in ("ts_code", "trade_date") if c in df.columns]
+    if len(dedup_cols) >= 2:
+        df = df.drop_duplicates(subset=dedup_cols, keep="last")
+
+    if len(df) != original_len:
+        logger.info("%s校验: %d → %d (去重/清洗)", data_type, original_len, len(df))
+
+    return df
 
 
-class TushareDataSource(BaseDataSource):
-    """Tushare 数据源"""
+# ──────────────────────────────────────────────
+# Tushare 数据源
+# ──────────────────────────────────────────────
+
+class TushareSource:
+    """Tushare数据源 — 带重试和断路器"""
 
     def __init__(self, token: str | None = None):
-        super().__init__("tushare")
-        self.token = token
+        self._token = token
         self._pro = None
+        self._breaker = CircuitBreaker(
+            failure_threshold=5,
+            recovery_timeout=30,
+        )
+        self._akshare_fallback = None
 
-    def connect(self) -> bool:
-        """连接 Tushare（优先代理API，fallback到官方API）"""
-        try:
-            import tushare as ts
-
-            if self.token:
-                ts.set_token(self.token)
-            self._pro = ts.pro_api()
-
-            # 优先尝试代理API（全接口权限，无需积分），
-            # 官方API需较高积分才能调用fina_indicator/daily_basic等接口
-            self._pro._DataApi__http_url = "http://tsy.xiaodefa.cn"
+    @property
+    def pro(self):
+        """延迟初始化Tushare pro接口"""
+        if self._pro is None:
             try:
-                df = self._pro.stock_basic(exchange="", list_status="L", fields="ts_code")
-                if not df.empty:
-                    self._connected = True
-                    logger.info("Tushare connected successfully (proxy API, full access)")
-                    return True
-            except Exception:
-                logger.warning("Proxy API unavailable, falling back to official API")
-
-            # Fallback: 官方 API（部分接口可能权限不足）
-            self._pro._DataApi__http_url = "https://api.tushare.pro"
-            try:
-                df = self._pro.stock_basic(exchange="", list_status="L", fields="ts_code")
-                if not df.empty:
-                    self._connected = True
-                    logger.info("Tushare connected successfully (official API, limited access)")
-                    return True
-            except Exception as e2:
-                logger.error(f"Both proxy and official API failed: {e2}")
-
-            self._connected = False
-            return False
-        except Exception as e:
-            logger.error(f"Failed to connect Tushare: {e}")
-            self._connected = False
-            return False
-
-    def is_connected(self) -> bool:
-        return self._connected
-
-    def _format_date(self, date_str: str) -> str:
-        """将 YYYY-MM-DD 转换为 YYYYMMDD — Tushare API要求YYYYMMDD格式"""
-        if not date_str:
-            return None
-        return date_str.replace("-", "")
-
-    def _format_date_back(self, date_str: str) -> str:
-        """将 YYYYMMDD 转换为 YYYY-MM-DD"""
-        if not date_str or len(date_str) != 8:
-            return date_str
-        return f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
-
-    # ==================== 行情数据 ====================
-
-    def get_stock_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
-        """获取股票日线行情"""
-        if not self._connected:
-            return pd.DataFrame()
-
-        try:
-            df = self._pro.daily(
-                ts_code=ts_code, start_date=self._format_date(start_date), end_date=self._format_date(end_date)
-            )
-
-            if df.empty:
-                return pd.DataFrame()
-
-            df = df.rename(
-                columns={
-                    "vol": "volume",  # Tushare用'vol'，统一为'volume'以兼容AKShare和下游逻辑
-                    "pct_chg": "pct_chg",
-                }
-            )
-            df["trade_date"] = df["trade_date"].apply(self._format_date_back)
-
-            return df[["trade_date", "open", "high", "low", "close", "volume", "amount", "pct_chg", "pre_close"]]
-
-        except Exception as e:
-            logger.error(f"Error getting stock daily: {e}")
-            return pd.DataFrame()
-
-    def get_index_daily(self, index_code: str, start_date: str, end_date: str) -> pd.DataFrame:
-        """获取指数日线行情"""
-        if not self._connected:
-            return pd.DataFrame()
-
-        try:
-            df = self._pro.index_daily(
-                ts_code=index_code, start_date=self._format_date(start_date), end_date=self._format_date(end_date)
-            )
-
-            if df.empty:
-                return pd.DataFrame()
-
-            df = df.rename(columns={"vol": "volume"})
-            df["trade_date"] = df["trade_date"].apply(self._format_date_back)
-
-            return df[["trade_date", "open", "high", "low", "close", "volume", "amount", "pct_chg", "pre_close"]]
-
-        except Exception as e:
-            logger.error(f"Error getting index daily: {e}")
-            return pd.DataFrame()
-
-    def get_stock_daily_batch(self, ts_codes: list[str], start_date: str, end_date: str) -> pd.DataFrame:
-        """批量获取多只股票日线行情"""
-        if not self._connected:
-            return pd.DataFrame()
-
-        all_data = []
-        for ts_code in ts_codes:
-            df = self.get_stock_daily(ts_code, start_date, end_date)
-            if not df.empty:
-                df["ts_code"] = ts_code
-                all_data.append(df)
-
-        if not all_data:
-            return pd.DataFrame()
-
-        return pd.concat(all_data, ignore_index=True)
-
-    # ==================== 基础数据 ====================
-
-    def get_stock_basic(self) -> pd.DataFrame:
-        """获取股票基础信息"""
-        if not self._connected:
-            return pd.DataFrame()
-
-        try:
-            df = self._pro.stock_basic(
-                exchange="",
-                list_status="L",
-                fields="ts_code,symbol,name,area,industry,market,list_date,delist_date,is_hs",
-            )
-            # list_status='L'仅获取上市股票，已退市/暂停上市不纳入股票池
-            # delist_date用于判断即将退市的股票
-
-            if df.empty:
-                return pd.DataFrame()
-
-            df["status"] = "L"
-            return df[["ts_code", "symbol", "name", "industry", "market", "list_date", "status"]]
-
-        except Exception as e:
-            logger.error(f"Error getting stock basic: {e}")
-            return pd.DataFrame()
-
-    def get_index_components(self, index_code: str, date: str | None = None) -> list[str]:
-        """获取指数成分股"""
-        if not self._connected:
-            return []
-
-        try:
-            date_str = self._format_date(date) if date else None
-
-            df = self._pro.index_weight(index_code=index_code, start_date=date_str, end_date=date_str)
-
-            if df.empty:
-                return []
-
-            return df["con_code"].tolist()
-
-        except Exception as e:
-            logger.error(f"Error getting index components: {e}")
-            return []
-
-    def get_trading_calendar(self, start_date: str, end_date: str) -> pd.DataFrame:
-        """获取交易日历"""
-        if not self._connected:
-            return pd.DataFrame()
-
-        try:
-            df = self._pro.trade_cal(
-                exchange="SSE", start_date=self._format_date(start_date), end_date=self._format_date(end_date)
-            )
-
-            if df.empty:
-                return pd.DataFrame()
-
-            df = df.rename(columns={"cal_date": "trade_date", "pretrade_date": "pretrade_date"})
-            df["trade_date"] = df["trade_date"].apply(self._format_date_back)
-            if "pretrade_date" in df.columns:
-                df["pretrade_date"] = df["pretrade_date"].apply(self._format_date_back)
-
-            return df[["trade_date", "is_open", "pretrade_date"]]
-
-        except Exception as e:
-            logger.error(f"Error getting trading calendar: {e}")
-            return pd.DataFrame()
-
-    # ==================== 财务数据 ====================
-
-    def get_financial_indicator(
-        self, ts_code: str, start_date: str | None = None, end_date: str | None = None
-    ) -> pd.DataFrame:
-        """获取财务指标 — 注意: Tushare返回的是报告期(end_date)，非公告日，
-        因子计算时必须按ann_date(公告日)对齐到PIT时点，否则引入未来函数"""
-        if not self._connected:
-            return pd.DataFrame()
-
-        try:
-            df = self._pro.fina_indicator(
-                ts_code=ts_code,
-                start_date=self._format_date(start_date) if start_date else None,
-                end_date=self._format_date(end_date) if end_date else None,
-            )
-
-            if df.empty:
-                return pd.DataFrame()
-
-            df["end_date"] = df["end_date"].apply(self._format_date_back)
-
-            # 选择常用指标
-            # pe_ttm/ps_ttm等TTM指标由Tushare在服务端计算，使用最近4个季度滚动加总
-            # 相比本地手算TTM，Tushare的TTM已处理亏损/空值等边界情况
-            columns = [
-                "ts_code",
-                "end_date",
-                "ann_date",
-                "roe",
-                "roa",
-                "grossprofit_margin",
-                "netprofit_margin",
-                "debt_to_assets",
-                "current_ratio",
-                "quick_ratio",
-                "ocfps",
-                "eps",
-                "bps",
-            ]
-
-            available_cols = [col for col in columns if col in df.columns]
-            return df[available_cols]
-
-        except Exception as e:
-            logger.error(f"Error getting financial indicator: {e}")
-            return pd.DataFrame()
-
-    def get_financial_data(
-        self, ts_code: str | None = None, start_date: str | None = None, end_date: str | None = None, **kwargs
-    ) -> pd.DataFrame:
-        """获取财务数据（兼容基类接口）"""
-        if ts_code:
-            return self.get_financial_indicator(ts_code, start_date, end_date)
-        return pd.DataFrame()
-
-    def get_income_statement(
-        self, ts_code: str, start_date: str | None = None, end_date: str | None = None
-    ) -> pd.DataFrame:
-        """获取利润表"""
-        if not self._connected:
-            return pd.DataFrame()
-
-        try:
-            df = self._pro.income(
-                ts_code=ts_code,
-                start_date=self._format_date(start_date) if start_date else None,
-                end_date=self._format_date(end_date) if end_date else None,
-            )
-
-            if df.empty:
-                return pd.DataFrame()
-
-            df["end_date"] = df["end_date"].apply(self._format_date_back)
-            return df
-
-        except Exception as e:
-            logger.error(f"Error getting income statement: {e}")
-            return pd.DataFrame()
-
-    def get_balance_sheet(
-        self, ts_code: str, start_date: str | None = None, end_date: str | None = None
-    ) -> pd.DataFrame:
-        """获取资产负债表"""
-        if not self._connected:
-            return pd.DataFrame()
-
-        try:
-            df = self._pro.balancesheet(
-                ts_code=ts_code,
-                start_date=self._format_date(start_date) if start_date else None,
-                end_date=self._format_date(end_date) if end_date else None,
-            )
-
-            if df.empty:
-                return pd.DataFrame()
-
-            df["end_date"] = df["end_date"].apply(self._format_date_back)
-            return df
-
-        except Exception as e:
-            logger.error(f"Error getting balance sheet: {e}")
-            return pd.DataFrame()
-
-    # ==================== 行业数据 ====================
-
-    def get_industry_classification(self, ts_code: str | None = None) -> pd.DataFrame:
-        """获取行业分类"""
-        if not self._connected:
-            return pd.DataFrame()
-
-        try:
-            # 申万一级分类，因子中性化时按此行业分组
-            df = self._pro.index_classify(level="L1", src="SW")
-
-            if df.empty:
-                return pd.DataFrame()
-
-            return df[["index_code", "industry_name"]]
-
-        except Exception as e:
-            logger.error(f"Error getting industry classification: {e}")
-            return pd.DataFrame()
-
-    # ==================== 复权数据 ====================
-
-    def get_adj_factor(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
-        """获取复权因子"""
-        if not self._connected:
-            return pd.DataFrame()
-
-        try:
-            df = self._pro.adj_factor(
-                ts_code=ts_code, start_date=self._format_date(start_date), end_date=self._format_date(end_date)
-            )
-
-            if df.empty:
-                return pd.DataFrame()
-
-            df["trade_date"] = df["trade_date"].apply(self._format_date_back)
-            return df[["trade_date", "adj_factor"]]
-
-        except Exception as e:
-            logger.error(f"Error getting adj factor: {e}")
-            return pd.DataFrame()
-
-    # ==================== 特色功能 ====================
-
-    def get_daily_basic(
-        self,
-        trade_date: str | None = None,
+                import tushare as ts
+                if self._token:
+                    ts.set_token(self._token)
+                self._pro = ts.pro_api()
+                logger.info("Tushare pro接口初始化成功")
+            except ImportError:
+                raise ImportError("请安装tushare: pip install tushare")
+        return self._pro
+
+    @property
+    def akshare_fallback(self):
+        """AKShare fallback数据源"""
+        if self._akshare_fallback is None:
+            from app.data_sources.akshare_source import AKShareSource
+            self._akshare_fallback = AKShareSource()
+        return self._akshare_fallback
+
+    @staticmethod
+    def _build_params(
         ts_code: str | None = None,
-        start_date: str | None = None,
-        end_date: str | None = None,
-    ) -> pd.DataFrame:
-        """
-        获取每日基本面数据（PE/PB/市值/换手率等）
+        trade_date: date | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        period: date | None = None,
+    ) -> dict[str, str]:
+        """构建Tushare API参数 — 统一日期格式化"""
+        params: dict[str, str] = {}
+        if ts_code:
+            params["ts_code"] = ts_code
+        if trade_date:
+            params["trade_date"] = trade_date.strftime("%Y%m%d")
+        if start_date:
+            params["start_date"] = start_date.strftime("%Y%m%d")
+        if end_date:
+            params["end_date"] = end_date.strftime("%Y%m%d")
+        if period:
+            params["period"] = period.strftime("%Y%m%d")
+        return params
 
-        支持两种调用方式:
-        1. 按交易日获取全市场: get_daily_basic(trade_date='2026-04-17')
-        2. 按股票+日期范围: get_daily_basic(ts_code='000001.SZ', start_date='2026-01-01', end_date='2026-04-18')
-
-        注意: total_mv/circ_mv单位为万元，使用时需*10000转为元
-        pe_ttm为滚动市盈率（TTM），pb为静态市净率（最新报告期）
-
-        Args:
-            trade_date: 交易日期 YYYY-MM-DD（获取全市场快照）
-            ts_code: 股票代码
-            start_date: 开始日期 YYYY-MM-DD
-            end_date: 结束日期 YYYY-MM-DD
-
-        Returns:
-            DataFrame with PE, PB, total_mv, circ_mv etc.
-        """
-        if not self._connected:
-            return pd.DataFrame()
-
+    def _call_with_fallback(self, func: Callable, data_type: str, **kwargs) -> pd.DataFrame:
+        """带断路器和fallback的数据获取"""
         try:
-            params = {
-                "fields": "ts_code,trade_date,close,turnover_rate,turnover_rate_f,volume_ratio,pe,pe_ttm,pb,ps,ps_ttm,dv_ratio,dv_ttm,total_mv,circ_mv"
-                # turnover_rate_f为自由流通股换手率，比turnover_rate(总股本换手率)更能反映真实交易活跃度
-            }
-            if trade_date:
-                params["trade_date"] = self._format_date(trade_date)
-            if ts_code:
-                params["ts_code"] = ts_code
-            if start_date:
-                params["start_date"] = self._format_date(start_date)
-            if end_date:
-                params["end_date"] = self._format_date(end_date)
+            if self._breaker.is_open:
+                logger.warning("Tushare断路器开启，使用AKShare fallback")
+                return self.akshare_fallback.fetch(data_type, **kwargs)
 
-            df = self._pro.daily_basic(**params)
-
-            if df.empty:
-                return pd.DataFrame()
-
-            df["trade_date"] = df["trade_date"].apply(self._format_date_back)
-            return df
+            df = func(**kwargs)
+            self._breaker.record_success()
+            return _validate_dataframe(df, data_type)
 
         except Exception as e:
-            logger.error(f"Error getting daily basic: {e}")
-            return pd.DataFrame()
+            self._breaker.record_failure()
+            logger.error("Tushare请求失败: %s", e)
 
-    def get_money_flow(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
-        """
-        获取资金流向数据
+            # 尝试AKShare fallback
+            try:
+                df = self.akshare_fallback.fetch(data_type, **kwargs)
+                logger.info("AKShare fallback成功: %s", data_type)
+                return _validate_dataframe(df, data_type)
+            except Exception as fallback_err:
+                logger.error("AKShare fallback也失败: %s", fallback_err)
+                raise
 
-        Args:
-            ts_code: 股票代码
-            start_date: 开始日期
-            end_date: 结束日期
+    # ──────────────────────────────────────────────
+    # 行情数据
+    # ──────────────────────────────────────────────
 
-        Returns:
-            DataFrame with money flow data
-        """
-        if not self._connected:
-            return pd.DataFrame()
+    @retry_with_backoff(max_retries=3)
+    def get_stock_daily(self, ts_code=None, trade_date=None, start_date=None, end_date=None) -> pd.DataFrame:
+        """获取股票日线行情"""
+        return self._call_with_fallback(
+            lambda **p: self.pro.daily(**p), "price",
+            ts_code=ts_code, trade_date=trade_date, start_date=start_date, end_date=end_date,
+        )
+
+    @retry_with_backoff(max_retries=3)
+    def get_stock_daily_basic(self, ts_code=None, trade_date=None, start_date=None, end_date=None) -> pd.DataFrame:
+        """获取每日指标"""
+        return self._call_with_fallback(
+            lambda **p: self.pro.daily_basic(**p), "basic",
+            ts_code=ts_code, trade_date=trade_date, start_date=start_date, end_date=end_date,
+        )
+
+    # ──────────────────────────────────────────────
+    # 财务数据
+    # ──────────────────────────────────────────────
+
+    @retry_with_backoff(max_retries=3)
+    def get_income(self, ts_code=None, period=None, start_date=None, end_date=None) -> pd.DataFrame:
+        """获取利润表"""
+        return self._call_with_fallback(
+            lambda **p: self.pro.income(**p), "financial",
+            ts_code=ts_code, period=period, start_date=start_date, end_date=end_date,
+        )
+
+    @retry_with_backoff(max_retries=3)
+    def get_balancesheet(self, ts_code=None, period=None, start_date=None, end_date=None) -> pd.DataFrame:
+        """获取资产负债表"""
+        return self._call_with_fallback(
+            lambda **p: self.pro.balancesheet(**p), "financial",
+            ts_code=ts_code, period=period, start_date=start_date, end_date=end_date,
+        )
+
+    @retry_with_backoff(max_retries=3)
+    def get_cashflow(self, ts_code=None, period=None, start_date=None, end_date=None) -> pd.DataFrame:
+        """获取现金流量表"""
+        return self._call_with_fallback(
+            lambda **p: self.pro.cashflow(**p), "financial",
+            ts_code=ts_code, period=period, start_date=start_date, end_date=end_date,
+        )
+
+    @retry_with_backoff(max_retries=3)
+    def get_financial_indicator(self, ts_code=None, period=None, start_date=None, end_date=None) -> pd.DataFrame:
+        """获取财务指标"""
+        return self._call_with_fallback(
+            lambda **p: self.pro.fina_indicator(**p), "financial",
+            ts_code=ts_code, period=period, start_date=start_date, end_date=end_date,
+        )
+
+    # ──────────────────────────────────────────────
+    # 指数数据
+    # ──────────────────────────────────────────────
+
+    @retry_with_backoff(max_retries=3)
+    def get_index_daily(self, ts_code="000001.SH", start_date=None, end_date=None) -> pd.DataFrame:
+        """获取指数日线"""
+        return self._call_with_fallback(
+            lambda **p: self.pro.index_daily(**p), "price",
+            ts_code=ts_code, start_date=start_date, end_date=end_date,
+        )
+
+    # ──────────────────────────────────────────────
+    # 资金流数据
+    # ──────────────────────────────────────────────
+
+    @retry_with_backoff(max_retries=3)
+    def get_moneyflow(self, ts_code=None, trade_date=None, start_date=None, end_date=None) -> pd.DataFrame:
+        """获取个股资金流"""
+        return self._call_with_fallback(
+            lambda **p: self.pro.moneyflow(**p), "moneyflow",
+            ts_code=ts_code, trade_date=trade_date, start_date=start_date, end_date=end_date,
+        )
+
+    # ──────────────────────────────────────────────
+    # 融资融券
+    # ──────────────────────────────────────────────
+
+    @retry_with_backoff(max_retries=3)
+    def get_margin(self, ts_code=None, trade_date=None, start_date=None, end_date=None) -> pd.DataFrame:
+        """获取融资融券数据"""
+        return self._call_with_fallback(
+            lambda **p: self.pro.margin(**p), "margin",
+            ts_code=ts_code, trade_date=trade_date, start_date=start_date, end_date=end_date,
+        )
+
+    # ──────────────────────────────────────────────
+    # 北向资金
+    # ──────────────────────────────────────────────
+
+    @retry_with_backoff(max_retries=3)
+    def get_north_flow(self, trade_date=None, start_date=None, end_date=None) -> pd.DataFrame:
+        """获取北向资金数据"""
+        return self._call_with_fallback(
+            lambda **p: self.pro.hk_hold(**p), "northflow",
+            trade_date=trade_date, start_date=start_date, end_date=end_date,
+        )
+
+    # ──────────────────────────────────────────────
+    # 股票列表
+    # ──────────────────────────────────────────────
+
+    @retry_with_backoff(max_retries=3)
+    def get_stock_basic(self, list_status="L") -> pd.DataFrame:
+        """获取股票列表"""
+        return self._call_with_fallback(
+            lambda **p: self.pro.stock_basic(**p), "basic",
+            list_status=list_status,
+        )
+
+    # ──────────────────────────────────────────────
+    # 批量同步
+    # ──────────────────────────────────────────────
+
+    def fetch_all_for_date(self, trade_date: date) -> dict[str, pd.DataFrame]:
+        """获取某日所有数据 — 用于日终流水线"""
+        result = {}
 
         try:
-            df = self._pro.moneyflow(
-                ts_code=ts_code, start_date=self._format_date(start_date), end_date=self._format_date(end_date)
-            )
-
-            if df.empty:
-                return pd.DataFrame()
-
-            df["trade_date"] = df["trade_date"].apply(self._format_date_back)
-            return df
-
+            result["stock_daily"] = self.get_stock_daily(trade_date=trade_date)
         except Exception as e:
-            logger.error(f"Error getting money flow: {e}")
-            return pd.DataFrame()
-
-    def get_hsgt_top10(self, trade_date: str) -> pd.DataFrame:
-        """
-        获取沪深港通十大成交股
-
-        Args:
-            trade_date: 交易日期 YYYY-MM-DD
-
-        Returns:
-            DataFrame with north money flow data per stock
-        """
-        if not self._connected:
-            return pd.DataFrame()
+            logger.error("获取stock_daily失败: %s", e)
 
         try:
-            df = self._pro.hsgt_top10(trade_date=self._format_date(trade_date))
-
-            if df.empty:
-                return pd.DataFrame()
-
-            df["trade_date"] = df["trade_date"].apply(self._format_date_back)
-            return df
-
+            result["stock_daily_basic"] = self.get_stock_daily_basic(trade_date=trade_date)
         except Exception as e:
-            logger.error(f"Error getting hsgt_top10: {e}")
-            return pd.DataFrame()
-
-    def get_moneyflow_hsgt(self, start_date: str, end_date: str) -> pd.DataFrame:
-        """
-        获取北向资金净流入汇总
-
-        Args:
-            start_date: 开始日期 YYYY-MM-DD
-            end_date: 结束日期 YYYY-MM-DD
-
-        Returns:
-            DataFrame with daily north/south money flow totals
-        """
-        if not self._connected:
-            return pd.DataFrame()
+            logger.error("获取stock_daily_basic失败: %s", e)
 
         try:
-            df = self._pro.moneyflow_hsgt(
-                start_date=self._format_date(start_date), end_date=self._format_date(end_date)
-            )
-
-            if df.empty:
-                return pd.DataFrame()
-
-            df["trade_date"] = df["trade_date"].apply(self._format_date_back)
-            return df
-
+            result["moneyflow"] = self.get_moneyflow(trade_date=trade_date)
         except Exception as e:
-            logger.error(f"Error getting moneyflow_hsgt: {e}")
-            return pd.DataFrame()
-
-    def get_limit_price(self, trade_date: str) -> pd.DataFrame:
-        """
-        获取涨跌停价格
-
-        Args:
-            trade_date: 交易日期
-
-        Returns:
-            DataFrame with limit up/down prices
-        """
-        if not self._connected:
-            return pd.DataFrame()
+            logger.error("获取moneyflow失败: %s", e)
 
         try:
-            df = self._pro.stk_limit(trade_date=self._format_date(trade_date))
-
-            if df.empty:
-                return pd.DataFrame()
-
-            df["trade_date"] = df["trade_date"].apply(self._format_date_back)
-            return df
-
+            result["index_daily"] = self.get_index_daily(end_date=trade_date)
         except Exception as e:
-            logger.error(f"Error getting limit price: {e}")
-            return pd.DataFrame()
+            logger.error("获取index_daily失败: %s", e)
 
-    # ==================== 股权质押 ====================
-
-    def get_share_pledge(
-        self, ts_code: str | None = None, start_date: str | None = None, end_date: str | None = None
-    ) -> pd.DataFrame:
-        """获取股权质押数据"""
-        if not self._connected:
-            return pd.DataFrame()
         try:
-            params = {}
-            if ts_code:
-                params["ts_code"] = ts_code
-            if start_date:
-                params["start_date"] = self._format_date(start_date)
-            if end_date:
-                params["end_date"] = self._format_date(end_date)
-            df = self._pro.share_pledge(**params)
-            if df is None or df.empty:
-                return pd.DataFrame()
-            if "end_date" in df.columns:
-                df["end_date"] = df["end_date"].apply(self._format_date_back)
-            return df
+            result["margin"] = self.get_margin(trade_date=trade_date)
         except Exception as e:
-            logger.error(f"Error getting share pledge: {e}")
-            return pd.DataFrame()
+            logger.error("获取margin失败: %s", e)
 
-    # ==================== 前十大股东 ====================
-
-    def get_top10_holders(self, ts_code: str, period: str | None = None) -> pd.DataFrame:
-        """获取前十大股东数据"""
-        if not self._connected:
-            return pd.DataFrame()
         try:
-            params = {"ts_code": ts_code}
-            if period:
-                params["period"] = self._format_date(period)
-            df = self._pro.top10_holders(**params)
-            if df is None or df.empty:
-                return pd.DataFrame()
-            if "ann_date" in df.columns:
-                df["ann_date"] = df["ann_date"].apply(self._format_date_back)
-            if "end_date" in df.columns:
-                df["end_date"] = df["end_date"].apply(self._format_date_back)
-            return df
+            result["northflow"] = self.get_north_flow(trade_date=trade_date)
         except Exception as e:
-            logger.error(f"Error getting top10 holders: {e}")
-            return pd.DataFrame()
+            logger.error("获取northflow失败: %s", e)
 
-    # ==================== 机构持仓 ====================
+        success = [k for k, v in result.items() if not v.empty]
+        logger.info("fetch_all_for_date %s: 成功 %d/%d 数据集",
+                     trade_date, len(success), len(result))
 
-    def get_institutional_holding(
-        self, ts_code: str, start_date: str | None = None, end_date: str | None = None
-    ) -> pd.DataFrame:
-        """获取机构持仓数据 (stk_holdernumber)"""
-        if not self._connected:
-            return pd.DataFrame()
-        try:
-            params = {"ts_code": ts_code}
-            if start_date:
-                params["start_date"] = self._format_date(start_date)
-            if end_date:
-                params["end_date"] = self._format_date(end_date)
-            df = self._pro.stk_holdernumber(**params)
-            if df is None or df.empty:
-                return pd.DataFrame()
-            if "ann_date" in df.columns:
-                df["ann_date"] = df["ann_date"].apply(self._format_date_back)
-            if "end_date" in df.columns:
-                df["end_date"] = df["end_date"].apply(self._format_date_back)
-            return df
-        except Exception as e:
-            logger.error(f"Error getting institutional holding: {e}")
-            return pd.DataFrame()
-
-    # ==================== 分析师一致预期 ====================
-
-    def get_analyst_consensus(
-        self, ts_code: str | None = None, start_date: str | None = None, end_date: str | None = None
-    ) -> pd.DataFrame:
-        """获取分析师一致预期数据"""
-        if not self._connected:
-            return pd.DataFrame()
-        try:
-            params = {}
-            if ts_code:
-                params["ts_code"] = ts_code
-            if start_date:
-                params["start_date"] = self._format_date(start_date)
-            if end_date:
-                params["end_date"] = self._format_date(end_date)
-            df = self._pro.consensus_data(**params)
-            if df is None or df.empty:
-                return pd.DataFrame()
-            if "ann_date" in df.columns:
-                df["ann_date"] = df["ann_date"].apply(self._format_date_back)
-            if "end_date" in df.columns:
-                df["end_date"] = df["end_date"].apply(self._format_date_back)
-            return df
-        except Exception as e:
-            logger.error(f"Error getting analyst consensus: {e}")
-            return pd.DataFrame()
-
-    # ==================== 资产负债表(含商誉) ====================
-
-    def get_balance_sheet_with_goodwill(self, ts_code: str, period: str | None = None) -> pd.DataFrame:
-        """获取资产负债表关键字段(含商誉)
-        f_ann_date为首次公告日，比ann_date更早，PIT对齐应优先使用f_ann_date"""
-        if not self._connected:
-            return pd.DataFrame()
-        try:
-            params = {"ts_code": ts_code}
-            if period:
-                params["period"] = self._format_date(period)
-            # f_ann_date(首次公告日)比ann_date更精确，用于PIT对齐
-            # goodwill/商誉是暴雷高发指标，需单独监控
-            df = self._pro.balancesheet(
-                fields="ts_code,ann_date,f_ann_date,end_date,goodwill,total_assets,total_hldr_eqy_exc_min_int", **params
-            )
-            if df is None or df.empty:
-                return pd.DataFrame()
-            if "ann_date" in df.columns:
-                df["ann_date"] = df["ann_date"].apply(self._format_date_back)
-            if "end_date" in df.columns:
-                df["end_date"] = df["end_date"].apply(self._format_date_back)
-            return df
-        except Exception as e:
-            logger.error(f"Error getting balance sheet with goodwill: {e}")
-            return pd.DataFrame()
+        return result

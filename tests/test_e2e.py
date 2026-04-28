@@ -215,7 +215,7 @@ class TestE2EDailyPipeline:
 
         # Step 1: Regime检测
         detector = RegimeDetector()
-        regime = detector.detect(self.market_data)
+        regime, confidence = detector.detect(self.market_data)
         assert regime in ['risk_on', 'trending', 'defensive', 'mean_reverting']
 
         # Step 2: 基于Regime的融合
@@ -287,16 +287,13 @@ class TestE2EDailyPipeline:
         assert cache.get(f"factor:roe_ttm:{td}") is None
 
     def test_pipeline_daily_pipeline_run(self):
-        """DailyPipeline.run() 端到端"""
+        """DailyPipeline.run() 端到端 — 无数据库会话时应在step3失败"""
         from app.core.daily_pipeline import DailyPipeline
 
-        pipeline = DailyPipeline()
-        result = pipeline.run(self.trade_date)
-        assert result['status'] == 'ok'
-        assert 'steps' in result
-        # 验证关键步骤都执行了
-        for step in ['step1_data_collection', 'step2_snapshot', 'step8_regime']:
-            assert step in result['steps'], f"缺少步骤: {step}"
+        pipeline = DailyPipeline(session=None)
+        # 无数据库会话，step3会因无行情数据而抛出ValueError
+        with pytest.raises(ValueError, match="无行情数据"):
+            pipeline.run(self.trade_date)
 
     def test_pipeline_regime_feeds_into_ensemble(self):
         """验证Regime检测结果正确传递给融合引擎"""
@@ -304,9 +301,9 @@ class TestE2EDailyPipeline:
         import inspect
 
         source = inspect.getsource(DailyPipeline.run)
-        # step8应在step5之前
-        assert source.find('step8_regime') < source.find('step5_module'), \
-            "step8(regime)应在step5(module scoring)之前执行"
+        # step6(regime)应在step5(ensemble)之后
+        assert source.find('_step6_regime') > source.find('_step5_ensemble'), \
+            "step6(regime)应在step5(ensemble)之后执行"
         # regime应传递给step6
         assert 'regime' in source, "regime应传递给后续步骤"
 

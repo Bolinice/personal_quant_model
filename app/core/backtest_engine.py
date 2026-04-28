@@ -209,6 +209,7 @@ class BacktestState:
     nav_history: List[Dict] = field(default_factory=list)
     trade_records: List[Dict] = field(default_factory=list)
     position_history: List[Dict] = field(default_factory=list)
+    holdings_snapshots: List[Dict] = field(default_factory=list)  # 每调仓日持仓快照
 
 
 class ABShareBacktestEngine:
@@ -1337,6 +1338,24 @@ class ABShareBacktestEngine:
                             for ts_code, pos in state.positions.items()
                         })
 
+                    # 记录调仓日持仓快照
+                    holdings_snapshot = {
+                        'trade_date': trade_date,
+                        'total_value': total_value,
+                        'cash': state.cash,
+                        'positions': {
+                            ts_code: {
+                                'shares': pos.shares,
+                                'cost_price': round(pos.cost_price, 2),
+                                'market_value': round(pos.shares * (price_data.get((ts_code, trade_date), {}).get('close', pos.cost_price) if price_data else pos.cost_price), 2),
+                                'weight': round((pos.shares * (price_data.get((ts_code, trade_date), {}).get('close', pos.cost_price) if price_data else pos.cost_price)) / total_value, 6) if total_value > 0 else 0,
+                                'entry_date': str(pos.entry_date) if pos.entry_date else None,
+                            }
+                            for ts_code, pos in state.positions.items()
+                        },
+                    }
+                    state.holdings_snapshots.append(holdings_snapshot)
+
             # 每日mark-to-market
             price_dict = {}
             if price_data:
@@ -1355,6 +1374,7 @@ class ABShareBacktestEngine:
         return {
             'nav_history': state.nav_history,
             'trade_records': state.trade_records,
+            'holdings_snapshots': state.holdings_snapshots,
             'metrics': metrics,
             'initial_capital': initial_capital,
             'final_value': state.cash + sum(pos.market_value for pos in state.positions.values()),

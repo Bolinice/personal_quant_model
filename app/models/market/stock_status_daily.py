@@ -1,10 +1,12 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean
+from sqlalchemy import Boolean, Column, Date, DateTime, Integer, String
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class StockStatusDaily(Base):
     """股票状态日表 - 支持按交易日回放"""
+
     __tablename__ = "stock_status_daily"
 
     id = Column(Integer, primary_key=True, index=True)

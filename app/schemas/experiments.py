@@ -1,17 +1,17 @@
 """实验注册Schema"""
 
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel
 
 
 class ExperimentRegistryBase(BaseModel):
     experiment_id: str
     experiment_name: str
-    snapshot_id: Optional[str] = None
-    config_version: Optional[str] = None
-    code_version: Optional[str] = None
-    result_summary: Optional[str] = None
+    snapshot_id: str | None = None
+    config_version: str | None = None
+    code_version: str | None = None
+    result_summary: str | None = None
     status: str = "pending"
 
 
@@ -20,8 +20,8 @@ class ExperimentRegistryCreate(ExperimentRegistryBase):
 
 
 class ExperimentRegistryResponse(ExperimentRegistryBase):
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     class Config:
         from_attributes = True

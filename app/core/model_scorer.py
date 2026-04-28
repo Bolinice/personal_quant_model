@@ -3,15 +3,19 @@
 实现ADD 8节: 等权加权、人工权重、IC/IR动态加权、分层筛选
 机构级增强: LightGBM排序模型、Stacking集成、对抗性验证、滚动IC动态加权
 """
-from typing import List, Optional, Dict
+
+from __future__ import annotations
+
 from datetime import date
+
 import numpy as np
 import pandas as pd
 from sqlalchemy.orm import Session
-from app.core.logging import logger
+
 from app.core.factor_preprocess import preprocess_factor_values
+from app.core.logging import logger
 from app.models.factors import Factor, FactorValue
-from app.models.models import Model, ModelFactorWeight, ModelScore
+from app.models.models import Model, ModelFactorWeight
 
 
 class MultiFactorScorer:
@@ -29,8 +33,7 @@ class MultiFactorScorer:
         """
         return factor_scores.mean(axis=1)
 
-    def manual_weight(self, factor_scores: pd.DataFrame,
-                      weights: Dict[str, float]) -> pd.Series:
+    def manual_weight(self, factor_scores: pd.DataFrame, weights: dict[str, float]) -> pd.Series:
         """
         人工权重加权 (ADD 8.2.2节)
         Score_i = Σ w_k * z_{i,k}, Σw_k = 1
@@ -48,8 +51,7 @@ class MultiFactorScorer:
 
         return weighted_sum / weight_sum
 
-    def ic_weight(self, factor_scores: pd.DataFrame,
-                  ic_values: Dict[str, float]) -> pd.Series:
+    def ic_weight(self, factor_scores: pd.DataFrame, ic_values: dict[str, float]) -> pd.Series:
         """
         IC动态加权 (ADD 8.2.3节)
         w_k ∝ IC_k / Σ|IC_j|
@@ -67,8 +69,7 @@ class MultiFactorScorer:
 
         return weighted_sum / ic_sum
 
-    def icir_weight(self, factor_scores: pd.DataFrame,
-                    icir_values: Dict[str, float]) -> pd.Series:
+    def icir_weight(self, factor_scores: pd.DataFrame, icir_values: dict[str, float]) -> pd.Series:
         """
         ICIR加权 (ADD 8.2.3节)
         w_k ∝ ICIR_k / Σ|ICIR_j|
@@ -88,13 +89,15 @@ class MultiFactorScorer:
 
     # ==================== IC加权 + ML融合 ====================
 
-    def fused_ic_ml_score(self,
-                          factor_scores: pd.DataFrame,
-                          ml_predictions: pd.Series,
-                          ic_weights: Dict[str, float],
-                          ml_weight: float = 0.4,
-                          ic_weight_total: float = 0.6,
-                          method: str = 'simple') -> pd.Series:
+    def fused_ic_ml_score(
+        self,
+        factor_scores: pd.DataFrame,
+        ml_predictions: pd.Series,
+        ic_weights: dict[str, float],
+        ml_weight: float = 0.4,
+        ic_weight_total: float = 0.6,
+        method: str = "simple",
+    ) -> pd.Series:
         """
         IC加权 + ML模型预测融合
         将传统因子IC加权评分与ML模型预测融合，兼顾可解释性和非线性捕获能力
@@ -124,10 +127,7 @@ class MultiFactorScorer:
         ml_score = ml_predictions.copy()
         ml_mean = ml_score.mean()
         ml_std = ml_score.std()
-        if ml_std > 0:
-            ml_score = (ml_score - ml_mean) / ml_std
-        else:
-            ml_score = pd.Series(0.0, index=ml_score.index)
+        ml_score = (ml_score - ml_mean) / ml_std if ml_std > 0 else pd.Series(0.0, index=ml_score.index)
 
         # 3. 对齐index
         common_idx = ic_score.index.intersection(ml_score.index)
@@ -138,13 +138,13 @@ class MultiFactorScorer:
         ml_aligned = ml_score.loc[common_idx]
 
         # 4. 融合
-        if method == 'simple':
+        if method == "simple":
             result = self._fuse_simple(ic_aligned, ml_aligned, ic_weight_total, ml_weight)
 
-        elif method == 'dynamic':
+        elif method == "dynamic":
             result = self._fuse_dynamic(ic_aligned, ml_aligned, ic_weight_total, ml_weight)
 
-        elif method == 'hierarchical':
+        elif method == "hierarchical":
             result = self._fuse_hierarchical(ic_aligned, ml_aligned, factor_scores.loc[common_idx])
 
         else:
@@ -169,18 +169,14 @@ class MultiFactorScorer:
         return result
 
     @staticmethod
-    def _fuse_simple(ic_score: pd.Series,
-                     ml_score: pd.Series,
-                     ic_weight: float,
-                     ml_weight: float) -> pd.Series:
+    def _fuse_simple(ic_score: pd.Series, ml_score: pd.Series, ic_weight: float, ml_weight: float) -> pd.Series:
         """简单加权融合: score = α*ic + (1-α)*ml"""
         return ic_weight * ic_score + ml_weight * ml_score
 
     @staticmethod
-    def _fuse_dynamic(ic_score: pd.Series,
-                      ml_score: pd.Series,
-                      ic_base_weight: float,
-                      ml_base_weight: float) -> pd.Series:
+    def _fuse_dynamic(
+        ic_score: pd.Series, ml_score: pd.Series, ic_base_weight: float, ml_base_weight: float
+    ) -> pd.Series:
         """
         动态权重融合
         根据IC和ML评分的分散度动态调整权重
@@ -205,10 +201,9 @@ class MultiFactorScorer:
         return ic_adj * ic_score + ml_adj * ml_score
 
     @staticmethod
-    def _fuse_hierarchical(ic_score: pd.Series,
-                           ml_score: pd.Series,
-                           factor_scores: pd.DataFrame,
-                           top_pct: float = 0.5) -> pd.Series:
+    def _fuse_hierarchical(
+        ic_score: pd.Series, ml_score: pd.Series, factor_scores: pd.DataFrame, top_pct: float = 0.5
+    ) -> pd.Series:
         """
         分层融合: IC粗筛 → ML精排
         1. 用IC评分选前top_pct的股票池
@@ -234,8 +229,7 @@ class MultiFactorScorer:
 
         return result
 
-    def hierarchical_filter(self, factor_scores: pd.DataFrame,
-                            hierarchy: List[Dict]) -> pd.Series:
+    def hierarchical_filter(self, factor_scores: pd.DataFrame, hierarchy: list[dict]) -> pd.Series:
         """
         分层筛选 (ADD 8.2.4节)
         例如: 先按质量因子筛前50% → 再按估值筛前50% → 最后按动量排序
@@ -247,9 +241,9 @@ class MultiFactorScorer:
         remaining = factor_scores.index.tolist()
 
         for step in hierarchy:
-            factors = step.get('factors', [])
-            method = step.get('method', 'top_pct')
-            param = step.get('param', 0.5)
+            factors = step.get("factors", [])
+            method = step.get("method", "top_pct")
+            param = step.get("param", 0.5)
 
             if not factors:
                 continue
@@ -257,24 +251,21 @@ class MultiFactorScorer:
             # 计算当前层综合得分
             step_scores = factor_scores.loc[remaining, factors].mean(axis=1)
 
-            if method == 'top_pct':
+            if method == "top_pct":
                 threshold = step_scores.quantile(1 - param)
                 remaining = step_scores[step_scores >= threshold].index.tolist()
-            elif method == 'top_n':
+            elif method == "top_n":
                 remaining = step_scores.nlargest(int(param)).index.tolist()
 
             if not remaining:
                 break
 
         # 最终排序
-        final_scores = factor_scores.loc[remaining].mean(axis=1)
-        return final_scores
+        return factor_scores.loc[remaining].mean(axis=1)
 
     # ==================== 机构级扩展评分方法 ====================
 
-    def rolling_ic_weight(self, factor_scores: pd.DataFrame,
-                          ic_history: pd.DataFrame,
-                          lookback: int = 60) -> pd.Series:
+    def rolling_ic_weight(self, factor_scores: pd.DataFrame, ic_history: pd.DataFrame, lookback: int = 60) -> pd.Series:
         """
         滚动IC动态加权
         使用过去lookback期的IC均值作为权重，比静态IC更适应市场变化
@@ -290,7 +281,7 @@ class MultiFactorScorer:
         # 计算滚动IC均值
         # 滚动IC比全历史IC更能捕捉因子有效性时变特征
         recent_ic = ic_history.tail(lookback)
-        ic_means = recent_ic.groupby('factor_code')['ic'].mean()
+        ic_means = recent_ic.groupby("factor_code")["ic"].mean()
 
         weighted_sum = pd.Series(0.0, index=factor_scores.index)
         ic_sum = 0
@@ -305,11 +296,14 @@ class MultiFactorScorer:
 
         return weighted_sum / ic_sum
 
-    def compute_ic_weights(self, factor_df: pd.DataFrame,
-                            return_df: pd.DataFrame,
-                            lookback: int = 60,
-                            method: str = 'icir',
-                            forward_period: int = 20) -> Dict[str, float]:
+    def compute_ic_weights(
+        self,
+        factor_df: pd.DataFrame,
+        return_df: pd.DataFrame,
+        lookback: int = 60,
+        method: str = "icir",
+        forward_period: int = 20,
+    ) -> dict[str, float]:
         """
         计算IC/ICIR权重 (向量化: merge+groupby替代三重循环)
 
@@ -326,21 +320,23 @@ class MultiFactorScorer:
         if factor_df.empty or return_df.empty:
             return {}
 
-        factor_codes = factor_df['factor_code'].unique() if 'factor_code' in factor_df.columns else []
+        factor_codes = factor_df["factor_code"].unique() if "factor_code" in factor_df.columns else []
         if len(factor_codes) == 0:
             return {}
 
         # 取最近lookback期的日期
-        all_dates = sorted(factor_df['trade_date'].unique())
+        all_dates = sorted(factor_df["trade_date"].unique())
         recent_dates = set(all_dates[-lookback:])
 
         # 向量化: merge因子和收益，一次计算所有IC
         # 替代逐因子逐日期三重循环，性能提升显著
         merged = pd.merge(
-            factor_df[factor_df['trade_date'].isin(recent_dates)][['trade_date', 'security_id', 'factor_code', 'value']],
-            return_df[['trade_date', 'security_id', 'forward_return']],
-            on=['trade_date', 'security_id'],
-            how='inner',
+            factor_df[factor_df["trade_date"].isin(recent_dates)][
+                ["trade_date", "security_id", "factor_code", "value"]
+            ],
+            return_df[["trade_date", "security_id", "forward_return"]],
+            on=["trade_date", "security_id"],
+            how="inner",
         )
         if merged.empty:
             return {}
@@ -349,13 +345,15 @@ class MultiFactorScorer:
         def _calc_ic(g):
             if len(g) < 10:  # 截面样本不足10时IC不可靠，跳过
                 return np.nan
-            valid = g['value'].notna() & g['forward_return'].notna()
+            valid = g["value"].notna() & g["forward_return"].notna()
             if valid.sum() < 10:
                 return np.nan
-            return g.loc[valid, 'value'].corr(g.loc[valid, 'forward_return'])
+            return g.loc[valid, "value"].corr(g.loc[valid, "forward_return"])
 
-        ic_df = merged.groupby(['factor_code', 'trade_date']).apply(_calc_ic, include_groups=False).reset_index(name='ic')
-        ic_df = ic_df.dropna(subset=['ic'])
+        ic_df = (
+            merged.groupby(["factor_code", "trade_date"]).apply(_calc_ic, include_groups=False).reset_index(name="ic")
+        )
+        ic_df = ic_df.dropna(subset=["ic"])
 
         if ic_df.empty:
             return {}
@@ -363,12 +361,12 @@ class MultiFactorScorer:
         # 计算权重
         weights = {}
         for fc in factor_codes:
-            fc_ic = ic_df[ic_df['factor_code'] == fc]['ic']
+            fc_ic = ic_df[ic_df["factor_code"] == fc]["ic"]
             if len(fc_ic) == 0:
                 continue
-            if method == 'ic':
+            if method == "ic":
                 weights[fc] = fc_ic.mean()
-            elif method == 'icir':
+            elif method == "icir":
                 ic_mean = fc_ic.mean()
                 ic_std = fc_ic.std()
                 if ic_std > 0:
@@ -386,10 +384,13 @@ class MultiFactorScorer:
         total = sum(positive_weights.values())
         return {k: v / total for k, v in positive_weights.items()}
 
-    def lightgbm_score(self, factor_scores: pd.DataFrame,
-                       returns: pd.Series = None,
-                       model_params: Dict = None,
-                       monotone_constraints: Dict[str, int] = None) -> pd.Series:
+    def lightgbm_score(
+        self,
+        factor_scores: pd.DataFrame,
+        returns: pd.Series = None,
+        model_params: dict | None = None,
+        monotone_constraints: dict[str, int] | None = None,
+    ) -> pd.Series:
         """
         LightGBM排序模型
         将股票选择建模为排序问题，使用lambdarank目标函数
@@ -404,25 +405,25 @@ class MultiFactorScorer:
             import lightgbm as lgb
         except ImportError:
             logger.warning("lightgbm not available, falling back to ICIR weight")
-            return self.icir_weight(factor_scores, {col: 1.0 for col in factor_scores.columns})
+            return self.icir_weight(factor_scores, dict.fromkeys(factor_scores.columns, 1.0))
 
         if returns is None:
             logger.warning("No returns provided for LightGBM, using equal weight")
             return self.equal_weight(factor_scores)
 
         params = model_params or {
-            'objective': 'lambdarank',
-            'metric': 'ndcg',
-            'learning_rate': 0.05,
-            'max_depth': 4,       # 浅树防止过拟合，A股截面数据噪声大
-            'num_leaves': 15,     # 与max_depth=4匹配，2^4=16
-            'min_data_in_leaf': 50,  # 叶节点最少样本，避免在小盘股上过拟合
-            'feature_fraction': 0.8,  # 列采样降低因子间共线性风险
-            'bagging_fraction': 0.8,  # 行采样增强鲁棒性
-            'bagging_freq': 5,
-            'lambda_l1': 0.1,    # L1正则化，自动做因子选择
-            'lambda_l2': 0.1,    # L2正则化，抑制共线性因子权重过大
-            'verbosity': -1,
+            "objective": "lambdarank",
+            "metric": "ndcg",
+            "learning_rate": 0.05,
+            "max_depth": 4,  # 浅树防止过拟合，A股截面数据噪声大
+            "num_leaves": 15,  # 与max_depth=4匹配，2^4=16
+            "min_data_in_leaf": 50,  # 叶节点最少样本，避免在小盘股上过拟合
+            "feature_fraction": 0.8,  # 列采样降低因子间共线性风险
+            "bagging_fraction": 0.8,  # 行采样增强鲁棒性
+            "bagging_freq": 5,
+            "lambda_l1": 0.1,  # L1正则化，自动做因子选择
+            "lambda_l2": 0.1,  # L2正则化，抑制共线性因子权重过大
+            "verbosity": -1,
         }
 
         # 准备训练数据
@@ -443,7 +444,7 @@ class MultiFactorScorer:
             constraints = []
             for col in factor_scores.columns:
                 constraints.append(monotone_constraints.get(col, 0))
-            params['monotone_constraints'] = constraints
+            params["monotone_constraints"] = constraints
 
         # 训练模型
         train_data = lgb.Dataset(X_train, label=y_rank, group=[len(X_train)])
@@ -453,10 +454,13 @@ class MultiFactorScorer:
         predictions = model.predict(factor_scores.values)
         return pd.Series(predictions, index=factor_scores.index)
 
-    def stacking_score(self, factor_scores: pd.DataFrame,
-                       returns: pd.Series = None,
-                       base_models: List[str] = None,
-                       n_folds: int = 5) -> pd.Series:
+    def stacking_score(
+        self,
+        factor_scores: pd.DataFrame,
+        returns: pd.Series = None,
+        base_models: list[str] | None = None,
+        n_folds: int = 5,
+    ) -> pd.Series:
         """
         Stacking集成评分 (机构级: K折交叉验证+元学习器)
         1. K折生成out-of-fold预测
@@ -470,17 +474,17 @@ class MultiFactorScorer:
             n_folds: 交叉验证折数
         """
         if base_models is None:
-            base_models = ['linear', 'icir']
+            base_models = ["linear", "icir"]
 
         if returns is None or returns.isna().all():
             # 无标签时退化为简单平均
             base_predictions = {}
             for model_name in base_models:
-                if model_name == 'linear':
-                    base_predictions['linear'] = self.equal_weight(factor_scores)
-                elif model_name == 'icir':
-                    base_predictions['icir'] = self.icir_weight(
-                        factor_scores, {col: 1.0 for col in factor_scores.columns}
+                if model_name == "linear":
+                    base_predictions["linear"] = self.equal_weight(factor_scores)
+                elif model_name == "icir":
+                    base_predictions["icir"] = self.icir_weight(
+                        factor_scores, dict.fromkeys(factor_scores.columns, 1.0)
                     )
             if not base_predictions:
                 return self.equal_weight(factor_scores)
@@ -496,7 +500,7 @@ class MultiFactorScorer:
         oof_predictions = {name: np.full(n_samples, np.nan) for name in base_models}
 
         for fold in range(n_folds):
-            val_idx = indices[fold * fold_size:(fold + 1) * fold_size]
+            val_idx = indices[fold * fold_size : (fold + 1) * fold_size]
             train_idx = np.setdiff1d(indices, val_idx)
 
             train_scores = factor_scores.iloc[train_idx]
@@ -505,9 +509,9 @@ class MultiFactorScorer:
 
             # 各基模型在训练集训练，验证集预测
             for model_name in base_models:
-                if model_name == 'linear':
+                if model_name == "linear":
                     pred = self.equal_weight(val_scores)
-                elif model_name == 'icir':
+                elif model_name == "icir":
                     # 在训练集上计算ICIR权重
                     icir_vals = {}
                     for col in train_scores.columns:
@@ -515,7 +519,7 @@ class MultiFactorScorer:
                         if not np.isnan(corr):
                             icir_vals[col] = corr
                     pred = self.icir_weight(val_scores, icir_vals) if icir_vals else self.equal_weight(val_scores)
-                elif model_name == 'lightgbm':
+                elif model_name == "lightgbm":
                     pred = self.lightgbm_score(val_scores, train_returns)
                 else:
                     pred = self.equal_weight(val_scores)
@@ -531,6 +535,7 @@ class MultiFactorScorer:
 
         try:
             from sklearn.linear_model import Ridge
+
             meta_X = oof_df.loc[valid_mask].values
             meta_y = returns.loc[valid_mask].values
             meta_learner = Ridge(alpha=1.0)  # Ridge做元学习器而非OLS，正则化防止对单一基模型过拟合
@@ -539,13 +544,13 @@ class MultiFactorScorer:
             # 用元学习器组合基模型的完整预测
             full_predictions = {}
             for model_name in base_models:
-                if model_name == 'linear':
+                if model_name == "linear":
                     full_predictions[model_name] = self.equal_weight(factor_scores)
-                elif model_name == 'icir':
+                elif model_name == "icir":
                     full_predictions[model_name] = self.icir_weight(
-                        factor_scores, {col: 1.0 for col in factor_scores.columns}
+                        factor_scores, dict.fromkeys(factor_scores.columns, 1.0)
                     )
-                elif model_name == 'lightgbm':
+                elif model_name == "lightgbm":
                     full_predictions[model_name] = self.lightgbm_score(factor_scores, returns)
 
             full_df = pd.DataFrame(full_predictions, index=factor_scores.index)
@@ -556,10 +561,9 @@ class MultiFactorScorer:
             # sklearn不可用，退化为加权平均
             return oof_df.mean(axis=1)
 
-    def adversarial_validation(self, train_data: pd.DataFrame,
-                               test_data: pd.DataFrame,
-                               factor_cols: List[str],
-                               threshold_auc: float = 0.55) -> Dict:
+    def adversarial_validation(
+        self, train_data: pd.DataFrame, test_data: pd.DataFrame, factor_cols: list[str], threshold_auc: float = 0.55
+    ) -> dict:
         # AUC=0.5表示无法区分，>0.55即认为存在可检测的分布漂移
         # 阈值设0.55而非0.5是为了容忍轻微噪声，避免误报
         """
@@ -580,7 +584,7 @@ class MultiFactorScorer:
             from sklearn.metrics import roc_auc_score
         except ImportError:
             logger.warning("sklearn not available for adversarial validation")
-            return {'has_drift': False, 'drifted_factors': []}
+            return {"has_drift": False, "drifted_factors": []}
 
         # 构建二分类问题: 区分训练期和测试期
         train_features = train_data[factor_cols].fillna(0)
@@ -597,25 +601,28 @@ class MultiFactorScorer:
         # 识别漂移最大的因子
         feature_importance = dict(zip(factor_cols, clf.feature_importances_))
         drifted_factors = [
-            f for f, imp in sorted(feature_importance.items(), key=lambda x: -x[1])
+            f
+            for f, imp in sorted(feature_importance.items(), key=lambda x: -x[1])
             if imp > 1.0 / len(factor_cols) * 2  # 重要性超过平均2倍视为漂移因子
         ]
 
         return {
-            'has_drift': auc > threshold_auc,
-            'auc': round(auc, 4),
-            'drifted_factors': drifted_factors,
-            'feature_importance': feature_importance,
+            "has_drift": auc > threshold_auc,
+            "auc": round(auc, 4),
+            "drifted_factors": drifted_factors,
+            "feature_importance": feature_importance,
         }
 
     # ==================== 无数据库便捷函数 ====================
 
     @staticmethod
-    def score_from_factor_df(factor_df: pd.DataFrame,
-                             method: str = 'equal',
-                             weights: Dict[str, float] = None,
-                             ic_values: Dict[str, float] = None,
-                             icir_values: Dict[str, float] = None) -> pd.DataFrame:
+    def score_from_factor_df(
+        factor_df: pd.DataFrame,
+        method: str = "equal",
+        weights: dict[str, float] | None = None,
+        ic_values: dict[str, float] | None = None,
+        icir_values: dict[str, float] | None = None,
+    ) -> pd.DataFrame:
         """
         不依赖数据库的评分便捷函数
         直接从因子DataFrame计算综合评分
@@ -635,33 +642,33 @@ class MultiFactorScorer:
 
         # 排除非因子列
         # 这些元数据列不是因子得分，参与加权计算会导致结果错误
-        skip_cols = {'security_id', 'ts_code', 'trade_date', 'data_source', 'amount_is_estimated'}
+        skip_cols = {"security_id", "ts_code", "trade_date", "data_source", "amount_is_estimated"}
         factor_cols = [c for c in factor_df.columns if c not in skip_cols]
         scores_matrix = factor_df[factor_cols].copy()
 
         # 计算综合得分
-        if method == 'equal':
-            factor_df['total_score'] = scorer.equal_weight(scores_matrix)
-        elif method == 'manual' and weights:
-            factor_df['total_score'] = scorer.manual_weight(scores_matrix, weights)
-        elif method == 'ic' and ic_values:
-            factor_df['total_score'] = scorer.ic_weight(scores_matrix, ic_values)
-        elif method == 'icir' and icir_values:
-            factor_df['total_score'] = scorer.icir_weight(scores_matrix, icir_values)
+        if method == "equal":
+            factor_df["total_score"] = scorer.equal_weight(scores_matrix)
+        elif method == "manual" and weights:
+            factor_df["total_score"] = scorer.manual_weight(scores_matrix, weights)
+        elif method == "ic" and ic_values:
+            factor_df["total_score"] = scorer.ic_weight(scores_matrix, ic_values)
+        elif method == "icir" and icir_values:
+            factor_df["total_score"] = scorer.icir_weight(scores_matrix, icir_values)
         else:
-            factor_df['total_score'] = scorer.equal_weight(scores_matrix)
+            factor_df["total_score"] = scorer.equal_weight(scores_matrix)
 
         # 排名
-        factor_df['rank'] = factor_df['total_score'].rank(ascending=False)
-        factor_df['quantile'] = factor_df['total_score'].rank(pct=True)
+        factor_df["rank"] = factor_df["total_score"].rank(ascending=False)
+        factor_df["quantile"] = factor_df["total_score"].rank(pct=True)
 
         return factor_df
 
     # ==================== 综合评分计算 ====================
 
-    def calculate_scores(self, model_id: int, trade_date: date,
-                         ts_codes: List[str] = None,
-                         weighting_method: str = 'equal') -> pd.DataFrame:
+    def calculate_scores(
+        self, model_id: int, trade_date: date, ts_codes: list[str] | None = None, weighting_method: str = "equal"
+    ) -> pd.DataFrame:
         """
         计算多因子综合评分
 
@@ -679,10 +686,14 @@ class MultiFactorScorer:
             raise ValueError(f"Model {model_id} not found")
 
         # 获取因子权重
-        factor_weights = self.db.query(ModelFactorWeight).filter(
-            ModelFactorWeight.model_id == model_id,
-            ModelFactorWeight.is_active == True,
-        ).all()
+        factor_weights = (
+            self.db.query(ModelFactorWeight)
+            .filter(
+                ModelFactorWeight.model_id == model_id,
+                ModelFactorWeight.is_active,
+            )
+            .all()
+        )
 
         if not factor_weights:
             raise ValueError(f"No factor weights for model {model_id}")
@@ -738,60 +749,63 @@ class MultiFactorScorer:
         scores_df = pd.DataFrame(factor_scores)
 
         # 计算综合得分
-        if weighting_method == 'equal':
-            scores_df['total_score'] = self.equal_weight(scores_df)
-        elif weighting_method == 'manual':
+        if weighting_method == "equal":
+            scores_df["total_score"] = self.equal_weight(scores_df)
+        elif weighting_method == "manual":
             weights = {factor_codes[fw.factor_id]: fw.weight for fw in factor_weights}
-            scores_df['total_score'] = self.manual_weight(scores_df, weights)
-        elif weighting_method == 'ic':
+            scores_df["total_score"] = self.manual_weight(scores_df, weights)
+        elif weighting_method == "ic":
             # IC动态加权 (机构级: 从实际IC计算权重)
             ic_weights = self.compute_ic_weights(
                 self._build_factor_ic_data(factor_weights, trade_date, ts_codes),
                 self._get_forward_return_data(trade_date),
-                method='ic',
+                method="ic",
             )
             if ic_weights:
-                scores_df['total_score'] = self.ic_weight(scores_df, ic_weights)
+                scores_df["total_score"] = self.ic_weight(scores_df, ic_weights)
             else:
-                scores_df['total_score'] = self.equal_weight(scores_df)
-        elif weighting_method == 'icir':
+                scores_df["total_score"] = self.equal_weight(scores_df)
+        elif weighting_method == "icir":
             # ICIR动态加权
             icir_weights = self.compute_ic_weights(
                 self._build_factor_ic_data(factor_weights, trade_date, ts_codes),
                 self._get_forward_return_data(trade_date),
-                method='icir',
+                method="icir",
             )
             if icir_weights:
-                scores_df['total_score'] = self.icir_weight(scores_df, icir_weights)
+                scores_df["total_score"] = self.icir_weight(scores_df, icir_weights)
             else:
-                scores_df['total_score'] = self.equal_weight(scores_df)
-        elif weighting_method == 'lightgbm':
-            scores_df['total_score'] = self.lightgbm_score(scores_df)
-        elif weighting_method == 'stacking':
-            scores_df['total_score'] = self.stacking_score(scores_df)
-        elif weighting_method == 'rolling_ic':
-            scores_df['total_score'] = self.equal_weight(scores_df)
+                scores_df["total_score"] = self.equal_weight(scores_df)
+        elif weighting_method == "lightgbm":
+            scores_df["total_score"] = self.lightgbm_score(scores_df)
+        elif weighting_method == "stacking":
+            scores_df["total_score"] = self.stacking_score(scores_df)
+        elif weighting_method == "rolling_ic":
+            scores_df["total_score"] = self.equal_weight(scores_df)
         else:
-            scores_df['total_score'] = self.equal_weight(scores_df)
+            scores_df["total_score"] = self.equal_weight(scores_df)
 
         # 排名
-        scores_df['rank'] = scores_df['total_score'].rank(ascending=False)
-        scores_df['quantile'] = scores_df['total_score'].rank(pct=True)
+        scores_df["rank"] = scores_df["total_score"].rank(ascending=False)
+        scores_df["quantile"] = scores_df["total_score"].rank(pct=True)
 
         return scores_df
 
     def select_top_stocks(self, scores_df: pd.DataFrame, top_n: int = 50) -> pd.DataFrame:
         """选择Top N股票"""
-        return scores_df.nsmallest(top_n, 'rank')
+        return scores_df.nsmallest(top_n, "rank")
 
-    def generate_portfolio_weights(self, scores_df: pd.DataFrame,
-                                   top_n: int = 50,
-                                   method: str = 'equal',
-                                   prev_weights: pd.Series = None,
-                                   turnover_penalty: float = 0.0,
-                                   risk_model=None,
-                                   expected_returns: pd.Series = None,
-                                   cov_matrix: np.ndarray = None) -> pd.Series:
+    def generate_portfolio_weights(
+        self,
+        scores_df: pd.DataFrame,
+        top_n: int = 50,
+        method: str = "equal",
+        prev_weights: pd.Series = None,
+        turnover_penalty: float = 0.0,
+        risk_model=None,
+        expected_returns: pd.Series = None,
+        cov_matrix: np.ndarray = None,
+    ) -> pd.Series:
         """
         生成组合权重 (ADD 10.3节 + 机构级增强)
 
@@ -807,23 +821,23 @@ class MultiFactorScorer:
         """
         top_stocks = self.select_top_stocks(scores_df, top_n)
 
-        if method == 'equal':
+        if method == "equal":
             # 等权 (ADD 10.3.1节)
             weights = pd.Series(1.0 / top_n, index=top_stocks.index)
-        elif method == 'score':
+        elif method == "score":
             # 分数加权 (ADD 10.3.2节)
-            scores = top_stocks['total_score']
+            scores = top_stocks["total_score"]
             scores = scores - scores.min() + 0.01  # +0.01避免最低分股票权重为零
             weights = scores / scores.sum()
-        elif method == 'benchmark_enhanced':
+        elif method == "benchmark_enhanced":
             # 基准增强权重 (ADD 10.3.3节) - 简化实现
-            scores = top_stocks['total_score']
+            scores = top_stocks["total_score"]
             scores = scores - scores.min() + 0.01
             weights = scores / scores.sum()
-        elif method == 'mean_cvar':
+        elif method == "mean_cvar":
             # Mean-CVaR优化
             weights = self._mean_cvar_weights(top_stocks, risk_model, expected_returns, cov_matrix)
-        elif method == 'hrp':
+        elif method == "hrp":
             # 层次风险平价
             weights = self._hrp_weights(top_stocks, cov_matrix)
         else:
@@ -835,34 +849,34 @@ class MultiFactorScorer:
 
         return weights
 
-    def _mean_cvar_weights(self, top_stocks: pd.DataFrame,
-                            risk_model, expected_returns: pd.Series,
-                            cov_matrix: np.ndarray) -> pd.Series:
+    def _mean_cvar_weights(
+        self, top_stocks: pd.DataFrame, risk_model, expected_returns: pd.Series, cov_matrix: np.ndarray
+    ) -> pd.Series:
         """Mean-CVaR优化权重 (委托给PortfolioOptimizer)"""
         if risk_model is None or expected_returns is None:
-            scores = top_stocks['total_score']
+            scores = top_stocks["total_score"]
             scores = scores - scores.min() + 0.01
             return scores / scores.sum()
 
         try:
             from app.core.portfolio_optimizer import PortfolioOptimizer
+
             optimizer = PortfolioOptimizer()
             result = optimizer.mean_cvar_optimize(
                 expected_returns=expected_returns.values,
                 cov_matrix=cov_matrix,
                 max_weight=1.0 / len(top_stocks) * 2,  # 单只股票权重上限为等权的2倍，兼顾集中度与灵活性
             )
-            if 'weights' in result:
-                return pd.Series(result['weights'], index=top_stocks.index)
+            if "weights" in result:
+                return pd.Series(result["weights"], index=top_stocks.index)
         except Exception as e:
             logger.warning(f"Mean-CVaR optimization failed: {e}")
 
-        scores = top_stocks['total_score']
+        scores = top_stocks["total_score"]
         scores = scores - scores.min() + 0.01
         return scores / scores.sum()
 
-    def _hrp_weights(self, top_stocks: pd.DataFrame,
-                      cov_matrix: np.ndarray = None) -> pd.Series:
+    def _hrp_weights(self, top_stocks: pd.DataFrame, cov_matrix: np.ndarray = None) -> pd.Series:
         """层次风险平价 (委托给PortfolioOptimizer)"""
         n = len(top_stocks)
         if cov_matrix is None or n < 3:
@@ -870,15 +884,14 @@ class MultiFactorScorer:
 
         try:
             from app.core.portfolio_optimizer import PortfolioOptimizer
+
             optimizer = PortfolioOptimizer()
             return optimizer.hrp_optimize(cov_matrix, index=top_stocks.index)
         except Exception as e:
             logger.warning(f"HRP failed: {e}, falling back to equal weight")
             return pd.Series(1.0 / n, index=top_stocks.index)
 
-    def _apply_turnover_penalty(self, weights: pd.Series,
-                                 prev_weights: pd.Series,
-                                 penalty: float) -> pd.Series:
+    def _apply_turnover_penalty(self, weights: pd.Series, prev_weights: pd.Series, penalty: float) -> pd.Series:
         """
         L1换手率惩罚
         优化: max w'*alpha - lambda_turn * |w - w_prev|_1
@@ -902,11 +915,14 @@ class MultiFactorScorer:
 
         return weights
 
-    def calc_market_impact(self, target_weights: pd.Series,
-                           prev_weights: pd.Series,
-                           daily_volumes: pd.Series,
-                           volatilities: pd.Series,
-                           total_aum: float) -> pd.Series:
+    def calc_market_impact(
+        self,
+        target_weights: pd.Series,
+        prev_weights: pd.Series,
+        daily_volumes: pd.Series,
+        volatilities: pd.Series,
+        total_aum: float,
+    ) -> pd.Series:
         """
         平方根市场冲击模型 (Almgren-Chriss简化)
         Impact = sigma * sqrt(Q / (0.1 * V))
@@ -943,8 +959,9 @@ class MultiFactorScorer:
 
     # ==================== IC权重计算辅助方法 ====================
 
-    def _build_factor_ic_data(self, factor_weights, trade_date: date,
-                               ts_codes: List[str] = None) -> pd.DataFrame:
+    def _build_factor_ic_data(
+        self, factor_weights, trade_date: date, ts_codes: list[str] | None = None
+    ) -> pd.DataFrame:
         """构建IC计算所需的因子数据 (批量查询，避免N+1)"""
         factor_ids = [fw.factor_id for fw in factor_weights]
 
@@ -966,39 +983,51 @@ class MultiFactorScorer:
             factor = factor_map.get(v.factor_id)
             if not factor:
                 continue
-            records.append({
-                'trade_date': trade_date,
-                'security_id': v.security_id,
-                'factor_code': factor.factor_code,
-                'value': v.value,
-            })
+            records.append(
+                {
+                    "trade_date": trade_date,
+                    "security_id": v.security_id,
+                    "factor_code": factor.factor_code,
+                    "value": v.value,
+                }
+            )
         return pd.DataFrame(records) if records else pd.DataFrame()
 
-    def _get_forward_return_data(self, trade_date: date,
-                                  forward_period: int = 20) -> pd.DataFrame:
+    def _get_forward_return_data(self, trade_date: date, forward_period: int = 20) -> pd.DataFrame:
         # forward_period=20对应约1个月交易日，是因子预测的典型时间窗口
         """获取前瞻收益数据 (向量化计算，避免逐股票循环)"""
         try:
-            from app.models.market import StockDaily
             from datetime import timedelta
+
+            from app.models.market import StockDaily
+
             end_date = trade_date + timedelta(days=forward_period + 30)  # +30天缓冲确保覆盖自然日中非交易日
-            stocks = self.db.query(StockDaily).filter(
-                StockDaily.trade_date >= trade_date,
-                StockDaily.trade_date <= end_date,
-            ).all()
+            stocks = (
+                self.db.query(StockDaily)
+                .filter(
+                    StockDaily.trade_date >= trade_date,
+                    StockDaily.trade_date <= end_date,
+                )
+                .all()
+            )
             if not stocks:
                 return pd.DataFrame()
-            price_df = pd.DataFrame([{
-                'trade_date': s.trade_date,
-                'security_id': s.ts_code,
-                'close': float(s.close) if s.close else np.nan,
-            } for s in stocks])
+            price_df = pd.DataFrame(
+                [
+                    {
+                        "trade_date": s.trade_date,
+                        "security_id": s.ts_code,
+                        "close": float(s.close) if s.close else np.nan,
+                    }
+                    for s in stocks
+                ]
+            )
             # 向量化计算前瞻收益
             # 按股票分组shift，避免逐股票循环，性能显著提升
-            price_df = price_df.dropna(subset=['close']).sort_values(['security_id', 'trade_date'])
-            price_df['fwd_close'] = price_df.groupby('security_id')['close'].shift(-forward_period)
-            price_df['forward_return'] = price_df['fwd_close'] / price_df['close'] - 1
-            result = price_df[['trade_date', 'security_id', 'forward_return']].dropna(subset=['forward_return'])
+            price_df = price_df.dropna(subset=["close"]).sort_values(["security_id", "trade_date"])
+            price_df["fwd_close"] = price_df.groupby("security_id")["close"].shift(-forward_period)
+            price_df["forward_return"] = price_df["fwd_close"] / price_df["close"] - 1
+            result = price_df[["trade_date", "security_id", "forward_return"]].dropna(subset=["forward_return"])
             return result if not result.empty else pd.DataFrame()
         except Exception:
             return pd.DataFrame()

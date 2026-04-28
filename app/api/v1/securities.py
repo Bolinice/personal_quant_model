@@ -1,12 +1,18 @@
 """证券管理 API。"""
 
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
+from app.core.response import success
 from app.db.base import get_db
-from app.services.securities_service import get_securities, get_security_by_ts_code, create_security, update_security, delete_security
-from app.schemas.securities import SecurityCreate, SecurityUpdate, SecurityOut
-from app.core.response import success, error
+from app.schemas.securities import SecurityCreate, SecurityUpdate
+from app.services.securities_service import (
+    create_security,
+    delete_security,
+    get_securities,
+    get_security_by_ts_code,
+    update_security,
+)
 
 router = APIRouter()
 

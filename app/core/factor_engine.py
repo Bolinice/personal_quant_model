@@ -3,19 +3,21 @@
 实现ADD 6.3节因子计算、存储、查询、分析全流程
 重构: 计算逻辑委托给FactorCalculator，本模块专注DB交互+因子分析
 """
-from typing import List, Optional, Dict, Any
-from datetime import date, datetime
-import numpy as np
 
+from __future__ import annotations
+
+from datetime import date
+from typing import Any
+
+import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, desc
 
-from app.core.logging import logger
-from app.core.factor_preprocess import FactorPreprocessor, preprocess_factor_values
-from app.core.factor_calculator import FactorCalculator, FACTOR_GROUPS, FACTOR_DIRECTIONS
-from app.models.factors import Factor, FactorValue, FactorAnalysis, FactorResult
+from app.core.factor_calculator import FACTOR_DIRECTIONS, FACTOR_GROUPS, FactorCalculator
+from app.core.factor_preprocess import FactorPreprocessor
+from app.models.factors import Factor, FactorValue
 
 
 class FactorEngine:
@@ -28,10 +30,17 @@ class FactorEngine:
 
     # ==================== 因子定义管理 ====================
 
-    def create_factor(self, factor_code: str, factor_name: str, category: str,
-                      direction: int = 1, formula_desc: str = None,
-                      calc_expression: str = None, description: str = None,
-                      created_by: int = None) -> Factor:
+    def create_factor(
+        self,
+        factor_code: str,
+        factor_name: str,
+        category: str,
+        direction: int = 1,
+        formula_desc: str | None = None,
+        calc_expression: str | None = None,
+        description: str | None = None,
+        created_by: int | None = None,
+    ) -> Factor:
         """创建因子定义"""
         factor = Factor(
             factor_code=factor_code,
@@ -48,15 +57,15 @@ class FactorEngine:
         self.db.refresh(factor)
         return factor
 
-    def get_factor(self, factor_id: int) -> Optional[Factor]:
+    def get_factor(self, factor_id: int) -> Factor | None:
         """获取因子定义"""
         return self.db.query(Factor).filter(Factor.id == factor_id).first()
 
-    def get_factor_by_code(self, factor_code: str) -> Optional[Factor]:
+    def get_factor_by_code(self, factor_code: str) -> Factor | None:
         """根据代码获取因子"""
         return self.db.query(Factor).filter(Factor.factor_code == factor_code).first()
 
-    def list_factors(self, category: str = None, is_active: bool = True) -> List[Factor]:
+    def list_factors(self, category: str | None = None, is_active: bool = True) -> list[Factor]:
         """列出因子"""
         query = self.db.query(Factor)
         if category:
@@ -67,20 +76,21 @@ class FactorEngine:
 
     # ==================== 因子值存储 ====================
 
-    def save_factor_values(self, factor_id: int, trade_date: date,
-                           values: pd.DataFrame, run_id: str = None) -> int:
+    def save_factor_values(
+        self, factor_id: int, trade_date: date, values: pd.DataFrame, run_id: str | None = None
+    ) -> int:
         """批量保存因子值 (优化: to_dict替代iterrows)"""
         records = []
-        for row in values.to_dict('records'):
+        for row in values.to_dict("records"):
             record = FactorValue(
                 factor_id=factor_id,
                 trade_date=trade_date,
-                security_id=row['security_id'],
-                raw_value=row.get('raw_value'),
-                processed_value=row.get('processed_value'),
-                neutralized_value=row.get('neutralized_value'),
-                zscore_value=row.get('zscore_value'),
-                value=row.get('zscore_value', row.get('processed_value')),
+                security_id=row["security_id"],
+                raw_value=row.get("raw_value"),
+                processed_value=row.get("processed_value"),
+                neutralized_value=row.get("neutralized_value"),
+                zscore_value=row.get("zscore_value"),
+                value=row.get("zscore_value", row.get("processed_value")),
                 run_id=run_id,
             )
             records.append(record)
@@ -92,6 +102,7 @@ class FactorEngine:
     def get_factor_values(self, factor_id: int, trade_date: date) -> pd.DataFrame:
         """获取因子值 - 带缓存"""
         from app.core.cache import factor_cache
+
         cache_key = f"fv:{factor_id}:{trade_date}"
         cached = factor_cache.get(cache_key)
         if cached is not None:
@@ -103,21 +114,26 @@ class FactorEngine:
         results = query.all()
         if not results:
             return pd.DataFrame()
-        df = pd.DataFrame([{
-            'security_id': r.security_id,
-            'raw_value': r.raw_value,
-            'processed_value': r.processed_value,
-            'neutralized_value': r.neutralized_value,
-            'zscore_value': r.zscore_value,
-            'value': r.value,
-        } for r in results])
+        df = pd.DataFrame(
+            [
+                {
+                    "security_id": r.security_id,
+                    "raw_value": r.raw_value,
+                    "processed_value": r.processed_value,
+                    "neutralized_value": r.neutralized_value,
+                    "zscore_value": r.zscore_value,
+                    "value": r.value,
+                }
+                for r in results
+            ]
+        )
         factor_cache.set(cache_key, df)
         return df
 
-    def get_factor_values_range(self, factor_id: int, start_date: date,
-                                end_date: date) -> pd.DataFrame:
+    def get_factor_values_range(self, factor_id: int, start_date: date, end_date: date) -> pd.DataFrame:
         """获取因子值时间序列 - 带范围缓存"""
         from app.core.cache import factor_cache
+
         cache_key = f"fvr:{factor_id}:{start_date}:{end_date}"
         cached = factor_cache.get(cache_key)
         if cached is not None:
@@ -133,22 +149,27 @@ class FactorEngine:
         results = query.all()
         if not results:
             return pd.DataFrame()
-        df = pd.DataFrame([{
-            'trade_date': r.trade_date,
-            'security_id': r.security_id,
-            'value': r.value,
-            'zscore_value': r.zscore_value,
-        } for r in results])
+        df = pd.DataFrame(
+            [
+                {
+                    "trade_date": r.trade_date,
+                    "security_id": r.security_id,
+                    "value": r.value,
+                    "zscore_value": r.zscore_value,
+                }
+                for r in results
+            ]
+        )
         factor_cache.set(cache_key, df)
         return df
 
     # ==================== 因子分析 (合并自FactorAnalyzer) ====================
 
-    def calc_ic(self, factor_values: pd.Series, forward_returns: pd.Series) -> Dict[str, float]:
+    def calc_ic(self, factor_values: pd.Series, forward_returns: pd.Series) -> dict[str, float]:
         """计算因子IC (Pearson + Spearman Rank IC)"""
         valid = ~(factor_values.isna() | forward_returns.isna())
         if valid.sum() < 10:
-            return {'ic': np.nan, 'rank_ic': np.nan}
+            return {"ic": np.nan, "rank_ic": np.nan}
 
         fv = factor_values[valid]
         fr = forward_returns[valid]
@@ -157,43 +178,44 @@ class FactorEngine:
         rank_ic = fv.rank().corr(fr.rank())
 
         return {
-            'ic': round(ic, 4) if not np.isnan(ic) else 0,
-            'rank_ic': round(rank_ic, 4) if not np.isnan(rank_ic) else 0,
+            "ic": round(ic, 4) if not np.isnan(ic) else 0,
+            "rank_ic": round(rank_ic, 4) if not np.isnan(rank_ic) else 0,
         }
 
-    def calc_ic_series(self, factor_id: int, start_date: date, end_date: date,
-                       forward_period: int = 20) -> pd.DataFrame:
+    def calc_ic_series(
+        self, factor_id: int, start_date: date, end_date: date, forward_period: int = 20
+    ) -> pd.DataFrame:
         """计算IC时间序列 (向量化: groupby替代逐日期filter)"""
         factor_data = self.get_factor_values_range(factor_id, start_date, end_date)
         if factor_data.empty:
             return pd.DataFrame()
 
-        security_ids = factor_data['security_id'].unique().tolist()
-        forward_returns = self._get_forward_returns(
-            security_ids, start_date, end_date, forward_period
-        )
+        security_ids = factor_data["security_id"].unique().tolist()
+        forward_returns = self._get_forward_returns(security_ids, start_date, end_date, forward_period)
         if forward_returns.empty:
             return pd.DataFrame()
 
-        fr_long = forward_returns.reset_index().melt(
-            id_vars='security_id', var_name='trade_date', value_name='forward_return'
-        ).dropna(subset=['forward_return'])
+        fr_long = (
+            forward_returns.reset_index()
+            .melt(id_vars="security_id", var_name="trade_date", value_name="forward_return")
+            .dropna(subset=["forward_return"])
+        )
 
         merged = pd.merge(
-            factor_data[['trade_date', 'security_id', 'value']],
+            factor_data[["trade_date", "security_id", "value"]],
             fr_long,
-            on=['trade_date', 'security_id'],
-            how='inner',
+            on=["trade_date", "security_id"],
+            how="inner",
         )
         if merged.empty:
             return pd.DataFrame()
 
         ic_records = []
-        for trade_date, group in merged.groupby('trade_date'):
+        for trade_date, group in merged.groupby("trade_date"):
             if len(group) < 10:
                 continue
-            fv = group['value']
-            fr = group['forward_return']
+            fv = group["value"]
+            fr = group["forward_return"]
             valid = ~(fv.isna() | fr.isna())
             if valid.sum() < 10:
                 continue
@@ -201,27 +223,30 @@ class FactorEngine:
             fr_valid = fr[valid]
             ic = fv_valid.corr(fr_valid)
             rank_ic = fv_valid.rank().corr(fr_valid.rank())
-            ic_records.append({
-                'trade_date': trade_date,
-                'factor_id': factor_id,
-                'ic': round(ic, 4) if not np.isnan(ic) else 0,
-                'rank_ic': round(rank_ic, 4) if not np.isnan(rank_ic) else 0,
-                'n_stocks': valid.sum(),
-            })
+            ic_records.append(
+                {
+                    "trade_date": trade_date,
+                    "factor_id": factor_id,
+                    "ic": round(ic, 4) if not np.isnan(ic) else 0,
+                    "rank_ic": round(rank_ic, 4) if not np.isnan(rank_ic) else 0,
+                    "n_stocks": valid.sum(),
+                }
+            )
 
         return pd.DataFrame(ic_records)
 
-    def calc_ic_statistics(self, ic_series: pd.Series) -> Dict[str, Any]:
+    def calc_ic_statistics(self, ic_series: pd.Series) -> dict[str, Any]:
         """计算IC统计指标 (含Newey-West调整t统计量)"""
         ic_series = ic_series.dropna()
         if len(ic_series) < 2:
-            return {'ic_mean': np.nan, 'icir': np.nan}
+            return {"ic_mean": np.nan, "icir": np.nan}
 
         naive_t = sp_stats.ttest_1samp(ic_series, 0)[0]
         naive_p = sp_stats.ttest_1samp(ic_series, 0)[1]
 
         try:
-            from app.core.risk_model import newey_west_tstat, newey_west_se
+            from app.core.risk_model import newey_west_se, newey_west_tstat
+
             nw_t = newey_west_tstat(ic_series)
             nw_se = newey_west_se(ic_series)
         except ImportError:
@@ -229,128 +254,148 @@ class FactorEngine:
             nw_se = ic_series.std() / np.sqrt(len(ic_series))
 
         return {
-            'ic_mean': ic_series.mean(),
-            'ic_std': ic_series.std(),
-            'icir': ic_series.mean() / nw_se if nw_se > 0 and not np.isnan(nw_se) else (ic_series.mean() / ic_series.std() if ic_series.std() > 0 else 0),
-            'ic_positive_ratio': (ic_series > 0).mean(),
-            'ic_t_stat': naive_t,
-            'ic_p_value': naive_p,
-            'ic_nw_t_stat': round(nw_t, 4),
-            'ic_nw_se': round(nw_se, 6) if not np.isnan(nw_se) else np.nan,
+            "ic_mean": ic_series.mean(),
+            "ic_std": ic_series.std(),
+            "icir": ic_series.mean() / nw_se
+            if nw_se > 0 and not np.isnan(nw_se)
+            else (ic_series.mean() / ic_series.std() if ic_series.std() > 0 else 0),
+            "ic_positive_ratio": (ic_series > 0).mean(),
+            "ic_t_stat": naive_t,
+            "ic_p_value": naive_p,
+            "ic_nw_t_stat": round(nw_t, 4),
+            "ic_nw_se": round(nw_se, 6) if not np.isnan(nw_se) else np.nan,
         }
 
-    def calc_factor_decay(self, factor_id: int, trade_date: date,
-                          max_lag: int = 20) -> Dict:
+    def calc_factor_decay(self, factor_id: int, trade_date: date, max_lag: int = 20) -> dict:
         """计算因子衰减 - 一次查询计算所有lag"""
         factor_data = self.get_factor_values(factor_id, trade_date)
         if factor_data.empty:
-            return {'factor_id': factor_id, 'trade_date': trade_date, 'decay_values': []}
+            return {"factor_id": factor_id, "trade_date": trade_date, "decay_values": []}
 
-        fv = factor_data.set_index('security_id')['value']
+        fv = factor_data.set_index("security_id")["value"]
         security_ids = fv.index.tolist()
 
         try:
-            from app.models.market import StockDaily
             from datetime import timedelta
+
+            from app.models.market import StockDaily
+
             query_end = trade_date + timedelta(days=max_lag + 60)
 
-            stocks = self.db.query(StockDaily).filter(
-                StockDaily.ts_code.in_(security_ids),
-                StockDaily.trade_date >= trade_date,
-                StockDaily.trade_date <= query_end,
-            ).all()
+            stocks = (
+                self.db.query(StockDaily)
+                .filter(
+                    StockDaily.ts_code.in_(security_ids),
+                    StockDaily.trade_date >= trade_date,
+                    StockDaily.trade_date <= query_end,
+                )
+                .all()
+            )
 
             if not stocks:
-                return {'factor_id': factor_id, 'trade_date': trade_date,
-                        'decay_values': [{'lag': lag, 'ic': 0, 'rank_ic': 0} for lag in range(1, max_lag + 1)]}
+                return {
+                    "factor_id": factor_id,
+                    "trade_date": trade_date,
+                    "decay_values": [{"lag": lag, "ic": 0, "rank_ic": 0} for lag in range(1, max_lag + 1)],
+                }
 
-            price_df = pd.DataFrame([{
-                'trade_date': s.trade_date,
-                'security_id': s.ts_code,
-                'close': float(s.close) if s.close else np.nan,
-            } for s in stocks])
-            price_df = price_df.dropna(subset=['close']).sort_values(['security_id', 'trade_date'])
+            price_df = pd.DataFrame(
+                [
+                    {
+                        "trade_date": s.trade_date,
+                        "security_id": s.ts_code,
+                        "close": float(s.close) if s.close else np.nan,
+                    }
+                    for s in stocks
+                ]
+            )
+            price_df = price_df.dropna(subset=["close"]).sort_values(["security_id", "trade_date"])
 
         except (ImportError, Exception):
-            return {'factor_id': factor_id, 'trade_date': trade_date,
-                    'decay_values': [{'lag': lag, 'ic': 0, 'rank_ic': 0} for lag in range(1, max_lag + 1)]}
+            return {
+                "factor_id": factor_id,
+                "trade_date": trade_date,
+                "decay_values": [{"lag": lag, "ic": 0, "rank_ic": 0} for lag in range(1, max_lag + 1)],
+            }
 
         decay_values = []
         for lag in range(1, max_lag + 1):
             price_df_lag = price_df.copy()
-            price_df_lag['fwd_close'] = price_df_lag.groupby('security_id')['close'].shift(-lag)
-            price_df_lag['forward_return'] = price_df_lag['fwd_close'] / price_df_lag['close'] - 1
+            price_df_lag["fwd_close"] = price_df_lag.groupby("security_id")["close"].shift(-lag)
+            price_df_lag["forward_return"] = price_df_lag["fwd_close"] / price_df_lag["close"] - 1
 
-            day_data = price_df_lag[price_df_lag['trade_date'] == trade_date].dropna(subset=['forward_return'])
+            day_data = price_df_lag[price_df_lag["trade_date"] == trade_date].dropna(subset=["forward_return"])
             if day_data.empty:
-                decay_values.append({'lag': lag, 'ic': 0, 'rank_ic': 0})
+                decay_values.append({"lag": lag, "ic": 0, "rank_ic": 0})
                 continue
 
-            fr = day_data.set_index('security_id')['forward_return']
+            fr = day_data.set_index("security_id")["forward_return"]
             common = fv.index.intersection(fr.index)
             if len(common) < 10:
-                decay_values.append({'lag': lag, 'ic': 0, 'rank_ic': 0})
+                decay_values.append({"lag": lag, "ic": 0, "rank_ic": 0})
                 continue
 
             fv_common = fv.loc[common]
             fr_common = fr.loc[common]
             valid = ~(fv_common.isna() | fr_common.isna())
             if valid.sum() < 10:
-                decay_values.append({'lag': lag, 'ic': 0, 'rank_ic': 0})
+                decay_values.append({"lag": lag, "ic": 0, "rank_ic": 0})
                 continue
 
             ic = fv_common[valid].corr(fr_common[valid])
             rank_ic = fv_common[valid].rank().corr(fr_common[valid].rank())
 
-            decay_values.append({
-                'lag': lag,
-                'ic': round(ic, 4) if not np.isnan(ic) else 0,
-                'rank_ic': round(rank_ic, 4) if not np.isnan(rank_ic) else 0,
-            })
+            decay_values.append(
+                {
+                    "lag": lag,
+                    "ic": round(ic, 4) if not np.isnan(ic) else 0,
+                    "rank_ic": round(rank_ic, 4) if not np.isnan(rank_ic) else 0,
+                }
+            )
 
-        return {'factor_id': factor_id, 'trade_date': trade_date, 'decay_values': decay_values}
+        return {"factor_id": factor_id, "trade_date": trade_date, "decay_values": decay_values}
 
-    def calc_factor_correlation(self, factor_id_a: int, factor_id_b: int,
-                                start_date: date, end_date: date) -> Dict:
+    def calc_factor_correlation(self, factor_id_a: int, factor_id_b: int, start_date: date, end_date: date) -> dict:
         """计算两个因子的相关性"""
         values_a = self.get_factor_values_range(factor_id_a, start_date, end_date)
         values_b = self.get_factor_values_range(factor_id_b, start_date, end_date)
 
         if values_a.empty or values_b.empty:
-            return {'correlation': np.nan}
+            return {"correlation": np.nan}
 
         merged = pd.merge(
-            values_a[['trade_date', 'security_id', 'value']],
-            values_b[['trade_date', 'security_id', 'value']],
-            on=['trade_date', 'security_id'],
-            suffixes=('_a', '_b'),
+            values_a[["trade_date", "security_id", "value"]],
+            values_b[["trade_date", "security_id", "value"]],
+            on=["trade_date", "security_id"],
+            suffixes=("_a", "_b"),
         )
 
         if merged.empty:
-            return {'correlation': np.nan}
+            return {"correlation": np.nan}
 
-        corr = merged['value_a'].corr(merged['value_b'])
-        rank_corr = merged['value_a'].rank().corr(merged['value_b'].rank())
+        corr = merged["value_a"].corr(merged["value_b"])
+        rank_corr = merged["value_a"].rank().corr(merged["value_b"].rank())
 
         return {
-            'correlation': round(corr, 4) if not np.isnan(corr) else 0,
-            'rank_correlation': round(rank_corr, 4) if not np.isnan(rank_corr) else 0,
+            "correlation": round(corr, 4) if not np.isnan(corr) else 0,
+            "rank_correlation": round(rank_corr, 4) if not np.isnan(rank_corr) else 0,
         }
 
     def _get_limit_by_ts_code(self, ts_code: str) -> float:
         """根据股票代码判断涨跌停限制
         主板: 10%, 创业板(300/301开头.SZ): 20%, 科创板(688开头.SH): 20%, 北交所(8/4开头.BJ): 30%
         """
-        if ts_code.endswith('.BJ'):
+        if ts_code.endswith(".BJ"):
             return 0.30
-        if ts_code.startswith(('688',)):
+        if ts_code.startswith(("688",)):
             return 0.20
-        if ts_code.startswith(('300', '301')):
+        if ts_code.startswith(("300", "301")):
             return 0.20
         return 0.10
 
-    def group_backtest(self, factor_id: int, start_date: date, end_date: date,
-                       n_groups: int = 5, forward_period: int = 20) -> Dict:
+    def group_backtest(
+        self, factor_id: int, start_date: date, end_date: date, n_groups: int = 5, forward_period: int = 20
+    ) -> dict:
         """因子分组回测 (计算各组实际收益 + 多空Sharpe)
         修正: 排除涨跌停股票的异常收益(不同板块涨跌停限制不同)
         """
@@ -358,17 +403,15 @@ class FactorEngine:
         if factor_data.empty:
             return {}
 
-        security_ids = factor_data['security_id'].unique().tolist()
-        forward_returns = self._get_forward_returns(
-            security_ids, start_date, end_date, forward_period
-        )
+        security_ids = factor_data["security_id"].unique().tolist()
+        forward_returns = self._get_forward_returns(security_ids, start_date, end_date, forward_period)
         if forward_returns.empty:
-            return {'factor_id': factor_id, 'n_groups': n_groups, 'group_results': {}}
+            return {"factor_id": factor_id, "n_groups": n_groups, "group_results": {}}
 
         group_returns_by_date = {}
 
-        for trade_date in sorted(factor_data['trade_date'].unique()):
-            day_data = factor_data[factor_data['trade_date'] == trade_date].copy()
+        for trade_date in sorted(factor_data["trade_date"].unique()):
+            day_data = factor_data[factor_data["trade_date"] == trade_date].copy()
             if trade_date not in forward_returns.columns:
                 continue
 
@@ -378,18 +421,18 @@ class FactorEngine:
             # 排除涨跌停等不可交易收益: 使用各板块涨跌停限制+1%容差
             # 北交所30%, 创业板/科创板20%, 主板10%, ST 5%
             day_return = day_return[day_return.abs() < 0.31]  # 使用最宽松的北交所限制作为全局过滤
-            day_data = day_data[day_data['security_id'].isin(day_return.index)]
+            day_data = day_data[day_data["security_id"].isin(day_return.index)]
 
             if len(day_data) < n_groups * 2:
                 continue
 
-            day_data = day_data.sort_values('value')
-            group_labels = pd.qcut(day_data['value'], n_groups, labels=False, duplicates='drop')
-            day_data['group'] = group_labels
+            day_data = day_data.sort_values("value")
+            group_labels = pd.qcut(day_data["value"], n_groups, labels=False, duplicates="drop")
+            day_data["group"] = group_labels
 
             group_returns = {}
             for group_num in range(n_groups):
-                group_stocks = day_data[day_data['group'] == group_num]['security_id']
+                group_stocks = day_data[day_data["group"] == group_num]["security_id"]
                 # 排除涨跌停股票: 收益超过板块限制视为涨跌停，不纳入均值计算
                 group_ret_values = day_return.reindex(group_stocks)
                 # 根据股票代码判断涨跌停限制
@@ -407,7 +450,7 @@ class FactorEngine:
                 group_returns_by_date[trade_date] = group_returns
 
         if not group_returns_by_date:
-            return {'factor_id': factor_id, 'n_groups': n_groups, 'group_results': {}}
+            return {"factor_id": factor_id, "n_groups": n_groups, "group_results": {}}
 
         dates = sorted(group_returns_by_date.keys())
         group_cumulative = {g: [1.0] for g in range(n_groups)}
@@ -435,80 +478,90 @@ class FactorEngine:
         for g in range(n_groups):
             rets = pd.Series(group_returns_series[g])
             group_stats[g] = {
-                'mean_return': round(rets.mean(), 6) if len(rets) > 0 else 0,
-                'cum_return': round(group_cumulative[g][-1] - 1, 4),
-                'n_periods': len(rets),
+                "mean_return": round(rets.mean(), 6) if len(rets) > 0 else 0,
+                "cum_return": round(group_cumulative[g][-1] - 1, 4),
+                "n_periods": len(rets),
             }
 
         return {
-            'factor_id': factor_id,
-            'n_groups': n_groups,
-            'group_stats': group_stats,
-            'group_returns_series': {g: group_returns_series[g] for g in range(n_groups)},
-            'group_cumulative_returns': {g: group_cumulative[g] for g in range(n_groups)},
-            'dates': dates,
-            'long_short_sharpe': round(ls_sharpe, 2),
-            'long_short_max_drawdown': round(ls_max_dd, 4),
-            'long_short_mean_return': round(ls_series.mean(), 6) if len(ls_series) > 0 else 0,
+            "factor_id": factor_id,
+            "n_groups": n_groups,
+            "group_stats": group_stats,
+            "group_returns_series": {g: group_returns_series[g] for g in range(n_groups)},
+            "group_cumulative_returns": {g: group_cumulative[g] for g in range(n_groups)},
+            "dates": dates,
+            "long_short_sharpe": round(ls_sharpe, 2),
+            "long_short_max_drawdown": round(ls_max_dd, 4),
+            "long_short_mean_return": round(ls_series.mean(), 6) if len(ls_series) > 0 else 0,
         }
 
-    def analyze_factor(self, factor_id: int, start_date: date, end_date: date,
-                       forward_period: int = 20) -> Dict:
+    def analyze_factor(self, factor_id: int, start_date: date, end_date: date, forward_period: int = 20) -> dict:
         """执行完整因子分析 (IC + 分组回测 + 覆盖率)"""
         factor_data = self.get_factor_values_range(factor_id, start_date, end_date)
         if factor_data.empty:
-            return {'error': 'No factor values found'}
+            return {"error": "No factor values found"}
 
         # IC分析
         ic_df = self.calc_ic_series(factor_id, start_date, end_date, forward_period)
         ic_stats = {}
-        if not ic_df.empty and 'ic' in ic_df.columns:
-            ic_stats = self.calc_ic_statistics(ic_df['ic'])
+        if not ic_df.empty and "ic" in ic_df.columns:
+            ic_stats = self.calc_ic_statistics(ic_df["ic"])
 
         # 分组回测
         group_result = self.group_backtest(factor_id, start_date, end_date, forward_period=forward_period)
 
         # 覆盖率
-        security_ids = factor_data['security_id'].unique()
+        security_ids = factor_data["security_id"].unique()
         coverage = len(security_ids)
 
         return {
-            'factor_id': factor_id,
-            'ic_stats': ic_stats,
-            'group_backtest': group_result,
-            'coverage': coverage,
-            'n_dates': len(factor_data['trade_date'].unique()),
+            "factor_id": factor_id,
+            "ic_stats": ic_stats,
+            "group_backtest": group_result,
+            "coverage": coverage,
+            "n_dates": len(factor_data["trade_date"].unique()),
         }
 
     # ==================== 因子计算 (委托给FactorCalculator) ====================
 
-    def calc_all_factors(self, financial_df: pd.DataFrame, price_df: pd.DataFrame,
-                         industry_col: str = None, cap_col: str = None,
-                         neutralize: bool = True,
-                         northbound_df: pd.DataFrame = None,
-                         analyst_df: pd.DataFrame = None,
-                         policy_df: pd.DataFrame = None,
-                         supply_chain_df: pd.DataFrame = None,
-                         sentiment_df: pd.DataFrame = None,
-                         stock_basic_df: pd.DataFrame = None,
-                         stock_status_df: pd.DataFrame = None,
-                         money_flow_df: pd.DataFrame = None,
-                         margin_df: pd.DataFrame = None,
-                         daily_basic_df: pd.DataFrame = None,
-                         industry_df: pd.DataFrame = None,
-                         trade_date: Optional[date] = None) -> pd.DataFrame:
+    def calc_all_factors(
+        self,
+        financial_df: pd.DataFrame,
+        price_df: pd.DataFrame,
+        industry_col: str | None = None,
+        cap_col: str | None = None,
+        neutralize: bool = True,
+        northbound_df: pd.DataFrame = None,
+        analyst_df: pd.DataFrame = None,
+        policy_df: pd.DataFrame = None,
+        supply_chain_df: pd.DataFrame = None,
+        sentiment_df: pd.DataFrame = None,
+        stock_basic_df: pd.DataFrame = None,
+        stock_status_df: pd.DataFrame = None,
+        money_flow_df: pd.DataFrame = None,
+        margin_df: pd.DataFrame = None,
+        daily_basic_df: pd.DataFrame = None,
+        industry_df: pd.DataFrame = None,
+        trade_date: date | None = None,
+    ) -> pd.DataFrame:
         """计算所有因子并预处理 (委托给FactorCalculator)
         PIT安全: trade_date传递给FactorCalculator用于财务数据PIT过滤
         """
         return self.calculator.calc_all_factors(
-            financial_df, price_df,
-            industry_col=industry_col, cap_col=cap_col,
+            financial_df,
+            price_df,
+            industry_col=industry_col,
+            cap_col=cap_col,
             neutralize=neutralize,
-            northbound_df=northbound_df, analyst_df=analyst_df,
-            policy_df=policy_df, supply_chain_df=supply_chain_df,
+            northbound_df=northbound_df,
+            analyst_df=analyst_df,
+            policy_df=policy_df,
+            supply_chain_df=supply_chain_df,
             sentiment_df=sentiment_df,
-            stock_basic_df=stock_basic_df, stock_status_df=stock_status_df,
-            money_flow_df=money_flow_df, margin_df=margin_df,
+            stock_basic_df=stock_basic_df,
+            stock_status_df=stock_status_df,
+            money_flow_df=money_flow_df,
+            margin_df=margin_df,
             daily_basic_df=daily_basic_df,
             industry_df=industry_df,
             trade_date=trade_date,
@@ -517,14 +570,17 @@ class FactorEngine:
     # ==================== 无数据库便捷函数 ====================
 
     @staticmethod
-    def calc_factors_from_data(price_df: pd.DataFrame,
-                               financial_df: pd.DataFrame = None,
-                               neutralize: bool = False,
-                               industry_col: str = None,
-                               cap_col: str = None) -> pd.DataFrame:
+    def calc_factors_from_data(
+        price_df: pd.DataFrame,
+        financial_df: pd.DataFrame = None,
+        neutralize: bool = False,
+        industry_col: str | None = None,
+        cap_col: str | None = None,
+    ) -> pd.DataFrame:
         """不依赖数据库的因子计算便捷函数 (委托给FactorCalculator)"""
         return FactorCalculator.calc_factors_from_data(
-            price_df, financial_df,
+            price_df,
+            financial_df,
             neutralize=neutralize,
             industry_col=industry_col,
             cap_col=cap_col,
@@ -532,9 +588,9 @@ class FactorEngine:
 
     # ==================== 辅助方法 ====================
 
-    def _get_forward_returns(self, security_ids: List[str],
-                              start_date: date, end_date: date,
-                              forward_period: int) -> pd.DataFrame:
+    def _get_forward_returns(
+        self, security_ids: list[str], start_date: date, end_date: date, forward_period: int
+    ) -> pd.DataFrame:
         """获取前瞻收益 (向量化计算, 仅使用公告日之后数据)"""
         try:
             from app.models.market import StockDaily
@@ -545,36 +601,45 @@ class FactorEngine:
             return pd.DataFrame()
 
         from datetime import timedelta
+
         query_end = end_date + timedelta(days=forward_period + 30)
 
-        stocks = self.db.query(StockDaily).filter(
-            StockDaily.ts_code.in_(security_ids),
-            StockDaily.trade_date >= start_date,
-            StockDaily.trade_date <= query_end,
-        ).all()
+        stocks = (
+            self.db.query(StockDaily)
+            .filter(
+                StockDaily.ts_code.in_(security_ids),
+                StockDaily.trade_date >= start_date,
+                StockDaily.trade_date <= query_end,
+            )
+            .all()
+        )
 
         if not stocks:
             return pd.DataFrame()
 
-        price_df = pd.DataFrame([{
-            'trade_date': s.trade_date,
-            'security_id': s.ts_code,
-            'close': float(s.close) if s.close else np.nan,
-        } for s in stocks])
+        price_df = pd.DataFrame(
+            [
+                {
+                    "trade_date": s.trade_date,
+                    "security_id": s.ts_code,
+                    "close": float(s.close) if s.close else np.nan,
+                }
+                for s in stocks
+            ]
+        )
 
         if price_df.empty:
             return pd.DataFrame()
 
-        price_df = price_df.dropna(subset=['close']).sort_values(['security_id', 'trade_date'])
-        price_df['fwd_close'] = price_df.groupby('security_id')['close'].shift(-forward_period)
-        price_df['forward_return'] = price_df['fwd_close'] / price_df['close'] - 1
+        price_df = price_df.dropna(subset=["close"]).sort_values(["security_id", "trade_date"])
+        price_df["fwd_close"] = price_df.groupby("security_id")["close"].shift(-forward_period)
+        price_df["forward_return"] = price_df["fwd_close"] / price_df["close"] - 1
 
-        valid = price_df.dropna(subset=['forward_return'])
+        valid = price_df.dropna(subset=["forward_return"])
         if valid.empty:
             return pd.DataFrame()
 
-        pivot = valid.pivot(index='security_id', columns='trade_date', values='forward_return')
-        return pivot
+        return valid.pivot(index="security_id", columns="trade_date", values="forward_return")
 
     def close(self) -> None:
         if self.db:
@@ -582,4 +647,4 @@ class FactorEngine:
 
 
 # 向后兼容: 保留模块级常量
-__all__ = ['FactorEngine', 'FactorCalculator', 'FACTOR_GROUPS', 'FACTOR_DIRECTIONS']
+__all__ = ["FACTOR_DIRECTIONS", "FACTOR_GROUPS", "FactorCalculator", "FactorEngine"]

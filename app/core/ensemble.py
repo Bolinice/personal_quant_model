@@ -23,15 +23,13 @@ V2 Regime映射:
 动态权重收缩: w = 0.7 * w_base + 0.3 * w_dynamic_shrunk, 限制10%-45%
 """
 
-import numpy as np
-import pandas as pd
-from typing import Dict, List, Optional, Tuple
 import logging
+
+import pandas as pd
 
 from app.core.alpha_modules import (
     get_alpha_modules,
     get_risk_penalty_module,
-    MODULE_REGISTRY,
 )
 from app.core.regime import REGIME_WEIGHT_ADJUSTMENTS
 
@@ -42,11 +40,11 @@ logger = logging.getLogger(__name__)
 # V2 基线权重
 # ─────────────────────────────────────────────
 
-DEFAULT_WEIGHTS: Dict[str, float] = {
-    "quality_growth": 0.35,   # 最高权重: 质量因子长期IC最稳定, A股超额主要来源
-    "expectation": 0.30,      # 次高: 分析师修正信号对短期收益预测力强
-    "residual_momentum": 0.25, # 中等: 残差动量比原始动量更纯, 但衰减快
-    "flow_confirm": 0.10,     # 最低: 资金流噪音大, 仅作确认信号避免虚假突破
+DEFAULT_WEIGHTS: dict[str, float] = {
+    "quality_growth": 0.35,  # 最高权重: 质量因子长期IC最稳定, A股超额主要来源
+    "expectation": 0.30,  # 次高: 分析师修正信号对短期收益预测力强
+    "residual_momentum": 0.25,  # 中等: 残差动量比原始动量更纯, 但衰减快
+    "flow_confirm": 0.10,  # 最低: 资金流噪音大, 仅作确认信号避免虚假突破
 }
 
 # 权重边界: 单模块权重 ∈ [MIN_WEIGHT, MAX_WEIGHT]
@@ -70,6 +68,7 @@ RISK_LAMBDA = 0.35  # 惩罚强度: 使风险厌恶与alpha激励大致等量级
 # 融合引擎
 # ─────────────────────────────────────────────
 
+
 class EnsembleEngine:
     """
     V2信号融合引擎
@@ -86,7 +85,7 @@ class EnsembleEngine:
 
     def __init__(
         self,
-        base_weights: Optional[Dict[str, float]] = None,
+        base_weights: dict[str, float] | None = None,
         risk_lambda: float = RISK_LAMBDA,
         shrink_base: float = SHRINK_BASE,
         min_weight: float = MIN_WEIGHT,
@@ -102,9 +101,7 @@ class EnsembleEngine:
         self.alpha_modules = get_alpha_modules()
         self.risk_module = get_risk_penalty_module()
 
-    def compute_module_scores(
-        self, df: pd.DataFrame, **kwargs
-    ) -> Dict[str, pd.Series]:
+    def compute_module_scores(self, df: pd.DataFrame, **kwargs) -> dict[str, pd.Series]:
         """计算所有Alpha模块得分"""
         module_scores = {}
         for name, module in self.alpha_modules.items():
@@ -124,15 +121,15 @@ class EnsembleEngine:
             logger.error(f"[Ensemble] 风险惩罚模块计算失败: {e}")
             return pd.Series(0.0, index=df.index)
 
-    def step1_base_weights(self) -> Dict[str, float]:
+    def step1_base_weights(self) -> dict[str, float]:
         """Step 1: 基础权重"""
         return self.base_weights.copy()
 
     def step2_dynamic_ic_weights(
         self,
-        base_weights: Dict[str, float],
-        ic_dict: Optional[Dict[str, float]] = None,
-    ) -> Dict[str, float]:
+        base_weights: dict[str, float],
+        ic_dict: dict[str, float] | None = None,
+    ) -> dict[str, float]:
         """
         Step 2: 动态IC加权
 
@@ -160,9 +157,9 @@ class EnsembleEngine:
 
     def step3_regime_adjustment(
         self,
-        weights: Dict[str, float],
+        weights: dict[str, float],
         regime: str = "trending",
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Step 3: Regime调权
 
@@ -177,9 +174,9 @@ class EnsembleEngine:
 
     def step4_correlation_shrinkage(
         self,
-        weights: Dict[str, float],
-        module_corr: Optional[pd.DataFrame] = None,
-    ) -> Dict[str, float]:
+        weights: dict[str, float],
+        module_corr: pd.DataFrame | None = None,
+    ) -> dict[str, float]:
         """
         Step 4: 高相关收缩
 
@@ -201,7 +198,6 @@ class EnsembleEngine:
 
         total_corr = 0.0
         count = 0
-        cols = module_corr.columns.tolist()
         for i in range(n):
             for j in range(i + 1, n):
                 total_corr += abs(module_corr.iloc[i, j])
@@ -219,9 +215,7 @@ class EnsembleEngine:
 
         return shrunk
 
-    def step5_normalize(
-        self, weights: Dict[str, float]
-    ) -> Dict[str, float]:
+    def step5_normalize(self, weights: dict[str, float]) -> dict[str, float]:
         """
         Step 5: 归一化 + 权重边界约束
 
@@ -244,13 +238,13 @@ class EnsembleEngine:
         self,
         df: pd.DataFrame,
         regime: str = "trending",
-        ic_dict: Optional[Dict[str, float]] = None,
-        module_corr: Optional[pd.DataFrame] = None,
+        ic_dict: dict[str, float] | None = None,
+        module_corr: pd.DataFrame | None = None,
         apply_risk_penalty: bool = True,
-        precomputed_module_scores: Optional[Dict[str, pd.Series]] = None,
-        precomputed_risk_penalty: Optional[pd.Series] = None,
+        precomputed_module_scores: dict[str, pd.Series] | None = None,
+        precomputed_risk_penalty: pd.Series | None = None,
         **kwargs,
-    ) -> Tuple[pd.Series, Dict]:
+    ) -> tuple[pd.Series, dict]:
         """
         完整V2融合流程
 
@@ -336,12 +330,13 @@ class EnsembleEngine:
 # 便捷函数
 # ─────────────────────────────────────────────
 
-def get_default_weights() -> Dict[str, float]:
+
+def get_default_weights() -> dict[str, float]:
     """获取V2默认权重"""
     return DEFAULT_WEIGHTS.copy()
 
 
-def get_regime_adjustments() -> Dict[str, Dict[str, float]]:
+def get_regime_adjustments() -> dict[str, dict[str, float]]:
     """获取Regime权重调整映射"""
     return REGIME_WEIGHT_ADJUSTMENTS.copy()
 

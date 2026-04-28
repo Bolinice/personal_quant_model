@@ -1,16 +1,23 @@
 """因子元数据模型"""
 
-from sqlalchemy import Column, String, Boolean, Integer, Text, DateTime
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class FactorMetadata(Base):
     """因子元数据表 - 因子身份证"""
+
     __tablename__ = "factor_metadata"
 
     factor_name = Column(String(100), primary_key=True, comment="因子名称")
-    factor_group = Column(String(50), nullable=False, index=True, comment="因子组: quality_growth/expectation/residual_momentum/flow_confirm/risk_penalty/experimental")
+    factor_group = Column(
+        String(50),
+        nullable=False,
+        index=True,
+        comment="因子组: quality_growth/expectation/residual_momentum/flow_confirm/risk_penalty/experimental",
+    )
     description = Column(Text, comment="因子描述")
     formula = Column(Text, comment="计算公式")
     source_table = Column(String(100), comment="来源表")
@@ -23,6 +30,4 @@ class FactorMetadata(Base):
     created_at = Column(DateTime, server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新时间")
 
-    __table_args__ = (
-        {"comment": "因子元数据表"},
-    )
+    __table_args__ = ({"comment": "因子元数据表"},)

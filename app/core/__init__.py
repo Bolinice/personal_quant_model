@@ -1,33 +1,33 @@
 """核心量化模块 — 因子引擎、评分、择时、回测、风控等。"""
 
-from app.core.adaptive_factor_engine import AdaptiveFactorEngine, FactorState, FactorProfile
-from app.core.online_learning import OnlineLearning
-from app.core.risk_budget_engine import RiskBudgetEngine, RiskLimit, RiskAction
+from app.core.adaptive_factor_engine import AdaptiveFactorEngine, FactorProfile, FactorState
 from app.core.alpha_modules import (
-    QualityGrowthModule,
-    ExpectationModule,
-    ResidualMomentumModule,
-    FlowConfirmModule,
-    RiskPenaltyModule,
     MODULE_REGISTRY,
-    get_module,
-    get_alpha_modules,
-    get_risk_penalty_module,
+    ExpectationModule,
+    FlowConfirmModule,
+    QualityGrowthModule,
+    ResidualMomentumModule,
+    RiskPenaltyModule,
     get_all_modules,
+    get_alpha_modules,
+    get_module,
+    get_risk_penalty_module,
 )
+from app.core.config_loader import ConfigLoader, get_config, get_config_value
+from app.core.daily_pipeline import DailyPipeline
 from app.core.ensemble import (
-    EnsembleEngine,
     DEFAULT_WEIGHTS,
     REGIME_WEIGHT_ADJUSTMENTS,
+    EnsembleEngine,
     create_ensemble_engine,
 )
 from app.core.factor_monitor import FactorMonitor
 from app.core.labels import LabelBuilder
-from app.core.regime import RegimeDetector, REGIME_TRENDING, REGIME_MEAN_REVERTING, REGIME_DEFENSIVE, REGIME_RISK_ON
-from app.core.universe import UniverseBuilder
+from app.core.online_learning import OnlineLearning
 from app.core.portfolio_builder import PortfolioBuilder, PortfolioMode, create_portfolio_builder
-from app.core.daily_pipeline import DailyPipeline
-from app.core.config_loader import ConfigLoader, get_config, get_config_value
+from app.core.regime import REGIME_DEFENSIVE, REGIME_MEAN_REVERTING, REGIME_RISK_ON, REGIME_TRENDING, RegimeDetector
+from app.core.risk_budget_engine import RiskAction, RiskBudgetEngine, RiskLimit
+from app.core.universe import UniverseBuilder
 
 __all__ = [
     "AdaptiveFactorEngine",

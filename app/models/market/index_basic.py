@@ -1,10 +1,12 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean
+from sqlalchemy import Column, Date, DateTime, Float, Integer, String
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class IndexBasic(Base):
     """指数基础信息表"""
+
     __tablename__ = "index_basic"
 
     id = Column(Integer, primary_key=True, index=True)

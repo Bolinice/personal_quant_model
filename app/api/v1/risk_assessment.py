@@ -1,16 +1,16 @@
 """风险测评 API。"""
 
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from app.db.base import get_db
-from app.services import risk_assessment_service
+
 from app.api.v1.auth import get_current_user
+from app.core.response import success
+from app.db.base import get_db
 from app.models.user import User
 from app.schemas.risk_assessment import (
-    RiskAssessmentSubmit, RiskAssessmentResult, RiskQuestion, RiskAssessmentOut,
+    RiskAssessmentSubmit,
 )
-from app.core.response import success
+from app.services import risk_assessment_service
 
 router = APIRouter()
 

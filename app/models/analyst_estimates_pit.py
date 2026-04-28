@@ -1,11 +1,13 @@
 """分析师PIT表"""
 
-from sqlalchemy import Column, BigInteger, Date, Numeric, String, Integer
+from sqlalchemy import BigInteger, Column, Date, Integer, Numeric, String
+
 from app.db.base import Base
 
 
 class AnalystEstimatesPIT(Base):
     """分析师PIT表 - 一致预期EPS/覆盖度/评级"""
+
     __tablename__ = "analyst_estimates_pit"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -18,6 +20,4 @@ class AnalystEstimatesPIT(Base):
     rating_mean = Column(Numeric(10, 6), comment="平均评级")
     snapshot_id = Column(String(50), index=True, comment="快照ID")
 
-    __table_args__ = (
-        {"comment": "分析师PIT表"},
-    )
+    __table_args__ = ({"comment": "分析师PIT表"},)

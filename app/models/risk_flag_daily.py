@@ -1,11 +1,13 @@
 """风险标签日表模型"""
 
-from sqlalchemy import Column, BigInteger, String, Date, Boolean, Numeric
+from sqlalchemy import BigInteger, Boolean, Column, Date, Numeric
+
 from app.db.base import Base
 
 
 class RiskFlagDaily(Base):
     """风险标签日表 - 每日每只股票的风险标签"""
+
     __tablename__ = "risk_flag_daily"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -21,6 +23,4 @@ class RiskFlagDaily(Base):
     cashflow_risk_flag = Column(Boolean, default=False, comment="现金流风险")
     risk_penalty_score = Column(Numeric(10, 6), default=0, comment="风险惩罚分(0~1)")
 
-    __table_args__ = (
-        {"comment": "风险标签日表"},
-    )
+    __table_args__ = ({"comment": "风险标签日表"},)

@@ -1,19 +1,27 @@
 """绩效分析 API。"""
 
-from typing import Dict
-from fastapi import APIRouter, Depends, HTTPException, status
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
+from app.core.response import success
 from app.db.base import get_db
-from app.services.performance_service import get_performance_analysis, get_industry_exposure, get_style_exposure, generate_performance_report
-from app.schemas.performance import PerformanceAnalysis, PerformanceReport
 from app.models.backtests import BacktestResult
-from app.core.response import success, error
+from app.services.performance_service import (
+    generate_performance_report,
+    get_industry_exposure,
+    get_performance_analysis,
+    get_style_exposure,
+)
 
 router = APIRouter()
 
 
 @router.get("/backtests/{backtest_id}/analysis")
-def get_backtest_performance(backtest_id: int, start_date: str = None, end_date: str = None, db: Session = Depends(get_db)):
+def get_backtest_performance(
+    backtest_id: int, start_date: str | None = None, end_date: str | None = None, db: Session = Depends(get_db)
+):
     """获取回测绩效分析"""
     analysis = get_performance_analysis(backtest_id, start_date, end_date, db=db)
     if not analysis:
@@ -55,7 +63,9 @@ def generate_backtest_report(backtest_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/simulated-portfolios/{portfolio_id}/analysis")
-def get_portfolio_performance(portfolio_id: int, start_date: str = None, end_date: str = None, db: Session = Depends(get_db)):
+def get_portfolio_performance(
+    portfolio_id: int, start_date: str | None = None, end_date: str | None = None, db: Session = Depends(get_db)
+):
     """获取模拟组合绩效分析"""
     analysis = get_performance_analysis(portfolio_id, start_date, end_date, db=db)
     if not analysis:

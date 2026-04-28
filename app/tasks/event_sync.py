@@ -1,12 +1,15 @@
 """事件数据同步任务"""
 
+from __future__ import annotations
+
 from datetime import date, timedelta
+
 from app.core.celery_config import celery_app
 from app.core.logging import logger
 
 
 @celery_app.task(name="sync_event_data")
-def sync_event_data(trade_date: str = None):
+def sync_event_data(trade_date: str | None = None):
     """
     同步事件数据(业绩预告/问询函/立案处罚/减持/股权质押等)
 

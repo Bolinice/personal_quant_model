@@ -1,10 +1,12 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, JSON, Text, Index
+from sqlalchemy import JSON, Boolean, Column, Date, DateTime, Index, Integer, String
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class Subscription(Base):
     """订阅表"""
+
     __tablename__ = "subscriptions"
     __table_args__ = (
         Index("ix_sub_user", "user_id"),
@@ -32,6 +34,7 @@ class Subscription(Base):
 
 class SubscriptionHistory(Base):
     """订阅历史表"""
+
     __tablename__ = "subscription_histories"
 
     id: int = Column(Integer, primary_key=True, index=True)
@@ -43,6 +46,7 @@ class SubscriptionHistory(Base):
 
 class SubscriptionPermission(Base):
     """订阅权限表"""
+
     __tablename__ = "subscription_permissions"
 
     id: int = Column(Integer, primary_key=True, index=True)

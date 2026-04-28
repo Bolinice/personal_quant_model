@@ -2,38 +2,43 @@
 模型训练器 - LightGBM训练 + 时序交叉验证 + Walk-Forward滚动训练
 核心: TimeSeriesSplit防止未来函数、OOF预测评估、特征重要性分析、模型持久化
 """
-from typing import Any, Dict, List, Optional, Tuple
+
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
+from typing import Any
+
 import numpy as np
 import pandas as pd
+
 from app.core.logging import logger
 
 
 @dataclass
 class TrainedModel:
     """训练好的模型"""
+
     model: Any
     scaler: Any
-    factor_cols: List[str]
-    cv_metrics: Dict = field(default_factory=dict)
-    oof_predictions: Optional[np.ndarray] = None
-    feature_importance: Dict = field(default_factory=dict)
-    train_date: Optional[date] = None
-    model_config: Dict = field(default_factory=dict)
-    model_type: str = 'lgbm'
+    factor_cols: list[str]
+    cv_metrics: dict = field(default_factory=dict)
+    oof_predictions: np.ndarray | None = None
+    feature_importance: dict = field(default_factory=dict)
+    train_date: date | None = None
+    model_config: dict = field(default_factory=dict)
+    model_type: str = "lgbm"
 
 
 @dataclass
 class WalkForwardResult:
     """Walk-Forward单窗口结果"""
-    train_start: Optional[date] = None
-    train_end: Optional[date] = None
-    test_start: Optional[date] = None
-    test_end: Optional[date] = None
-    model: Optional[TrainedModel] = None
-    test_predictions: Optional[pd.Series] = None
+
+    train_start: date | None = None
+    train_end: date | None = None
+    test_start: date | None = None
+    test_end: date | None = None
+    model: TrainedModel | None = None
+    test_predictions: pd.Series | None = None
     test_ic: float = 0.0
     test_icir: float = 0.0
     test_rank_ic: float = 0.0
@@ -47,44 +52,47 @@ class ModelTrainer:
 
     # LightGBM默认参数 (保守，防止过拟合)
     DEFAULT_LGBM_CONFIG = {
-        'objective': 'regression',
-        'metric': 'mse',
-        'n_estimators': 300,
-        'max_depth': 5,
-        'learning_rate': 0.05,
-        'num_leaves': 31,
-        'min_child_samples': 50,
-        'subsample': 0.8,
-        'colsample_bytree': 0.8,
-        'reg_alpha': 0.1,
-        'reg_lambda': 0.1,
-        'verbose': -1,
-        'n_jobs': -1,
-        'random_state': 42,
+        "objective": "regression",
+        "metric": "mse",
+        "n_estimators": 300,
+        "max_depth": 5,
+        "learning_rate": 0.05,
+        "num_leaves": 31,
+        "min_child_samples": 50,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "reg_alpha": 0.1,
+        "reg_lambda": 0.1,
+        "verbose": -1,
+        "n_jobs": -1,
+        "random_state": 42,
     }
 
     # LightGBM排序模型默认参数
     DEFAULT_LGBM_RANK_CONFIG = {
-        'objective': 'lambdarank',
-        'metric': 'ndcg',
-        'n_estimators': 200,
-        'max_depth': 4,
-        'learning_rate': 0.05,
-        'num_leaves': 15,
-        'min_child_samples': 50,
-        'subsample': 0.8,
-        'colsample_bytree': 0.8,
-        'reg_alpha': 0.1,
-        'reg_lambda': 0.1,
-        'verbose': -1,
-        'n_jobs': -1,
-        'random_state': 42,
+        "objective": "lambdarank",
+        "metric": "ndcg",
+        "n_estimators": 200,
+        "max_depth": 4,
+        "learning_rate": 0.05,
+        "num_leaves": 15,
+        "min_child_samples": 50,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "reg_alpha": 0.1,
+        "reg_lambda": 0.1,
+        "verbose": -1,
+        "n_jobs": -1,
+        "random_state": 42,
     }
 
-    def __init__(self, model_dir: str = 'models/',
-                 n_splits: int = 5,
-                 min_train_samples: int = 200,
-                 early_stopping_rounds: int = 30):
+    def __init__(
+        self,
+        model_dir: str = "models/",
+        n_splits: int = 5,
+        min_train_samples: int = 200,
+        early_stopping_rounds: int = 30,
+    ):
         self.model_dir = Path(model_dir)
         self.model_dir.mkdir(parents=True, exist_ok=True)
         self.n_splits = n_splits
@@ -93,12 +101,14 @@ class ModelTrainer:
 
     # ==================== 1. LightGBM回归训练 (TimeSeriesSplit CV) ====================
 
-    def train_lgbm(self,
-                    factor_df: pd.DataFrame,
-                    return_series: pd.Series,
-                    factor_cols: List[str],
-                    model_config: Optional[Dict] = None,
-                    monotone_constraints: Optional[Dict[str, int]] = None) -> Optional[TrainedModel]:
+    def train_lgbm(
+        self,
+        factor_df: pd.DataFrame,
+        return_series: pd.Series,
+        factor_cols: list[str],
+        model_config: dict | None = None,
+        monotone_constraints: dict[str, int] | None = None,
+    ) -> TrainedModel | None:
         """
         时序交叉验证训练LightGBM回归模型
         使用TimeSeriesSplit确保训练数据始终在验证数据之前，防止未来函数
@@ -130,7 +140,7 @@ class ModelTrainer:
         # 单调约束
         if monotone_constraints:
             constraints = [monotone_constraints.get(col, 0) for col in factor_cols]
-            config['monotone_constraints'] = constraints
+            config["monotone_constraints"] = constraints
 
         # TimeSeriesSplit交叉验证
         tscv = TimeSeriesSplit(n_splits=self.n_splits)
@@ -154,7 +164,8 @@ class ModelTrainer:
             # 训练
             model = lgb.LGBMRegressor(**config)
             model.fit(
-                X_train_scaled, y_train,
+                X_train_scaled,
+                y_train,
                 eval_set=[(X_val_scaled, y_val)],
                 callbacks=[lgb.early_stopping(self.early_stopping_rounds, verbose=False)],
             )
@@ -168,12 +179,12 @@ class ModelTrainer:
             rank_ic = self._calc_rank_ic(val_pred, y_val)
             rmse = np.sqrt(np.mean((val_pred - y_val) ** 2))
 
-            cv_metrics[f'fold_{fold_idx}'] = {
-                'ic': round(ic, 4),
-                'rank_ic': round(rank_ic, 4),
-                'rmse': round(rmse, 6),
-                'n_train': len(X_train),
-                'n_val': len(X_val),
+            cv_metrics[f"fold_{fold_idx}"] = {
+                "ic": round(ic, 4),
+                "rank_ic": round(rank_ic, 4),
+                "rmse": round(rmse, 6),
+                "n_train": len(X_train),
+                "n_val": len(X_val),
             }
             fold_models.append((model, scaler))
 
@@ -192,13 +203,15 @@ class ModelTrainer:
         full_model.fit(X_scaled, y)
 
         # 特征重要性
-        feature_importance = dict(zip(
-            factor_cols,
-            full_model.feature_importances_ / full_model.feature_importances_.sum(),
-        ))
+        feature_importance = dict(
+            zip(
+                factor_cols,
+                full_model.feature_importances_ / full_model.feature_importances_.sum(),
+            )
+        )
 
         # 汇总CV指标
-        cv_metrics['overall'] = self._summarize_cv_metrics(cv_metrics)
+        cv_metrics["overall"] = self._summarize_cv_metrics(cv_metrics)
 
         trained = TrainedModel(
             model=full_model,
@@ -209,7 +222,7 @@ class ModelTrainer:
             feature_importance=feature_importance,
             train_date=date.today(),
             model_config=config,
-            model_type='lgbm',
+            model_type="lgbm",
         )
 
         logger.info(
@@ -218,8 +231,8 @@ class ModelTrainer:
                 "n_samples": len(X),
                 "n_features": len(factor_cols),
                 "n_folds": len(fold_models),
-                "overall_ic": cv_metrics['overall'].get('ic', 0),
-                "overall_rank_ic": cv_metrics['overall'].get('rank_ic', 0),
+                "overall_ic": cv_metrics["overall"].get("ic", 0),
+                "overall_rank_ic": cv_metrics["overall"].get("rank_ic", 0),
             },
         )
 
@@ -227,11 +240,13 @@ class ModelTrainer:
 
     # ==================== 2. LightGBM排序模型 ====================
 
-    def train_lgbm_rank(self,
-                         factor_df: pd.DataFrame,
-                         return_series: pd.Series,
-                         factor_cols: List[str],
-                         model_config: Optional[Dict] = None) -> Optional[TrainedModel]:
+    def train_lgbm_rank(
+        self,
+        factor_df: pd.DataFrame,
+        return_series: pd.Series,
+        factor_cols: list[str],
+        model_config: dict | None = None,
+    ) -> TrainedModel | None:
         """
         LightGBM LambdaRank排序模型
         将股票选择建模为排序问题，用lambdarank目标函数
@@ -266,13 +281,15 @@ class ModelTrainer:
 
         # 训练 (lambdarank需要group参数)
         train_data = lgb.Dataset(X_scaled, label=y_rank, group=[len(X_scaled)])
-        model = lgb.train(config, train_data, num_boost_round=config.get('n_estimators', 200))
+        model = lgb.train(config, train_data, num_boost_round=config.get("n_estimators", 200))
 
         # 特征重要性
-        feature_importance = dict(zip(
-            factor_cols,
-            model.feature_importance() / model.feature_importance().sum(),
-        ))
+        feature_importance = dict(
+            zip(
+                factor_cols,
+                model.feature_importance() / model.feature_importance().sum(),
+            )
+        )
 
         trained = TrainedModel(
             model=model,
@@ -281,7 +298,7 @@ class ModelTrainer:
             feature_importance=feature_importance,
             train_date=date.today(),
             model_config=config,
-            model_type='lgbm_rank',
+            model_type="lgbm_rank",
         )
 
         logger.info(
@@ -293,16 +310,18 @@ class ModelTrainer:
 
     # ==================== 3. Walk-Forward滚动训练 ====================
 
-    def walk_forward_train(self,
-                            data_df: pd.DataFrame,
-                            factor_cols: List[str],
-                            return_col: str = 'forward_return',
-                            date_col: str = 'trade_date',
-                            train_window: int = 504,
-                            test_window: int = 63,
-                            gap: int = 21,
-                            retrain_freq: int = 63,
-                            model_config: Optional[Dict] = None) -> List[WalkForwardResult]:
+    def walk_forward_train(
+        self,
+        data_df: pd.DataFrame,
+        factor_cols: list[str],
+        return_col: str = "forward_return",
+        date_col: str = "trade_date",
+        train_window: int = 504,
+        test_window: int = 63,
+        gap: int = 21,
+        retrain_freq: int = 63,
+        model_config: dict | None = None,
+    ) -> list[WalkForwardResult]:
         """
         Walk-Forward滚动训练
         每个窗口: 训练模型 → 测试期预测 → 下一窗口重新训练
@@ -382,8 +401,8 @@ class ModelTrainer:
             results.append(wf_result)
 
             logger.info(
-                f"WF window: train={dates[start]}~{dates[train_end-1]}, "
-                f"test={dates[test_start]}~{dates[min(test_end-1, T-1)]}, "
+                f"WF window: train={dates[start]}~{dates[train_end - 1]}, "
+                f"test={dates[test_start]}~{dates[min(test_end - 1, T - 1)]}, "
                 f"IC={test_ic:.4f}, RankIC={test_rank_ic:.4f}",
             )
 
@@ -417,10 +436,7 @@ class ModelTrainer:
 
     # ==================== 4. 预测 ====================
 
-    def predict(self,
-                trained_model: TrainedModel,
-                factor_df: pd.DataFrame,
-                factor_cols: List[str]) -> pd.Series:
+    def predict(self, trained_model: TrainedModel, factor_df: pd.DataFrame, factor_cols: list[str]) -> pd.Series:
         """
         使用训练好的模型预测
 
@@ -487,39 +503,40 @@ class ModelTrainer:
 
         # 分离不可pickle的模型对象
         save_data = {
-            'factor_cols': trained_model.factor_cols,
-            'cv_metrics': trained_model.cv_metrics,
-            'feature_importance': trained_model.feature_importance,
-            'train_date': trained_model.train_date,
-            'model_config': trained_model.model_config,
-            'model_type': trained_model.model_type,
+            "factor_cols": trained_model.factor_cols,
+            "cv_metrics": trained_model.cv_metrics,
+            "feature_importance": trained_model.feature_importance,
+            "train_date": trained_model.train_date,
+            "model_config": trained_model.model_config,
+            "model_type": trained_model.model_type,
         }
 
         # 保存sklearn scaler
         if trained_model.scaler is not None:
-            save_data['scaler'] = trained_model.scaler
+            save_data["scaler"] = trained_model.scaler
 
         # 保存LightGBM模型
-        if trained_model.model_type in ('lgbm', 'lgbm_rank'):
+        if trained_model.model_type in ("lgbm", "lgbm_rank"):
             lgbm_path = self.model_dir / f"{name}_lgbm.txt"
             try:
                 import lightgbm as lgb
+
                 if isinstance(trained_model.model, lgb.LGBMRegressor):
                     trained_model.model.booster_.save_model(str(lgbm_path))
                 else:
                     trained_model.model.save_model(str(lgbm_path))
-                save_data['lgbm_path'] = str(lgbm_path)
+                save_data["lgbm_path"] = str(lgbm_path)
             except Exception as e:
                 logger.warning(f"Failed to save LightGBM model: {e}")
-                save_data['model_pickle'] = pickle.dumps(trained_model.model)
+                save_data["model_pickle"] = pickle.dumps(trained_model.model)
 
-        with open(model_path, 'wb') as f:
+        with open(model_path, "wb") as f:
             pickle.dump(save_data, f)
 
         logger.info(f"Model saved: {model_path}")
         return str(model_path)
 
-    def load_model(self, name: str) -> Optional[TrainedModel]:
+    def load_model(self, name: str) -> TrainedModel | None:
         """
         从磁盘加载模型
 
@@ -536,16 +553,17 @@ class ModelTrainer:
             logger.warning(f"Model not found: {model_path}")
             return None
 
-        with open(model_path, 'rb') as f:
+        with open(model_path, "rb") as f:
             save_data = pickle.load(f)
 
         # 加载LightGBM模型
         model = None
-        if 'lgbm_path' in save_data:
+        if "lgbm_path" in save_data:
             try:
                 import lightgbm as lgb
-                lgbm_path = save_data['lgbm_path']
-                if save_data.get('model_type') == 'lgbm_rank':
+
+                lgbm_path = save_data["lgbm_path"]
+                if save_data.get("model_type") == "lgbm_rank":
                     model = lgb.Booster(model_file=lgbm_path)
                 else:
                     booster = lgb.Booster(model_file=lgbm_path)
@@ -555,22 +573,22 @@ class ModelTrainer:
                     model._Booster = booster  # 兼容旧版本
                     model.fitted_ = True
                     # 设置n_features_in_避免sklearn check_is_fitted失败
-                    if 'factor_cols' in save_data:
-                        model.n_features_in_ = len(save_data['factor_cols'])
+                    if "factor_cols" in save_data:
+                        model.n_features_in_ = len(save_data["factor_cols"])
             except Exception as e:
                 logger.warning(f"Failed to load LightGBM model: {e}")
-        elif 'model_pickle' in save_data:
-            model = pickle.loads(save_data['model_pickle'])
+        elif "model_pickle" in save_data:
+            model = pickle.loads(save_data["model_pickle"])
 
         trained = TrainedModel(
             model=model,
-            scaler=save_data.get('scaler'),
-            factor_cols=save_data.get('factor_cols', []),
-            cv_metrics=save_data.get('cv_metrics', {}),
-            feature_importance=save_data.get('feature_importance', {}),
-            train_date=save_data.get('train_date'),
-            model_config=save_data.get('model_config', {}),
-            model_type=save_data.get('model_type', 'lgbm'),
+            scaler=save_data.get("scaler"),
+            factor_cols=save_data.get("factor_cols", []),
+            cv_metrics=save_data.get("cv_metrics", {}),
+            feature_importance=save_data.get("feature_importance", {}),
+            train_date=save_data.get("train_date"),
+            model_config=save_data.get("model_config", {}),
+            model_type=save_data.get("model_type", "lgbm"),
         )
 
         logger.info(f"Model loaded: {model_path}")
@@ -578,9 +596,7 @@ class ModelTrainer:
 
     # ==================== 6. 特征重要性 ====================
 
-    def get_feature_importance(self,
-                                trained_model: TrainedModel,
-                                top_n: int = 20) -> Dict[str, float]:
+    def get_feature_importance(self, trained_model: TrainedModel, top_n: int = 20) -> dict[str, float]:
         """
         获取特征重要性 (top N)
 
@@ -603,10 +619,9 @@ class ModelTrainer:
 
     # ==================== 辅助方法 ====================
 
-    def _prepare_training_data(self,
-                                factor_df: pd.DataFrame,
-                                return_series: pd.Series,
-                                factor_cols: List[str]) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray]]:
+    def _prepare_training_data(
+        self, factor_df: pd.DataFrame, return_series: pd.Series, factor_cols: list[str]
+    ) -> tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None]:
         """准备训练数据，处理缺失值"""
         available_cols = [c for c in factor_cols if c in factor_df.columns]
         if not available_cols:
@@ -654,23 +669,23 @@ class ModelTrainer:
         return corr if not np.isnan(corr) else 0.0
 
     @staticmethod
-    def _summarize_cv_metrics(cv_metrics: Dict) -> Dict:
+    def _summarize_cv_metrics(cv_metrics: dict) -> dict:
         """汇总CV指标"""
-        fold_metrics = [v for k, v in cv_metrics.items() if k.startswith('fold_')]
+        fold_metrics = [v for k, v in cv_metrics.items() if k.startswith("fold_")]
         if not fold_metrics:
             return {}
 
         summary = {}
-        for metric_name in ['ic', 'rank_ic', 'rmse']:
+        for metric_name in ["ic", "rank_ic", "rmse"]:
             values = [m[metric_name] for m in fold_metrics if metric_name in m]
             if values:
                 summary[metric_name] = round(np.mean(values), 4)
-                summary[f'{metric_name}_std'] = round(np.std(values), 4)
-                summary[f'{metric_name}_min'] = round(np.min(values), 4)
-                summary[f'{metric_name}_max'] = round(np.max(values), 4)
+                summary[f"{metric_name}_std"] = round(np.std(values), 4)
+                summary[f"{metric_name}_min"] = round(np.min(values), 4)
+                summary[f"{metric_name}_max"] = round(np.max(values), 4)
 
         # ICIR = IC_mean / IC_std
-        if 'ic' in summary and 'ic_std' in summary and summary['ic_std'] > 0:
-            summary['icir'] = round(summary['ic'] / summary['ic_std'], 2)
+        if "ic" in summary and "ic_std" in summary and summary["ic_std"] > 0:
+            summary["icir"] = round(summary["ic"] / summary["ic_std"], 2)
 
         return summary

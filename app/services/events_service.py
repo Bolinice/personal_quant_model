@@ -1,13 +1,13 @@
 """事件中心服务"""
 
 from datetime import date
-from typing import List, Optional, Dict, Any
-from sqlalchemy.orm import Session
+
 from sqlalchemy import and_
+from sqlalchemy.orm import Session
 
 from app.models.event_center import EventCenter
 from app.models.risk_flag_daily import RiskFlagDaily
-from app.schemas.events import EventCreate, RiskFlagResponse
+from app.schemas.events import EventCreate
 
 
 class EventService:
@@ -16,14 +16,14 @@ class EventService:
     @staticmethod
     def get_events(
         db: Session,
-        stock_id: Optional[int] = None,
-        event_type: Optional[str] = None,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-        severity: Optional[str] = None,
+        stock_id: int | None = None,
+        event_type: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        severity: str | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[EventCenter]:
+    ) -> list[EventCenter]:
         """查询事件列表"""
         query = db.query(EventCenter)
         if stock_id is not None:
@@ -39,7 +39,7 @@ class EventService:
         return query.order_by(EventCenter.event_date.desc()).offset(offset).limit(limit).all()
 
     @staticmethod
-    def get_event_by_id(db: Session, event_id: int) -> Optional[EventCenter]:
+    def get_event_by_id(db: Session, event_id: int) -> EventCenter | None:
         """获取事件详情"""
         return db.query(EventCenter).filter(EventCenter.id == event_id).first()
 
@@ -56,8 +56,8 @@ class EventService:
     def get_risk_flags(
         db: Session,
         trade_date: date,
-        stock_id: Optional[int] = None,
-    ) -> List[RiskFlagDaily]:
+        stock_id: int | None = None,
+    ) -> list[RiskFlagDaily]:
         """查询风险标签"""
         query = db.query(RiskFlagDaily).filter(RiskFlagDaily.trade_date == trade_date)
         if stock_id is not None:
@@ -65,11 +65,15 @@ class EventService:
         return query.all()
 
     @staticmethod
-    def get_blacklist(db: Session, trade_date: date) -> List[RiskFlagDaily]:
+    def get_blacklist(db: Session, trade_date: date) -> list[RiskFlagDaily]:
         """获取黑名单股票"""
-        return db.query(RiskFlagDaily).filter(
-            and_(
-                RiskFlagDaily.trade_date == trade_date,
-                RiskFlagDaily.blacklist_flag == True,
+        return (
+            db.query(RiskFlagDaily)
+            .filter(
+                and_(
+                    RiskFlagDaily.trade_date == trade_date,
+                    RiskFlagDaily.blacklist_flag,
+                )
             )
-        ).all()
+            .all()
+        )

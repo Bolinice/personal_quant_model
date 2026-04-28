@@ -1,13 +1,23 @@
+from __future__ import annotations
+
+from datetime import timedelta
+
 from sqlalchemy.orm import Session
+
 from app.db.base import with_db
 from app.models.subscriptions import Subscription, SubscriptionHistory, SubscriptionPermission
-from app.schemas.subscriptions import SubscriptionCreate, SubscriptionUpdate, SubscriptionHistoryCreate, SubscriptionPermissionCreate
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
+from app.schemas.subscriptions import (
+    SubscriptionCreate,
+    SubscriptionHistoryCreate,
+    SubscriptionPermissionCreate,
+    SubscriptionUpdate,
+)
+
 
 @with_db
-def get_subscriptions(user_id: int = None, product_id: int = None, is_active: bool = None, db: Session = None):
+def get_subscriptions(
+    user_id: int | None = None, product_id: int | None = None, is_active: bool | None = None, db: Session | None = None
+):
     query = db.query(Subscription)
     if user_id:
         query = query.filter(Subscription.user_id == user_id)
@@ -16,6 +26,7 @@ def get_subscriptions(user_id: int = None, product_id: int = None, is_active: bo
     if is_active is not None:
         query = query.filter(Subscription.is_active == is_active)
     return query.all()
+
 
 @with_db
 def create_subscription(subscription: SubscriptionCreate, db: Session = None):
@@ -28,11 +39,12 @@ def create_subscription(subscription: SubscriptionCreate, db: Session = None):
     history = SubscriptionHistoryCreate(
         subscription_id=db_subscription.id,
         action="create",
-        details={"plan_id": subscription.plan_id, "start_time": subscription.start_time}
+        details={"plan_id": subscription.plan_id, "start_time": subscription.start_time},
     )
     create_subscription_history(db_subscription.id, history, db=db)
 
     return db_subscription
+
 
 @with_db
 def update_subscription(subscription_id: int, subscription_update: SubscriptionUpdate, db: Session = None):
@@ -46,18 +58,16 @@ def update_subscription(subscription_id: int, subscription_update: SubscriptionU
     db.refresh(db_subscription)
 
     # 创建订阅历史
-    history = SubscriptionHistoryCreate(
-        subscription_id=subscription_id,
-        action="update",
-        details=update_data
-    )
+    history = SubscriptionHistoryCreate(subscription_id=subscription_id, action="update", details=update_data)
     create_subscription_history(subscription_id, history, db=db)
 
     return db_subscription
 
+
 @with_db
 def get_subscription_histories(subscription_id: int, db: Session = None):
     return db.query(SubscriptionHistory).filter(SubscriptionHistory.subscription_id == subscription_id).all()
+
 
 @with_db
 def create_subscription_history(subscription_id: int, history: SubscriptionHistoryCreate, db: Session = None):
@@ -67,9 +77,11 @@ def create_subscription_history(subscription_id: int, history: SubscriptionHisto
     db.refresh(db_history)
     return db_history
 
+
 @with_db
 def get_subscription_permissions(subscription_id: int, db: Session = None):
     return db.query(SubscriptionPermission).filter(SubscriptionPermission.subscription_id == subscription_id).all()
+
 
 @with_db
 def create_subscription_permission(permission: SubscriptionPermissionCreate, db: Session = None):
@@ -79,14 +91,20 @@ def create_subscription_permission(permission: SubscriptionPermissionCreate, db:
     db.refresh(db_permission)
     return db_permission
 
+
 @with_db
 def check_subscription_permission(subscription_id: int, permission_type: str, db: Session = None):
     """检查订阅权限"""
-    permission = db.query(SubscriptionPermission).filter(
-        SubscriptionPermission.subscription_id == subscription_id,
-        SubscriptionPermission.permission_type == permission_type
-    ).first()
+    permission = (
+        db.query(SubscriptionPermission)
+        .filter(
+            SubscriptionPermission.subscription_id == subscription_id,
+            SubscriptionPermission.permission_type == permission_type,
+        )
+        .first()
+    )
     return permission is not None and permission.is_granted
+
 
 @with_db
 def renew_subscription(subscription_id: int, db: Session = None):
@@ -105,9 +123,7 @@ def renew_subscription(subscription_id: int, db: Session = None):
 
     # 创建续订历史
     history = SubscriptionHistoryCreate(
-        subscription_id=subscription_id,
-        action="renew",
-        details={"new_end_time": subscription.end_time}
+        subscription_id=subscription_id, action="renew", details={"new_end_time": subscription.end_time}
     )
     create_subscription_history(subscription_id, history, db=db)
 

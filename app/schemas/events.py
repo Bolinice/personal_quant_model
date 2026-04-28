@@ -1,22 +1,22 @@
 """事件中心Schema"""
 
 from datetime import date, datetime
-from typing import Optional, List
+
 from pydantic import BaseModel
 
 
 class EventBase(BaseModel):
     stock_id: int
     event_type: str
-    event_subtype: Optional[str] = None
+    event_subtype: str | None = None
     event_date: date
-    effective_date: Optional[date] = None
-    expire_date: Optional[date] = None
-    severity: Optional[str] = None
-    score: Optional[float] = None
-    title: Optional[str] = None
-    content: Optional[str] = None
-    source: Optional[str] = None
+    effective_date: date | None = None
+    expire_date: date | None = None
+    severity: str | None = None
+    score: float | None = None
+    title: str | None = None
+    content: str | None = None
+    source: str | None = None
 
 
 class EventCreate(EventBase):
@@ -25,8 +25,8 @@ class EventCreate(EventBase):
 
 class EventResponse(EventBase):
     id: int
-    snapshot_id: Optional[str] = None
-    created_at: Optional[datetime] = None
+    snapshot_id: str | None = None
+    created_at: datetime | None = None
 
     class Config:
         from_attributes = True

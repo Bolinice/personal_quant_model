@@ -8,17 +8,15 @@
 - SlowQueryMiddleware: 慢查询监控
 """
 
-import time
 import json
 import logging
-from collections import defaultdict
-from typing import Dict, List, Tuple, Optional
+import time
 
-from fastapi import Request, Response, HTTPException, status
+from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.core.compliance import add_disclaimer, DISCLAIMER_SIMPLE
-from app.monitoring.metrics import REQUEST_DURATION, REQUEST_COUNT, ACTIVE_USERS
+from app.core.compliance import add_disclaimer
+from app.monitoring.metrics import REQUEST_COUNT, REQUEST_DURATION
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +24,7 @@ logger = logging.getLogger(__name__)
 # ============================================================
 # 日志中间件
 # ============================================================
+
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     """请求日志中间件"""
@@ -36,9 +35,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         process_time = time.time() - start_time
         logger.info(
-            f"Response: {request.method} {request.url.path} "
-            f"Status: {response.status_code} "
-            f"Time: {process_time:.3f}s"
+            f"Response: {request.method} {request.url.path} Status: {response.status_code} Time: {process_time:.3f}s"
         )
         response.headers["X-Process-Time"] = str(process_time)
         return response
@@ -48,6 +45,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 # Prometheus 指标中间件
 # ============================================================
 
+
 class MetricsMiddleware(BaseHTTPMiddleware):
     """Prometheus 指标收集中间件"""
 
@@ -56,11 +54,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         process_time = time.time() - start_time
         REQUEST_DURATION.observe(process_time)
-        REQUEST_COUNT.labels(
-            method=request.method,
-            endpoint=request.url.path,
-            status_code=response.status_code
-        ).inc()
+        REQUEST_COUNT.labels(method=request.method, endpoint=request.url.path, status_code=response.status_code).inc()
         return response
 
 
@@ -172,7 +166,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.requests_per_minute = requests_per_minute
         # 内存存储：仅单进程生效，多worker部署时各实例独立计数，实际总QPS=单实例阈值*worker数
-        self._requests: Dict[str, List[float]] = {}
+        self._requests: dict[str, list[float]] = {}
 
     async def dispatch(self, request: Request, call_next):
         client_ip = request.client.host if request.client else "unknown"
@@ -181,9 +175,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # 清理过期记录
         if client_ip in self._requests:
-            self._requests[client_ip] = [
-                t for t in self._requests[client_ip] if now - t < window
-            ]
+            self._requests[client_ip] = [t for t in self._requests[client_ip] if now - t < window]
         else:
             self._requests[client_ip] = []
 
@@ -196,8 +188,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             )
 
         self._requests[client_ip].append(now)
-        response = await call_next(request)
-        return response
+        return await call_next(request)
 
 
 class RedisRateLimitMiddleware(BaseHTTPMiddleware):
@@ -215,7 +206,7 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
         self,
         app,
         requests_per_minute: int = 60,
-        redis_url: Optional[str] = None,
+        redis_url: str | None = None,
     ):
         super().__init__(app)
         self.requests_per_minute = requests_per_minute
@@ -273,7 +264,8 @@ class RedisRateLimitMiddleware(BaseHTTPMiddleware):
                     media_type="application/json",
                 )
         except Exception as e:
-            logger.warning(f"Redis 限流异常，放行请求: {e}")  # 限流降级策略：宁可放过不可误杀，避免Redis故障导致全量拒绝
+            logger.warning(
+                f"Redis 限流异常，放行请求: {e}"
+            )  # 限流降级策略：宁可放过不可误杀，避免Redis故障导致全量拒绝
 
-        response = await call_next(request)
-        return response
+        return await call_next(request)

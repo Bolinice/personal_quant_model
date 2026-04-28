@@ -1,20 +1,21 @@
 """数据质量校验 API。"""
 
 from datetime import date
-from typing import Optional
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+
+from app.core.response import success
 from app.db.base import get_db
 from app.services import data_quality_service
-from app.core.response import success
 
 router = APIRouter()
 
 
 @router.get("/check")
 def run_quality_check(
-    start_date: Optional[date] = Query(None, description="开始日期"),
-    end_date: Optional[date] = Query(None, description="结束日期"),
+    start_date: date | None = Query(None, description="开始日期"),
+    end_date: date | None = Query(None, description="结束日期"),
     db: Session = Depends(get_db),
 ):
     """运行所有数据质量检查"""
@@ -35,7 +36,7 @@ def check_missing_days(
 
 @router.get("/price-anomaly")
 def check_price_anomaly(
-    trade_date: Optional[date] = Query(None, description="交易日期"),
+    trade_date: date | None = Query(None, description="交易日期"),
     db: Session = Depends(get_db),
 ):
     """检查价格异常"""
@@ -45,7 +46,7 @@ def check_price_anomaly(
 
 @router.get("/zero-volume")
 def check_zero_volume(
-    trade_date: Optional[date] = Query(None, description="交易日期"),
+    trade_date: date | None = Query(None, description="交易日期"),
     db: Session = Depends(get_db),
 ):
     """检查成交量零值异常"""
@@ -55,7 +56,7 @@ def check_zero_volume(
 
 @router.get("/financial-consistency")
 def check_financial_consistency(
-    report_date: Optional[date] = Query(None, description="报告日期"),
+    report_date: date | None = Query(None, description="报告日期"),
     db: Session = Depends(get_db),
 ):
     """检查财务数据勾稽关系"""

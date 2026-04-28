@@ -1,23 +1,39 @@
 """订阅管理 API。"""
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from pydantic import BaseModel
-from typing import List, Optional
-from sqlalchemy.orm import Session
 from datetime import date, timedelta
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.core.response import success
 from app.db.base import get_db
-from app.services.subscriptions_service import get_subscriptions, create_subscription, update_subscription, get_subscription_histories, create_subscription_history, get_subscription_permissions, create_subscription_permission, check_subscription_permission, renew_subscription
-from app.models.subscriptions import Subscription, SubscriptionHistory, SubscriptionPermission
 from app.models.products import Product, SubscriptionPlan
-from app.schemas.subscriptions import SubscriptionCreate, SubscriptionUpdate, SubscriptionHistoryCreate, SubscriptionPermissionCreate, SubscriptionOut, SubscriptionHistoryOut, SubscriptionPermissionOut
-from app.core.response import success, error
+from app.models.subscriptions import Subscription, SubscriptionPermission
+from app.schemas.subscriptions import (
+    SubscriptionCreate,
+    SubscriptionHistoryCreate,
+    SubscriptionPermissionCreate,
+    SubscriptionUpdate,
+)
+from app.services.subscriptions_service import (
+    check_subscription_permission,
+    create_subscription,
+    create_subscription_history,
+    create_subscription_permission,
+    get_subscription_histories,
+    get_subscription_permissions,
+    get_subscriptions,
+    renew_subscription,
+    update_subscription,
+)
 
 router = APIRouter()
 
 # 付费模型对应的 product_code 映射
 PAID_PRODUCT_MAP = {
-    'ZZ1000': 'ZZ1000_REPORT',
-    'ALL_A': 'ALL_A_REPORT',
+    "ZZ1000": "ZZ1000_REPORT",
+    "ALL_A": "ALL_A_REPORT",
 }
 
 
@@ -34,8 +50,20 @@ class SubscribeRequest(BaseModel):
 @router.get("/plans")
 def list_plans(db: Session = Depends(get_db)):
     """列出订阅方案"""
-    plans = db.query(SubscriptionPlan).filter(SubscriptionPlan.is_active == True).all()
-    return success([{"id": p.id, "plan_name": p.plan_name, "plan_type": p.plan_type, "price": p.price, "duration_days": p.duration_days, "features": p.features} for p in plans])
+    plans = db.query(SubscriptionPlan).filter(SubscriptionPlan.is_active).all()
+    return success(
+        [
+            {
+                "id": p.id,
+                "plan_name": p.plan_name,
+                "plan_type": p.plan_type,
+                "price": p.price,
+                "duration_days": p.duration_days,
+                "features": p.features,
+            }
+            for p in plans
+        ]
+    )
 
 
 @router.post("/check-access")
@@ -50,13 +78,17 @@ def check_access(req: CheckAccessRequest, db: Session = Depends(get_db)):
         return success({"has_access": False, "resource_code": req.resource_code})
 
     today = date.today()
-    subscription = db.query(Subscription).filter(
-        Subscription.user_id == req.user_id,
-        Subscription.product_id == product.id,
-        Subscription.status == 'active',
-        Subscription.payment_status == 'paid',
-        Subscription.end_date >= today,
-    ).first()
+    subscription = (
+        db.query(Subscription)
+        .filter(
+            Subscription.user_id == req.user_id,
+            Subscription.product_id == product.id,
+            Subscription.status == "active",
+            Subscription.payment_status == "paid",
+            Subscription.end_date >= today,
+        )
+        .first()
+    )
 
     return success({"has_access": subscription is not None, "resource_code": req.resource_code})
 
@@ -68,7 +100,7 @@ def subscribe(req: SubscribeRequest, db: Session = Depends(get_db)):
     if not plan:
         raise HTTPException(status_code=404, detail="套餐不存在")
 
-    products = db.query(Product).filter(Product.is_active == True).all()
+    products = db.query(Product).filter(Product.is_active).all()
     if not products:
         raise HTTPException(status_code=404, detail="没有可订阅的产品")
 
@@ -77,14 +109,20 @@ def subscribe(req: SubscribeRequest, db: Session = Depends(get_db)):
 
     created = []
     for product in products:
-        existing = db.query(Subscription).filter(
-            Subscription.user_id == req.user_id,
-            Subscription.product_id == product.id,
-            Subscription.status == 'active',
-            Subscription.end_date >= today,
-        ).first()
+        existing = (
+            db.query(Subscription)
+            .filter(
+                Subscription.user_id == req.user_id,
+                Subscription.product_id == product.id,
+                Subscription.status == "active",
+                Subscription.end_date >= today,
+            )
+            .first()
+        )
         if existing:
-            created.append({"product_id": product.id, "product_name": product.product_name, "status": "already_subscribed"})
+            created.append(
+                {"product_id": product.id, "product_name": product.product_name, "status": "already_subscribed"}
+            )
             continue
 
         sub = Subscription(
@@ -94,17 +132,17 @@ def subscribe(req: SubscribeRequest, db: Session = Depends(get_db)):
             plan_type=plan.plan_type,
             start_date=today,
             end_date=end_date,
-            status='active',
+            status="active",
             auto_renew=True,
-            payment_method='mock',
-            payment_status='paid',
+            payment_method="mock",
+            payment_status="paid",
         )
         db.add(sub)
         db.flush()
 
         perm = SubscriptionPermission(
             subscription_id=sub.id,
-            permission_type='read_report',
+            permission_type="read_report",
             is_granted=True,
         )
         db.add(perm)
@@ -129,7 +167,9 @@ def create_subscription_endpoint(subscription: SubscriptionCreate, db: Session =
 
 
 @router.put("/{subscription_id}")
-def update_subscription_endpoint(subscription_id: int, subscription_update: SubscriptionUpdate, db: Session = Depends(get_db)):
+def update_subscription_endpoint(
+    subscription_id: int, subscription_update: SubscriptionUpdate, db: Session = Depends(get_db)
+):
     """更新订阅"""
     subscription = update_subscription(subscription_id, subscription_update, db=db)
     if subscription is None:
@@ -145,7 +185,9 @@ def read_subscription_histories(subscription_id: int, db: Session = Depends(get_
 
 
 @router.post("/{subscription_id}/history")
-def create_subscription_history_endpoint(subscription_id: int, history: SubscriptionHistoryCreate, db: Session = Depends(get_db)):
+def create_subscription_history_endpoint(
+    subscription_id: int, history: SubscriptionHistoryCreate, db: Session = Depends(get_db)
+):
     """创建订阅历史"""
     result = create_subscription_history(subscription_id, history, db=db)
     return success(result)
@@ -159,7 +201,9 @@ def read_subscription_permissions(subscription_id: int, db: Session = Depends(ge
 
 
 @router.post("/{subscription_id}/permissions")
-def create_subscription_permission_endpoint(subscription_id: int, permission: SubscriptionPermissionCreate, db: Session = Depends(get_db)):
+def create_subscription_permission_endpoint(
+    subscription_id: int, permission: SubscriptionPermissionCreate, db: Session = Depends(get_db)
+):
     """创建订阅权限"""
     result = create_subscription_permission(permission, db=db)
     return success(result)

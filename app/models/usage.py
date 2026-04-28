@@ -3,13 +3,15 @@
 - UsageRecord: 用户功能用量追踪
 """
 
-from sqlalchemy import Column, Integer, String, Date, DateTime, Index, UniqueConstraint
+from sqlalchemy import Column, Date, DateTime, Index, Integer, String, UniqueConstraint
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class UsageRecord(Base):
     """用量记录表"""
+
     __tablename__ = "usage_records"
     __table_args__ = (
         UniqueConstraint("user_id", "permission_code", "usage_date", name="uq_usage_user_perm_date"),

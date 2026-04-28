@@ -1,10 +1,18 @@
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.v1 import api_router
 from app.core.config import settings
 from app.core.logging import logger
-from app.api.v1 import api_router
-from app.middleware.middleware import MetricsMiddleware, LoggingMiddleware, RateLimitMiddleware, RedisRateLimitMiddleware, ComplianceMiddleware, SlowQueryMiddleware
+from app.middleware.middleware import (
+    ComplianceMiddleware,
+    LoggingMiddleware,
+    MetricsMiddleware,
+    RedisRateLimitMiddleware,
+    SlowQueryMiddleware,
+)
 
 
 @asynccontextmanager
@@ -25,6 +33,7 @@ async def lifespan(app: FastAPI):
     # 开发环境自动建表，生产环境必须走 Alembic
     if settings.ENV == "development":
         from app.db.base import Base, engine
+
         Base.metadata.create_all(bind=engine)
         logger.info("开发环境：自动建表完成（生产环境请使用 Alembic 迁移）")
 
@@ -87,7 +96,9 @@ async def health_check():
     """健康检查端点"""
     try:
         from sqlalchemy import text
+
         from app.db.base import engine
+
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
 
@@ -100,9 +111,11 @@ async def health_check():
 async def metrics():
     """监控指标端点"""
     from prometheus_client import generate_latest
+
     return generate_latest()
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="127.0.0.1", port=8000)

@@ -1,12 +1,36 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
-    auth, users, securities, market, stock_pools, factors,
-    models, timing, portfolios, backtests, simulated_portfolios,
-    products, subscriptions, reports, task_logs, alert_logs, performance,
-    strategies, notifications, content, usage, risk_assessment, data_quality,
+    alert_logs,
+    auth,
+    backtests,
+    content,
+    data_quality,
     # V2新增路由
-    events, factor_metadata, model_registry, experiments, snapshots, monitor,
+    events,
+    experiments,
+    factor_metadata,
+    factors,
+    market,
+    model_registry,
+    models,
+    monitor,
+    notifications,
+    performance,
+    portfolios,
+    products,
+    reports,
+    risk_assessment,
+    securities,
+    simulated_portfolios,
+    snapshots,
+    stock_pools,
+    strategies,
+    subscriptions,
+    task_logs,
+    timing,
+    usage,
+    users,
 )
 
 api_router = APIRouter()

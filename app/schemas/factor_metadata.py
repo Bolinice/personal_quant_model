@@ -1,16 +1,16 @@
 """因子元数据Schema"""
 
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel
 
 
 class FactorMetadataBase(BaseModel):
     factor_name: str
     factor_group: str
-    description: Optional[str] = None
-    formula: Optional[str] = None
-    source_table: Optional[str] = None
+    description: str | None = None
+    formula: str | None = None
+    source_table: str | None = None
     pit_required: bool = False
     direction: int = 1
     frequency: str = "daily"
@@ -24,8 +24,8 @@ class FactorMetadataCreate(FactorMetadataBase):
 
 
 class FactorMetadataResponse(FactorMetadataBase):
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     class Config:
         from_attributes = True

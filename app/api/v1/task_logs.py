@@ -1,18 +1,32 @@
 """任务日志 API。"""
 
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
+from app.core.response import success
 from app.db.base import get_db
-from app.services.task_logs_service import get_task_logs, create_task_log, get_task_log_by_id, update_task_log, delete_task_log
-from app.schemas.task_logs import TaskLogCreate, TaskLogUpdate, TaskLogOut
-from app.core.response import success, error
+from app.schemas.task_logs import TaskLogCreate, TaskLogUpdate
+from app.services.task_logs_service import (
+    create_task_log,
+    delete_task_log,
+    get_task_log_by_id,
+    get_task_logs,
+    update_task_log,
+)
 
 router = APIRouter()
 
 
 @router.get("/")
-def read_task_logs(skip: int = 0, limit: int = 100, task_type: str = None, status: str = None, db: Session = Depends(get_db)):
+def read_task_logs(
+    skip: int = 0,
+    limit: int = 100,
+    task_type: str | None = None,
+    status: str | None = None,
+    db: Session = Depends(get_db),
+):
     """获取任务日志列表"""
     logs = get_task_logs(skip=skip, limit=limit, task_type=task_type, status=status, db=db)
     return success(logs)

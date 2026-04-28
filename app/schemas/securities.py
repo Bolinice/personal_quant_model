@@ -1,25 +1,29 @@
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional
 from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict
+
 
 class SecurityBase(BaseModel):
     ts_code: str
     symbol: str
     name: str
     board: str
-    industry_name: Optional[str] = None
-    list_date: Optional[datetime] = None
+    industry_name: str | None = None
+    list_date: datetime | None = None
     status: str = "listed"
     is_st: bool = False
+
 
 class SecurityCreate(SecurityBase):
     pass
 
+
 class SecurityUpdate(BaseModel):
-    name: Optional[str] = None
-    industry_name: Optional[str] = None
-    status: Optional[str] = None
-    is_st: Optional[bool] = None
+    name: str | None = None
+    industry_name: str | None = None
+    status: str | None = None
+    is_st: bool | None = None
+
 
 class SecurityInDB(SecurityBase):
     id: int
@@ -28,12 +32,14 @@ class SecurityInDB(SecurityBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class SecurityOut(SecurityBase):
     id: int
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
 
 class Security(SecurityOut):
     pass

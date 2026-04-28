@@ -1,10 +1,12 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, JSON, Text, Index, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Column, Date, DateTime, Float, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class Model(Base):
     """模型定义表"""
+
     __tablename__ = "models"
     __table_args__ = (
         UniqueConstraint("model_code", name="uq_model_code"),
@@ -41,6 +43,7 @@ class Model(Base):
 
 class ModelFactorWeight(Base):
     """模型因子权重表"""
+
     __tablename__ = "model_factor_weights"
     __table_args__ = (
         UniqueConstraint("model_id", "factor_id", name="uq_mfw_model_factor"),
@@ -59,6 +62,7 @@ class ModelFactorWeight(Base):
 
 class ModelScore(Base):
     """模型评分结果表"""
+
     __tablename__ = "model_scores"
     __table_args__ = (
         Index("ix_ms_model_date", "model_id", "trade_date"),
@@ -82,10 +86,9 @@ class ModelScore(Base):
 
 class ModelPerformance(Base):
     """模型表现跟踪表"""
+
     __tablename__ = "model_performance"
-    __table_args__ = (
-        Index("ix_mp_model_date", "model_id", "trade_date"),
-    )
+    __table_args__ = (Index("ix_mp_model_date", "model_id", "trade_date"),)
 
     id: int = Column(Integer, primary_key=True, index=True)
     model_id: int = Column(Integer, index=True, nullable=False)

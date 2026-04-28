@@ -1,14 +1,14 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, JSON, Text, Index, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Column, Date, DateTime, Index, Integer, String, UniqueConstraint
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class StockPool(Base):
     """股票池定义表"""
+
     __tablename__ = "stock_pools"
-    __table_args__ = (
-        UniqueConstraint("pool_code", name="uq_pool_code"),
-    )
+    __table_args__ = (UniqueConstraint("pool_code", name="uq_pool_code"),)
 
     id: int = Column(Integer, primary_key=True, index=True)
     pool_code: str = Column(String(50), unique=True, index=True, nullable=False)
@@ -28,6 +28,7 @@ class StockPool(Base):
 
 class StockPoolSnapshot(Base):
     """股票池快照表 - 支持按日期回放"""
+
     __tablename__ = "stock_pool_snapshots"
     __table_args__ = (
         UniqueConstraint("pool_id", "trade_date", name="uq_pool_snapshot_date"),

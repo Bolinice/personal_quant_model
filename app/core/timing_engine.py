@@ -3,44 +3,50 @@
 实现ADD 9节: 均线择时、市场宽度择时、波动率择时、回撤控制择时、多信号融合
 机构级增强: HMM市场状态识别、DMA动态模型平均、北向资金择时、政策日历择时、贝叶斯共轭更新
 """
-from typing import Any, Dict, List, Optional, Tuple
+
 from datetime import date, datetime, timedelta
-from enum import Enum
+from enum import Enum, StrEnum
+from typing import Any
+
 import numpy as np
 import pandas as pd
 from sqlalchemy.orm import Session
+
 from app.core.logging import logger
 
 
-class TimingSignalType(str, Enum):
-    LONG = "long"        # 看多
-    SHORT = "short"      # 看空
+class TimingSignalType(StrEnum):
+    LONG = "long"  # 看多
+    SHORT = "short"  # 看空
     NEUTRAL = "neutral"  # 中性
 
 
-class FusionMethod(str, Enum):
-    EQUAL = "equal"              # 等权投票
-    MOMENTUM = "momentum"        # 动量加权
-    BAYESIAN = "bayesian"        # 贝叶斯融合
+class FusionMethod(StrEnum):
+    EQUAL = "equal"  # 等权投票
+    MOMENTUM = "momentum"  # 动量加权
+    BAYESIAN = "bayesian"  # 贝叶斯融合
 
 
-class MarketRegime(str, Enum):
-    BULL = "bull"       # 牛市
-    BEAR = "bear"       # 熊市
+class MarketRegime(StrEnum):
+    BULL = "bull"  # 牛市
+    BEAR = "bear"  # 熊市
     SIDEWAYS = "sideways"  # 震荡
 
 
 class TimingEngine:
     """择时引擎 - 符合ADD 9节"""
 
-    def __init__(self, db: Optional[Session] = None) -> None:
+    def __init__(self, db: Session | None = None) -> None:
         self.db = db
 
     # ==================== 1. 均线择时 (ADD 9.1节) ====================
 
-    def ma_cross_signal(self, close: pd.Series,
-                        short_window: int = 20,  # 为什么20日：约1个月交易日的均线，捕捉月级别短期趋势
-                        long_window: int = 60) -> pd.Series:  # 为什么60日：约1个季度交易日，过滤短期噪声，识别中期趋势
+    def ma_cross_signal(
+        self,
+        close: pd.Series,
+        short_window: int = 20,  # 为什么20日：约1个月交易日的均线，捕捉月级别短期趋势
+        long_window: int = 60,
+    ) -> pd.Series:  # 为什么60日：约1个季度交易日，过滤短期噪声，识别中期趋势
         """
         均线交叉择时 (ADD 9.1节)
         短均线上穿长均线 → 看多
@@ -78,23 +84,23 @@ class TimingEngine:
 
         return signal
 
-    def ma_trend_strength(self, close: pd.Series,
-                          windows: List[int] = [5, 10, 20, 60, 120]) -> pd.Series:
+    def ma_trend_strength(self, close: pd.Series, windows: list[int] = None) -> pd.Series:
         """
         多均线趋势强度
         所有均线上方 → 强多头(+1)
         所有均线下方 → 强空头(-1)
         """
+        if windows is None:
+            windows = [5, 10, 20, 60, 120]
         mas = [close.rolling(w).mean() for w in windows]
         above_count = sum(ma < close for ma in mas)
-        strength = (above_count / len(windows)) * 2 - 1  # [-1, 1]
-        return strength
+        return (above_count / len(windows)) * 2 - 1  # [-1, 1]
 
     # ==================== 2. 市场宽度择时 (ADD 9.2节) ====================
 
-    def breadth_signal(self, advance_count: pd.Series,
-                       decline_count: pd.Series,
-                       window: int = 20) -> pd.Series:  # 为什么20日：平滑单日噪声，A股涨跌家数日波动大
+    def breadth_signal(
+        self, advance_count: pd.Series, decline_count: pd.Series, window: int = 20
+    ) -> pd.Series:  # 为什么20日：平滑单日噪声，A股涨跌家数日波动大
         """
         市场宽度择时 (ADD 9.2节)
         上涨家数占比 > 阈值 → 看多
@@ -107,7 +113,7 @@ class TimingEngine:
         breadth_ma = breadth.rolling(window).mean()
 
         signal = pd.Series(TimingSignalType.NEUTRAL, index=breadth.index)
-        signal[breadth_ma > 0.6] = TimingSignalType.LONG   # 60%以上个股上涨：市场参与面广，赚钱效应扩散
+        signal[breadth_ma > 0.6] = TimingSignalType.LONG  # 60%以上个股上涨：市场参与面广，赚钱效应扩散
         signal[breadth_ma < 0.4] = TimingSignalType.SHORT  # 40%以下上涨：多数个股下跌，系统性风险偏高
 
         logger.info(
@@ -121,19 +127,20 @@ class TimingEngine:
 
         return signal
 
-    def advance_decline_line(self, advance_count: pd.Series,
-                             decline_count: pd.Series) -> pd.Series:
+    def advance_decline_line(self, advance_count: pd.Series, decline_count: pd.Series) -> pd.Series:
         """腾落指数"""
         net_advance = advance_count - decline_count
-        ad_line = net_advance.cumsum()
-        return ad_line
+        return net_advance.cumsum()
 
     # ==================== 3. 波动率择时 (ADD 9.3节) ====================
 
-    def volatility_signal(self, close: pd.Series,
-                          window: int = 20,
-                          low_vol_threshold: float = 0.12,   # 为什么0.12：A股沪深300正常年化波动约20-25%，12%以下属于低波动
-                          high_vol_threshold: float = 0.25) -> pd.Series:  # 为什么0.25：25%以上说明市场处于恐慌或剧烈调整
+    def volatility_signal(
+        self,
+        close: pd.Series,
+        window: int = 20,
+        low_vol_threshold: float = 0.12,  # 为什么0.12：A股沪深300正常年化波动约20-25%，12%以下属于低波动
+        high_vol_threshold: float = 0.25,
+    ) -> pd.Series:  # 为什么0.25：25%以上说明市场处于恐慌或剧烈调整
         """
         波动率择时 (ADD 9.3节)
         低波动 → 看多（适合持有） # 为什么低波动看多：低波动意味着市场分歧小、趋势稳定，A股低波动期往往伴随缓慢上涨
@@ -148,9 +155,12 @@ class TimingEngine:
 
         return signal
 
-    def vix_signal(self, vix: pd.Series,
-                   low_threshold: float = 15,   # 为什么15：A股iVIX正常区间20-25，15以下极度平静
-                   high_threshold: float = 25) -> pd.Series:  # 为什么25：25以上对应恐慌加剧，历史上看25+往往伴随大跌
+    def vix_signal(
+        self,
+        vix: pd.Series,
+        low_threshold: float = 15,  # 为什么15：A股iVIX正常区间20-25，15以下极度平静
+        high_threshold: float = 25,
+    ) -> pd.Series:  # 为什么25：25以上对应恐慌加剧，历史上看25+往往伴随大跌
         """
         VIX择时（A股可用中国波指iVIX替代）
         """
@@ -161,9 +171,12 @@ class TimingEngine:
 
     # ==================== 4. 回撤控制择时 (ADD 9.4节) ====================
 
-    def drawdown_control_signal(self, close: pd.Series,
-                                max_drawdown: float = 0.10,      # 为什么0.10：A股增强策略回撤超10%意味着择时/选股已失效
-                                recovery_threshold: float = 0.03) -> pd.Series:  # 为什么0.03：反弹3%才确认恢复，避免假突破导致过早加仓
+    def drawdown_control_signal(
+        self,
+        close: pd.Series,
+        max_drawdown: float = 0.10,  # 为什么0.10：A股增强策略回撤超10%意味着择时/选股已失效
+        recovery_threshold: float = 0.03,
+    ) -> pd.Series:  # 为什么0.03：反弹3%才确认恢复，避免假突破导致过早加仓
         """
         回撤控制择时 (ADD 9.4节)
         回撤超过阈值 → 减仓
@@ -182,9 +195,7 @@ class TimingEngine:
 
         return signal
 
-    def trailing_stop_signal(self, close: pd.Series,
-                             stop_pct: float = 0.05,
-                             window: int = 20) -> pd.Series:
+    def trailing_stop_signal(self, close: pd.Series, stop_pct: float = 0.05, window: int = 20) -> pd.Series:
         """
         移动止损择时
         """
@@ -198,9 +209,12 @@ class TimingEngine:
 
     # ==================== 5. 多信号融合 (ADD 9.5节) ====================
 
-    def fuse_signals(self, signals: Dict[str, pd.Series],
-                     method: FusionMethod = FusionMethod.EQUAL,
-                     weights: Optional[Dict[str, float]] = None) -> pd.Series:
+    def fuse_signals(
+        self,
+        signals: dict[str, pd.Series],
+        method: FusionMethod = FusionMethod.EQUAL,
+        weights: dict[str, float] | None = None,
+    ) -> pd.Series:
         """
         多信号融合 (ADD 9.5节)
 
@@ -216,11 +230,13 @@ class TimingEngine:
         # 将信号转换为数值: long=1, neutral=0, short=-1
         signal_values = {}
         for name, signal in signals.items():
-            numeric = signal.map({
-                TimingSignalType.LONG: 1,
-                TimingSignalType.NEUTRAL: 0,
-                TimingSignalType.SHORT: -1,
-            }).fillna(0)
+            numeric = signal.map(
+                {
+                    TimingSignalType.LONG: 1,
+                    TimingSignalType.NEUTRAL: 0,
+                    TimingSignalType.SHORT: -1,
+                }
+            ).fillna(0)
             signal_values[name] = numeric
 
         signal_df = pd.DataFrame(signal_values)
@@ -265,11 +281,14 @@ class TimingEngine:
 
         return result
 
-    def _bayesian_fuse(self, signal_df: pd.DataFrame,
-                        returns: Optional[pd.Series] = None,
-                        prior_alpha: float = 5.0,  # 为什么5.0：Beta(5,5)先验均值0.5，方差0.02，代表"不确定但偏中性"的先验信念
-                        prior_beta: float = 5.0,
-                        decay: float = 0.98) -> pd.Series:  # 为什么0.98：约50个交易日半衰期，让近期表现权重逐渐增大但不过度遗忘
+    def _bayesian_fuse(
+        self,
+        signal_df: pd.DataFrame,
+        returns: pd.Series | None = None,
+        prior_alpha: float = 5.0,  # 为什么5.0：Beta(5,5)先验均值0.5，方差0.02，代表"不确定但偏中性"的先验信念
+        prior_beta: float = 5.0,
+        decay: float = 0.98,
+    ) -> pd.Series:  # 为什么0.98：约50个交易日半衰期，让近期表现权重逐渐增大但不过度遗忘
         """
         顺序Beta共轭更新+指数遗忘
         每个信号维护(alpha_k, beta_k)参数:
@@ -317,7 +336,7 @@ class TimingEngine:
                     betas[i] *= decay
 
                     # 判断命中
-                    hit = (np.sign(signal_dir) == actual_dir)
+                    hit = np.sign(signal_dir) == actual_dir
                     if hit:
                         alphas[i] += 1
                     else:
@@ -338,10 +357,9 @@ class TimingEngine:
 
         return combined
 
-    def calc_target_exposure(self, signal: pd.Series,
-                             base_exposure: float = 1.0,
-                             max_exposure: float = 1.0,
-                             min_exposure: float = 0.0) -> pd.Series:
+    def calc_target_exposure(
+        self, signal: pd.Series, base_exposure: float = 1.0, max_exposure: float = 1.0, min_exposure: float = 0.0
+    ) -> pd.Series:
         """
         根据择时信号计算目标仓位
 
@@ -357,16 +375,15 @@ class TimingEngine:
         short_mask = signal == TimingSignalType.SHORT
         neutral_mask = signal == TimingSignalType.NEUTRAL
 
-        exposure[long_mask] = max_exposure       # 看多：满仓
-        exposure[short_mask] = min_exposure      # 看空：空仓或最低仓位
+        exposure[long_mask] = max_exposure  # 看多：满仓
+        exposure[short_mask] = min_exposure  # 看空：空仓或最低仓位
         exposure[neutral_mask] = base_exposure * 0.5  # 为什么0.5：中性信号时半仓，A股择时信号噪声大，半仓攻守兼备
 
         return exposure
 
     # ==================== 6. 市场状态识别 ====================
 
-    def identify_market_regime(self, close: pd.Series,
-                               window: int = 60) -> pd.Series:
+    def identify_market_regime(self, close: pd.Series, window: int = 60) -> pd.Series:
         """
         市场状态识别
         牛市/熊市/震荡
@@ -378,7 +395,7 @@ class TimingEngine:
         regime = pd.Series(MarketRegime.SIDEWAYS, index=close.index)
 
         # 牛市：价格在均线上方，波动率较低
-        bull = (close > ma) & (vol < 0.2)   # 为什么vol<0.2：牛市特征是"缓涨"，波动率反而不高
+        bull = (close > ma) & (vol < 0.2)  # 为什么vol<0.2：牛市特征是"缓涨"，波动率反而不高
         regime[bull] = MarketRegime.BULL
 
         # 熊市：价格在均线下方，波动率较高
@@ -389,9 +406,7 @@ class TimingEngine:
 
     # ==================== 机构级扩展择时方法 ====================
 
-    def hmm_regime_detection(self, features: pd.DataFrame,
-                              n_regimes: int = 3,
-                              window: int = 252) -> pd.Series:
+    def hmm_regime_detection(self, features: pd.DataFrame, n_regimes: int = 3, window: int = 252) -> pd.Series:
         """
         HMM市场状态识别 (Hidden Markov Model)
         使用多特征(收益、波动、宽度等)识别市场状态
@@ -406,12 +421,12 @@ class TimingEngine:
             from hmmlearn.hmm import GaussianHMM
         except ImportError:
             logger.warning("hmmlearn not available, falling back to simple regime detection")
-            if 'close' in features.columns:
-                return self.identify_market_regime(features['close'])
+            if "close" in features.columns:
+                return self.identify_market_regime(features["close"])
             return pd.Series(MarketRegime.SIDEWAYS, index=features.index)
 
         # 准备特征
-        feature_cols = [c for c in features.columns if c != 'close']
+        feature_cols = [c for c in features.columns if c != "close"]
         if not feature_cols:
             feature_cols = features.columns.tolist()
 
@@ -422,13 +437,15 @@ class TimingEngine:
         if len(X_valid) < 100:
             logger.warning(
                 "HMM regime detection: insufficient valid data",
-                extra={"n_valid": len(X_valid), "min_required": 100},  # 为什么100：HMM需足够样本估计转移矩阵和发射概率，100是经验下限
+                extra={
+                    "n_valid": len(X_valid),
+                    "min_required": 100,
+                },  # 为什么100：HMM需足够样本估计转移矩阵和发射概率，100是经验下限
             )
             return pd.Series(MarketRegime.SIDEWAYS, index=features.index)
 
         # 训练HMM
-        model = GaussianHMM(n_components=n_regimes, covariance_type='full',
-                            n_iter=100, random_state=42)
+        model = GaussianHMM(n_components=n_regimes, covariance_type="full", n_iter=100, random_state=42)
         try:
             model.fit(X_valid)
             states = model.predict(X_valid)
@@ -461,9 +478,7 @@ class TimingEngine:
 
         return result
 
-    def northbound_timing_signal(self, north_flow: pd.Series,
-                                  window: int = 5,
-                                  threshold: float = 0.0) -> pd.Series:
+    def northbound_timing_signal(self, north_flow: pd.Series, window: int = 5, threshold: float = 0.0) -> pd.Series:
         """
         北向资金择时信号
         北向资金是A股最有效的择时信号之一 # 为什么最有效：北向资金代表外资，信息优势+定价权，历史上与沪深300走势高度相关
@@ -476,7 +491,9 @@ class TimingEngine:
         # 累计N日净流入
         cum_flow = north_flow.rolling(window).sum()
         # 标准化
-        flow_zscore = (cum_flow - cum_flow.rolling(60, min_periods=20).mean()) / cum_flow.rolling(60, min_periods=20).std().replace(0, np.nan)
+        flow_zscore = (cum_flow - cum_flow.rolling(60, min_periods=20).mean()) / cum_flow.rolling(
+            60, min_periods=20
+        ).std().replace(0, np.nan)
 
         signal = pd.Series(TimingSignalType.NEUTRAL, index=north_flow.index)
         signal[flow_zscore > threshold + 0.5] = TimingSignalType.LONG
@@ -484,8 +501,9 @@ class TimingEngine:
 
         return signal
 
-    def policy_calendar_signal(self, trade_dates: pd.Series,
-                                policy_events: Optional[List[Dict[str, Any]]] = None) -> pd.Series:
+    def policy_calendar_signal(
+        self, trade_dates: pd.Series, policy_events: list[dict[str, Any]] | None = None
+    ) -> pd.Series:
         """
         政策日历择时
         # A股政策事件(两会、政治局会议等)对市场有可预测影响
@@ -502,10 +520,10 @@ class TimingEngine:
             policy_events = self._default_policy_calendar()
 
         for event in policy_events:
-            event_date = pd.Timestamp(event.get('date', ''))
-            pre_days = event.get('pre_days', 5)
-            post_days = event.get('post_days', 10)
-            impact = event.get('expected_impact', 0)
+            event_date = pd.Timestamp(event.get("date", ""))
+            pre_days = event.get("pre_days", 5)
+            post_days = event.get("post_days", 10)
+            impact = event.get("expected_impact", 0)
 
             # 事件前: 期待效应
             pre_start = event_date - timedelta(days=pre_days)
@@ -525,20 +543,43 @@ class TimingEngine:
 
         return signal
 
-    def _default_policy_calendar(self) -> List[Dict[str, Any]]:
+    def _default_policy_calendar(self) -> list[dict[str, Any]]:
         """A股默认政策日历(年度重要事件)"""
         current_year = datetime.now().year
         return [
             # 两会(3月初): 通常利好
-            {'date': f'{current_year}-03-03', 'event_name': '两会开幕', 'expected_impact': 1, 'pre_days': 10, 'post_days': 15},
+            {
+                "date": f"{current_year}-03-03",
+                "event_name": "两会开幕",
+                "expected_impact": 1,
+                "pre_days": 10,
+                "post_days": 15,
+            },
             # 政治局会议(4月底/7月底/10月底/12月初): 关注经济政策
-            {'date': f'{current_year}-04-28', 'event_name': '政治局会议(4月)', 'expected_impact': 1, 'pre_days': 3, 'post_days': 5},
-            {'date': f'{current_year}-07-28', 'event_name': '政治局会议(7月)', 'expected_impact': 1, 'pre_days': 3, 'post_days': 5},
-            {'date': f'{current_year}-12-05', 'event_name': '中央经济工作会议', 'expected_impact': 1, 'pre_days': 5, 'post_days': 10},
+            {
+                "date": f"{current_year}-04-28",
+                "event_name": "政治局会议(4月)",
+                "expected_impact": 1,
+                "pre_days": 3,
+                "post_days": 5,
+            },
+            {
+                "date": f"{current_year}-07-28",
+                "event_name": "政治局会议(7月)",
+                "expected_impact": 1,
+                "pre_days": 3,
+                "post_days": 5,
+            },
+            {
+                "date": f"{current_year}-12-05",
+                "event_name": "中央经济工作会议",
+                "expected_impact": 1,
+                "pre_days": 5,
+                "post_days": 10,
+            },
         ]
 
-    def seasonal_signal(self, close: pd.Series,
-                         dates: Optional[pd.Series] = None) -> pd.Series:
+    def seasonal_signal(self, close: pd.Series, dates: pd.Series | None = None) -> pd.Series:
         """
         A股季节性择时
         春季躁动、Sell in May、年末效应等
@@ -573,10 +614,13 @@ class TimingEngine:
 
         return signal
 
-    def fuse_signals_dma(self, signals: Dict[str, pd.Series],
-                          returns: Optional[pd.Series] = None,
-                          forgetting_factor: float = 0.95,  # 为什么0.95：约20个交易日半衰期，平衡适应速度和稳定性
-                          min_evidence: int = 30) -> pd.Series:  # 为什么30：至少一个半月数据才评估信号质量，避免短期噪声主导权重
+    def fuse_signals_dma(
+        self,
+        signals: dict[str, pd.Series],
+        returns: pd.Series | None = None,
+        forgetting_factor: float = 0.95,  # 为什么0.95：约20个交易日半衰期，平衡适应速度和稳定性
+        min_evidence: int = 30,
+    ) -> pd.Series:  # 为什么30：至少一个半月数据才评估信号质量，避免短期噪声主导权重
         """
         动态模型平均 (Dynamic Model Averaging, DMA)
         根据各信号近期表现动态调整权重，比等权/固定权重更适应市场变化
@@ -593,11 +637,13 @@ class TimingEngine:
         # 将信号转换为数值
         signal_values = {}
         for name, signal in signals.items():
-            numeric = signal.map({
-                TimingSignalType.LONG: 1,
-                TimingSignalType.NEUTRAL: 0,
-                TimingSignalType.SHORT: -1,
-            }).fillna(0)
+            numeric = signal.map(
+                {
+                    TimingSignalType.LONG: 1,
+                    TimingSignalType.NEUTRAL: 0,
+                    TimingSignalType.SHORT: -1,
+                }
+            ).fillna(0)
             signal_values[name] = numeric
 
         signal_df = pd.DataFrame(signal_values)
@@ -609,7 +655,6 @@ class TimingEngine:
             # DMA: 根据各信号预测误差更新权重
             n_signals = len(signals)
             log_weights = np.zeros(n_signals)  # 对数权重
-            signal_names = list(signals.keys())
             combined = pd.Series(0.0, index=signal_df.index)
 
             for t in range(len(signal_df)):
@@ -618,15 +663,13 @@ class TimingEngine:
                 weights = weights / weights.sum()
 
                 # 加权组合信号
-                combined.iloc[t] = sum(
-                    weights[i] * signal_df.iloc[t, i] for i in range(n_signals)
-                )
+                combined.iloc[t] = sum(weights[i] * signal_df.iloc[t, i] for i in range(n_signals))
 
                 # 更新权重(基于预测误差)
                 if t > 0 and not np.isnan(returns.iloc[t]):
                     actual = 1 if returns.iloc[t] > 0 else -1
                     for i in range(n_signals):
-                        prediction = signal_df.iloc[t-1, i]
+                        prediction = signal_df.iloc[t - 1, i]
                         error = (actual - prediction) ** 2
                         log_weights[i] = forgetting_factor * log_weights[i] - 0.5 * error
 
@@ -647,11 +690,14 @@ class TimingEngine:
 
         return result
 
-    def fuse_signals_bayesian(self, signals: Dict[str, pd.Series],
-                               returns: Optional[pd.Series] = None,
-                               prior_alpha: float = 10.0,  # 为什么10.0：比贝叶斯融合的5.0更保守，Beta(10,10)更集中在0.5附近
-                               prior_beta: float = 10.0,
-                               lookback: int = 60) -> pd.Series:  # 为什么60：约一个季度交易日，与因子IC评估周期对齐
+    def fuse_signals_bayesian(
+        self,
+        signals: dict[str, pd.Series],
+        returns: pd.Series | None = None,
+        prior_alpha: float = 10.0,  # 为什么10.0：比贝叶斯融合的5.0更保守，Beta(10,10)更集中在0.5附近
+        prior_beta: float = 10.0,
+        lookback: int = 60,
+    ) -> pd.Series:  # 为什么60：约一个季度交易日，与因子IC评估周期对齐
         """
         贝叶斯共轭更新信号融合
         对每个信号维护Beta分布的命中率，用后验均值作为权重
@@ -669,11 +715,13 @@ class TimingEngine:
 
         signal_values = {}
         for name, signal in signals.items():
-            numeric = signal.map({
-                TimingSignalType.LONG: 1,
-                TimingSignalType.NEUTRAL: 0,
-                TimingSignalType.SHORT: -1,
-            }).fillna(0)
+            numeric = signal.map(
+                {
+                    TimingSignalType.LONG: 1,
+                    TimingSignalType.NEUTRAL: 0,
+                    TimingSignalType.SHORT: -1,
+                }
+            ).fillna(0)
             signal_values[name] = numeric
 
         signal_df = pd.DataFrame(signal_values)
@@ -694,7 +742,7 @@ class TimingEngine:
                 bayesian_weights[col] = prior_alpha / (prior_alpha + prior_beta)
                 continue
 
-            hits = ((signal_dir[valid] == actual_dir[valid])).sum()
+            hits = (signal_dir[valid] == actual_dir[valid]).sum()
             misses = valid.sum() - hits
 
             # 后验均值 = (alpha + hits) / (alpha + beta + hits + misses)
@@ -730,9 +778,9 @@ class TimingEngine:
 
     # ==================== 7. 择时信号评估框架 ====================
 
-    def evaluate_timing_signal(self, signal: pd.Series,
-                                returns: pd.Series,
-                                regime_series: Optional[pd.Series] = None) -> Dict[str, Any]:
+    def evaluate_timing_signal(
+        self, signal: pd.Series, returns: pd.Series, regime_series: pd.Series | None = None
+    ) -> dict[str, Any]:
         """
         择时信号评估框架
         全面评估择时信号的质量: 命中率、盈亏因子、信噪比、状态条件命中率
@@ -757,11 +805,13 @@ class TimingEngine:
         ret = returns.loc[common]
 
         # 数值化信号
-        sig_numeric = sig.map({
-            TimingSignalType.LONG: 1,
-            TimingSignalType.NEUTRAL: 0,
-            TimingSignalType.SHORT: -1,
-        }).fillna(0)
+        sig_numeric = sig.map(
+            {
+                TimingSignalType.LONG: 1,
+                TimingSignalType.NEUTRAL: 0,
+                TimingSignalType.SHORT: -1,
+            }
+        ).fillna(0)
 
         # 1. 命中率: 信号方向与实际方向一致的比例
         actual_dir = np.sign(ret)
@@ -784,7 +834,7 @@ class TimingEngine:
 
         total_profit = long_profits + short_profits
         total_loss = long_losses + short_losses
-        pl_factor = total_profit / total_loss if total_loss > 0 else float('inf')
+        pl_factor = total_profit / total_loss if total_loss > 0 else float("inf")
 
         # 3. 信噪比 (Signal-to-Noise Ratio)
         # 信号贡献的收益 / 总波动
@@ -801,16 +851,16 @@ class TimingEngine:
             short_hit_rate = (ret[short_mask] < 0).sum() / short_mask.sum()
 
         result = {
-            'hit_rate': round(hit_rate, 4),
-            'profit_loss_factor': round(pl_factor, 4),
-            'signal_to_noise_ratio': round(snr, 4),
-            'long_hit_rate': round(long_hit_rate, 4),
-            'short_hit_rate': round(short_hit_rate, 4),
-            'n_long': int(long_mask.sum()),
-            'n_short': int(short_mask.sum()),
-            'n_neutral': int((sig_numeric == 0).sum()),
-            'total_profit': round(total_profit, 6),
-            'total_loss': round(total_loss, 6),
+            "hit_rate": round(hit_rate, 4),
+            "profit_loss_factor": round(pl_factor, 4),
+            "signal_to_noise_ratio": round(snr, 4),
+            "long_hit_rate": round(long_hit_rate, 4),
+            "short_hit_rate": round(short_hit_rate, 4),
+            "n_long": int(long_mask.sum()),
+            "n_short": int(short_mask.sum()),
+            "n_neutral": int((sig_numeric == 0).sum()),
+            "total_profit": round(total_profit, 6),
+            "total_loss": round(total_loss, 6),
         }
 
         # 5. 状态条件命中率
@@ -819,7 +869,7 @@ class TimingEngine:
             if len(regime_common) > 0:
                 regime_result = {}
                 for regime in regime_series.loc[regime_common].unique():
-                    regime_mask = (regime_series.loc[regime_common] == regime)
+                    regime_mask = regime_series.loc[regime_common] == regime
                     regime_sig = sig_numeric.loc[regime_common][regime_mask]
                     regime_ret = ret.loc[regime_common][regime_mask]
                     regime_active = regime_sig != 0
@@ -829,10 +879,10 @@ class TimingEngine:
                     else:
                         regime_hit_rate = 0
                     regime_result[regime] = {
-                        'hit_rate': round(regime_hit_rate, 4),
-                        'n_observations': int(regime_mask.sum()),
+                        "hit_rate": round(regime_hit_rate, 4),
+                        "n_observations": int(regime_mask.sum()),
                     }
-                result['regime_conditional'] = regime_result
+                result["regime_conditional"] = regime_result
 
         logger.info(
             "Timing signal evaluated",
@@ -851,9 +901,9 @@ class TimingEngine:
 
     # ==================== 8. 择时信号回测验证 ====================
 
-    def backtest_timing_signal(self, close: pd.Series,
-                               signal: pd.Series,
-                               initial_capital: float = 1000000.0) -> Dict[str, Any]:
+    def backtest_timing_signal(
+        self, close: pd.Series, signal: pd.Series, initial_capital: float = 1000000.0
+    ) -> dict[str, Any]:
         """
         择时信号回测验证 (ADD 9.6节)
         """
@@ -873,13 +923,13 @@ class TimingEngine:
         max_dd = ((nav - nav.cummax()) / nav.cummax()).min()
 
         result = {
-            'total_return': round(total_return, 4),
-            'max_drawdown': round(max_dd, 4),
-            'buy_hold_return': round(buy_hold_nav.iloc[-1] - 1, 4),
-            'signal_distribution': {
-                'long': int((signal == TimingSignalType.LONG).sum()),
-                'short': int((signal == TimingSignalType.SHORT).sum()),
-                'neutral': int((signal == TimingSignalType.NEUTRAL).sum()),
+            "total_return": round(total_return, 4),
+            "max_drawdown": round(max_dd, 4),
+            "buy_hold_return": round(buy_hold_nav.iloc[-1] - 1, 4),
+            "signal_distribution": {
+                "long": int((signal == TimingSignalType.LONG).sum()),
+                "short": int((signal == TimingSignalType.SHORT).sum()),
+                "neutral": int((signal == TimingSignalType.NEUTRAL).sum()),
             },
         }
 

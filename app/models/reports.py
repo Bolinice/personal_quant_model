@@ -1,10 +1,12 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, JSON, Text, Index
+from sqlalchemy import JSON, Boolean, Column, Date, DateTime, Index, Integer, String, Text
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class Report(Base):
     """报告表"""
+
     __tablename__ = "reports"
     __table_args__ = (
         Index("ix_rpt_type", "report_type"),
@@ -33,6 +35,7 @@ class Report(Base):
 
 class ReportTemplate(Base):
     """报告模板表"""
+
     __tablename__ = "report_templates"
 
     id: int = Column(Integer, primary_key=True, index=True)
@@ -47,6 +50,7 @@ class ReportTemplate(Base):
 
 class ReportSchedule(Base):
     """报告调度表"""
+
     __tablename__ = "report_schedules"
 
     id: int = Column(Integer, primary_key=True, index=True)

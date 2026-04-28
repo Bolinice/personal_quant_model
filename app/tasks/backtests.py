@@ -1,7 +1,8 @@
-from celery import shared_task
+import time
+
 from app.core.celery_config import celery_app
 from app.core.logging import logger
-import time
+
 
 @celery_app.task(bind=True, max_retries=3)
 def run_backtest(self, backtest_id: int):
@@ -12,7 +13,7 @@ def run_backtest(self, backtest_id: int):
         # 模拟回测过程
         for i in range(10):
             time.sleep(1)  # 模拟处理时间
-            logger.info(f"Backtest {backtest_id} progress: {i*10}%")
+            logger.info(f"Backtest {backtest_id} progress: {i * 10}%")
 
         logger.info(f"Backtest {backtest_id} completed")
         return {"status": "completed", "backtest_id": backtest_id}
@@ -20,6 +21,7 @@ def run_backtest(self, backtest_id: int):
     except Exception as exc:
         logger.error(f"Backtest {backtest_id} failed: {exc}")
         raise self.retry(exc=exc, countdown=60)
+
 
 @celery_app.task(bind=True, max_retries=3)
 def generate_backtest_report(self, backtest_id: int):

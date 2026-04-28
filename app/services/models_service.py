@@ -1,23 +1,26 @@
-from typing import List
 from sqlalchemy.orm import Session
+
 from app.db.base import with_db
 from app.models.models import Model, ModelFactorWeight, ModelScore
-from app.schemas.models import ModelCreate, ModelUpdate, ModelFactorWeightCreate, ModelScoreCreate
-import pandas as pd
-import numpy as np
+from app.schemas.models import ModelCreate, ModelFactorWeightCreate, ModelUpdate
+
 
 def get_factor_values(factor_id: int, trade_date: str, db: Session):
     """导入get_factor_values函数"""
     from app.services.factors_service import get_factor_values as gfvs
+
     return gfvs(factor_id, trade_date, db=None if db is None else db)
+
 
 @with_db
 def get_models(skip: int = 0, limit: int = 100, db: Session = None):
     return db.query(Model).offset(skip).limit(limit).all()
 
+
 @with_db
 def get_model_by_code(model_code: str, db: Session = None):
     return db.query(Model).filter(Model.model_code == model_code).first()
+
 
 @with_db
 def create_model(model: ModelCreate, db: Session = None):
@@ -26,6 +29,7 @@ def create_model(model: ModelCreate, db: Session = None):
     db.commit()
     db.refresh(db_model)
     return db_model
+
 
 @with_db
 def update_model(model_id: int, model_update: ModelUpdate, db: Session = None):
@@ -39,19 +43,17 @@ def update_model(model_id: int, model_update: ModelUpdate, db: Session = None):
     db.refresh(db_model)
     return db_model
 
+
 @with_db
 def get_model_factor_weights(model_id: int, db: Session = None):
     return db.query(ModelFactorWeight).filter(ModelFactorWeight.model_id == model_id).all()
 
+
 @with_db
-def create_model_factor_weights(model_id: int, weights: List[ModelFactorWeightCreate], db: Session = None):
+def create_model_factor_weights(model_id: int, weights: list[ModelFactorWeightCreate], db: Session = None):
     db_weights = []
     for weight in weights:
-        db_weight = ModelFactorWeight(
-            model_id=model_id,
-            factor_id=weight.factor_id,
-            weight=weight.weight
-        )
+        db_weight = ModelFactorWeight(model_id=model_id, factor_id=weight.factor_id, weight=weight.weight)
         db.add(db_weight)
         db_weights.append(db_weight)
     db.commit()
@@ -59,14 +61,16 @@ def create_model_factor_weights(model_id: int, weights: List[ModelFactorWeightCr
         db.refresh(db_weight)
     return db_weights
 
+
 @with_db
-def update_model_factor_weights(model_id: int, weights: List[ModelFactorWeightCreate], db: Session = None):
+def update_model_factor_weights(model_id: int, weights: list[ModelFactorWeightCreate], db: Session = None):
     # 删除旧权重
     db.query(ModelFactorWeight).filter(ModelFactorWeight.model_id == model_id).delete()
     db.commit()
 
     # 添加新权重
     return create_model_factor_weights(model_id, weights, db=db)
+
 
 @with_db
 def get_model_scores(model_id: int, trade_date: str, selected_only: bool = False, db: Session = None):
@@ -76,15 +80,13 @@ def get_model_scores(model_id: int, trade_date: str, selected_only: bool = False
         pass
     return query.all()
 
+
 @with_db
 def create_model_scores(model_id: int, trade_date: str, scores: list, db: Session = None):
     db_scores = []
     for score in scores:
         db_score = ModelScore(
-            model_id=model_id,
-            trade_date=trade_date,
-            security_id=score['security_id'],
-            total_score=score['total_score']
+            model_id=model_id, trade_date=trade_date, security_id=score["security_id"], total_score=score["total_score"]
         )
         db.add(db_score)
         db_scores.append(db_score)
@@ -92,6 +94,7 @@ def create_model_scores(model_id: int, trade_date: str, scores: list, db: Sessio
     for db_score in db_scores:
         db.refresh(db_score)
     return db_scores
+
 
 @with_db
 def calculate_model_scores(model_id: int, trade_date: str, db: Session = None):
@@ -117,13 +120,12 @@ def calculate_model_scores(model_id: int, trade_date: str, db: Session = None):
         total_score = 0
         for weight in weights:
             # 获取该股票的因子值
-            factor_value = next((fv.value for fv in factor_values[weight.factor_id] if fv.security_id == security_id), 0)
+            factor_value = next(
+                (fv.value for fv in factor_values[weight.factor_id] if fv.security_id == security_id), 0
+            )
             total_score += factor_value * weight.weight
 
-        scores.append({
-            'security_id': security_id,
-            'total_score': total_score
-        })
+        scores.append({"security_id": security_id, "total_score": total_score})
 
     # 保存评分
     return create_model_scores(model_id, trade_date, scores, db=db)

@@ -1,21 +1,32 @@
 """因子管理 API。"""
 
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from app.db.base import get_db
-from app.services.factors_service import (
-    get_factors, get_factor_by_code, create_factor, update_factor,
-    get_factor_values, create_factor_values, get_factor_analysis,
-    create_factor_analysis, calculate_factor_values, preprocess_factor_values,
-)
-from app.schemas.factors import (
-    FactorCreate, FactorUpdate, FactorValueCreate, FactorAnalysisCreate,
-    FactorOut, FactorValueOut, FactorAnalysisOut,
-)
-from app.core.response import success, error
+
 from app.api.v1.auth import get_current_user
+from app.core.response import success
+from app.db.base import get_db
 from app.models.user import User
+from app.schemas.factors import (
+    FactorAnalysisCreate,
+    FactorCreate,
+    FactorUpdate,
+    FactorValueCreate,
+)
+from app.services.factors_service import (
+    calculate_factor_values,
+    create_factor,
+    create_factor_analysis,
+    create_factor_values,
+    get_factor_analysis,
+    get_factor_by_code,
+    get_factor_values,
+    get_factors,
+    preprocess_factor_values,
+    update_factor,
+)
 
 router = APIRouter()
 
@@ -24,8 +35,8 @@ router = APIRouter()
 def read_factors(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-    category: str = None,
-    status: str = None,
+    category: str | None = None,
+    status: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -76,7 +87,7 @@ def update_factor_endpoint(
 def read_factor_values(
     factor_id: int,
     trade_date: str,
-    security_id: int = None,
+    security_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -89,11 +100,13 @@ def read_factor_values(
 def create_factor_values_endpoint(
     factor_id: int,
     trade_date: str = Query(..., description="交易日期，格式YYYYMMDD"),
-    values: List[FactorValueCreate] = [],
+    values: list[FactorValueCreate] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """批量创建因子值"""
+    if values is None:
+        values = []
     result = create_factor_values(factor_id, trade_date=trade_date, values=values, db=db)
     return success(result)
 

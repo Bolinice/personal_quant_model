@@ -1,10 +1,12 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, JSON, Index
+from sqlalchemy import JSON, Boolean, Column, DateTime, Index, Integer, String, Text
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class ContentBlock(Base):
     """内容块表 - 通用 CMS 模型"""
+
     __tablename__ = "content_blocks"
     __table_args__ = (
         Index("ix_cb_page_section_lang", "page", "section", "lang"),

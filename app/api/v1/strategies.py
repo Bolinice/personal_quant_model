@@ -1,16 +1,18 @@
 """
 策略管理API
 """
-from typing import List, Optional
+
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.api.v1.auth import get_current_user
+from app.core.response import page_result, success
 from app.db.base import get_db
 from app.models.models import Model, ModelFactorWeight
-from app.core.response import success, error, page_result
-from app.api.v1.auth import get_current_user
 from app.models.user import User
-
 
 router = APIRouter()
 
@@ -18,26 +20,26 @@ router = APIRouter()
 class StrategyCreate(BaseModel):
     model_name: str
     model_type: str = "scoring"
-    description: Optional[str] = None
-    factor_ids: List[int] = []
+    description: str | None = None
+    factor_ids: list[int] = []
     factor_weights: dict = {}
     config: dict = {}
 
 
 class StrategyUpdate(BaseModel):
-    model_name: Optional[str] = None
-    description: Optional[str] = None
-    factor_ids: Optional[List[int]] = None
-    factor_weights: Optional[dict] = None
-    config: Optional[dict] = None
-    status: Optional[str] = None
+    model_name: str | None = None
+    description: str | None = None
+    factor_ids: list[int] | None = None
+    factor_weights: dict | None = None
+    config: dict | None = None
+    status: str | None = None
 
 
 @router.get("/")
 def list_strategies(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    status: str = None,
+    status: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -50,15 +52,18 @@ def list_strategies(
     items = query.offset((page - 1) * page_size).limit(page_size).all()
 
     return page_result(
-        items=[{
-            "id": m.id,
-            "model_code": m.model_code,
-            "model_name": m.model_name,
-            "model_type": m.model_type,
-            "status": m.status,
-            "version": m.version,
-            "created_at": str(m.created_at),
-        } for m in items],
+        items=[
+            {
+                "id": m.id,
+                "model_code": m.model_code,
+                "model_name": m.model_name,
+                "model_type": m.model_type,
+                "status": m.status,
+                "version": m.version,
+                "created_at": str(m.created_at),
+            }
+            for m in items
+        ],
         page=page,
         page_size=page_size,
         total=total,
@@ -76,27 +81,33 @@ def get_strategy(
     if not model:
         raise HTTPException(status_code=404, detail="策略不存在")
 
-    # 获取因子权重
-    weights = db.query(ModelFactorWeight).filter(
-        ModelFactorWeight.model_id == strategy_id,
-    ).all()
+    # 获取因子权重（用于关联查询，结果已在model字段中返回）
+    _ = (
+        db.query(ModelFactorWeight)
+        .filter(
+            ModelFactorWeight.model_id == strategy_id,
+        )
+        .all()
+    )
 
-    return success({
-        "id": model.id,
-        "model_code": model.model_code,
-        "model_name": model.model_name,
-        "model_type": model.model_type,
-        "description": model.description,
-        "version": model.version,
-        "status": model.status,
-        "factor_ids": model.factor_ids,
-        "factor_weights": model.factor_weights,
-        "model_config": model.model_config,
-        "ic_mean": model.ic_mean,
-        "ic_ir": model.ic_ir,
-        "created_at": str(model.created_at),
-        "updated_at": str(model.updated_at) if model.updated_at else None,
-    })
+    return success(
+        {
+            "id": model.id,
+            "model_code": model.model_code,
+            "model_name": model.model_name,
+            "model_type": model.model_type,
+            "description": model.description,
+            "version": model.version,
+            "status": model.status,
+            "factor_ids": model.factor_ids,
+            "factor_weights": model.factor_weights,
+            "model_config": model.model_config,
+            "ic_mean": model.ic_mean,
+            "ic_ir": model.ic_ir,
+            "created_at": str(model.created_at),
+            "updated_at": str(model.updated_at) if model.updated_at else None,
+        }
+    )
 
 
 @router.post("/")
@@ -107,6 +118,7 @@ def create_strategy(
 ):
     """创建策略"""
     import uuid
+
     model = Model(
         model_code=f"STR_{uuid.uuid4().hex[:8].upper()}",
         model_name=strategy.model_name,

@@ -1,17 +1,17 @@
 """市场数据 API。"""
 
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
+from app.core.response import success
 from app.db.base import get_db
+from app.schemas.market import IndexDailyCreate, StockDailyCreate
 from app.services.market_service import (
-    get_stock_daily, get_index_daily, get_trading_calendar,
-    create_stock_daily, create_index_daily, create_trading_calendar,
-    get_stock_financial, get_stock_industry, get_stock_basic,
-    create_stock_financial, create_stock_industry, create_stock_basic,
+    create_index_daily,
+    create_stock_daily,
+    get_index_daily,
+    get_stock_daily,
 )
-from app.schemas.market import StockDailyCreate, IndexDailyCreate, StockDailyOut, IndexDailyOut
-from app.core.response import success, error
 
 router = APIRouter()
 

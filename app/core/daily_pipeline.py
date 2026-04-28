@@ -19,19 +19,17 @@ V2 12步流程:
 import logging
 import uuid
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
-import numpy as np
 
 from app.core.alpha_modules import get_alpha_modules, get_risk_penalty_module
 from app.core.ensemble import EnsembleEngine
+from app.core.factor_monitor import FactorMonitor
+from app.core.portfolio_builder import PortfolioBuilder
 from app.core.regime import RegimeDetector
 from app.core.risk_budget_engine import RiskBudgetEngine
-from app.core.portfolio_builder import PortfolioBuilder, PortfolioMode
 from app.core.universe import UniverseBuilder
-from app.core.factor_monitor import FactorMonitor
-from app.core.labels import LabelBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +39,12 @@ class DailyPipeline:
 
     def __init__(
         self,
-        universe_builder: Optional[UniverseBuilder] = None,
-        ensemble_engine: Optional[EnsembleEngine] = None,
-        regime_detector: Optional[RegimeDetector] = None,
-        risk_budget_engine: Optional[RiskBudgetEngine] = None,
-        portfolio_builder: Optional[PortfolioBuilder] = None,
-        factor_monitor: Optional[FactorMonitor] = None,
+        universe_builder: UniverseBuilder | None = None,
+        ensemble_engine: EnsembleEngine | None = None,
+        regime_detector: RegimeDetector | None = None,
+        risk_budget_engine: RiskBudgetEngine | None = None,
+        portfolio_builder: PortfolioBuilder | None = None,
+        factor_monitor: FactorMonitor | None = None,
     ):
         self.universe_builder = universe_builder or UniverseBuilder()
         self.ensemble_engine = ensemble_engine or EnsembleEngine()
@@ -55,7 +53,7 @@ class DailyPipeline:
         self.portfolio_builder = portfolio_builder or PortfolioBuilder()
         self.factor_monitor = factor_monitor or FactorMonitor()
 
-    def step1_data_collection(self, trade_date: date, **kwargs) -> Dict[str, Any]:
+    def step1_data_collection(self, trade_date: date, **kwargs) -> dict[str, Any]:
         """
         Step 1: 数据采集与PIT对齐
 
@@ -70,7 +68,7 @@ class DailyPipeline:
             "pit_aligned": True,
         }
 
-    def step2_snapshot(self, trade_date: date, **kwargs) -> Dict[str, Any]:
+    def step2_snapshot(self, trade_date: date, **kwargs) -> dict[str, Any]:
         """
         Step 2: 数据快照生成
 
@@ -85,7 +83,7 @@ class DailyPipeline:
             "snapshot_id": snapshot_id,
         }
 
-    def step3_universe(self, trade_date: date, **kwargs) -> Dict[str, Any]:
+    def step3_universe(self, trade_date: date, **kwargs) -> dict[str, Any]:
         """
         Step 3: 股票池构建(含风险事件过滤)
 
@@ -99,7 +97,7 @@ class DailyPipeline:
             "extended_count": 0,
         }
 
-    def step4_factor_preprocess(self, trade_date: date, **kwargs) -> Dict[str, Any]:
+    def step4_factor_preprocess(self, trade_date: date, **kwargs) -> dict[str, Any]:
         """
         Step 4: 因子预处理流水线
 
@@ -113,7 +111,7 @@ class DailyPipeline:
             "factors_processed": 0,
         }
 
-    def step5_module_scoring(self, df: pd.DataFrame, **kwargs) -> Dict[str, Any]:
+    def step5_module_scoring(self, df: pd.DataFrame, **kwargs) -> dict[str, Any]:
         """
         Step 5: 五大模块打分
 
@@ -147,11 +145,13 @@ class DailyPipeline:
         }
 
     def step6_ensemble(
-        self, df: pd.DataFrame, regime: str = "trending",
-        precomputed_module_scores: Optional[Dict[str, pd.Series]] = None,
-        precomputed_risk_penalty: Optional[pd.Series] = None,
-        **kwargs
-    ) -> Tuple[pd.Series, Dict]:
+        self,
+        df: pd.DataFrame,
+        regime: str = "trending",
+        precomputed_module_scores: dict[str, pd.Series] | None = None,
+        precomputed_risk_penalty: pd.Series | None = None,
+        **kwargs,
+    ) -> tuple[pd.Series, dict]:
         """
         Step 6: 信号融合
 
@@ -160,10 +160,11 @@ class DailyPipeline:
         """
         logger.info(f"[Step 6] 信号融合 (regime={regime})")
         final_scores, meta = self.ensemble_engine.fuse(
-            df, regime=regime,
+            df,
+            regime=regime,
             precomputed_module_scores=precomputed_module_scores,
             precomputed_risk_penalty=precomputed_risk_penalty,
-            **kwargs
+            **kwargs,
         )
         return final_scores, meta
 
@@ -178,7 +179,7 @@ class DailyPipeline:
         logger.info("[Step 7] ML增强排序 (跳过, 使用规则得分)")
         return scores
 
-    def step8_regime_detection(self, **kwargs) -> Dict[str, Any]:
+    def step8_regime_detection(self, **kwargs) -> dict[str, Any]:
         """
         Step 8: Regime检测
 
@@ -186,14 +187,14 @@ class DailyPipeline:
         - 4状态: risk_on/trending/defensive/mean_reverting
         """
         logger.info("[Step 8] Regime检测")
-        market_data = kwargs.get('market_data', pd.DataFrame())
+        market_data = kwargs.get("market_data", pd.DataFrame())
         if market_data.empty:
             # 无市场数据时默认震荡市
             return {"regime": "mean_reverting"}
         regime = self.regime_detector.detect(market_data)
         return {"regime": regime}
 
-    def step9_timing_position(self, **kwargs) -> Dict[str, Any]:
+    def step9_timing_position(self, **kwargs) -> dict[str, Any]:
         """
         Step 9: 择时仓位控制
 
@@ -202,13 +203,10 @@ class DailyPipeline:
         """
         logger.info("[Step 9] 择时仓位控制")
         # compute_timing_position不接受regime参数, 需过滤
-        timing_kwargs = {k: v for k, v in kwargs.items() if k != 'regime'}
-        timing_result = self.risk_budget_engine.compute_timing_position(**timing_kwargs)
-        return timing_result
+        timing_kwargs = {k: v for k, v in kwargs.items() if k != "regime"}
+        return self.risk_budget_engine.compute_timing_position(**timing_kwargs)
 
-    def step10_portfolio_build(
-        self, scores: pd.Series, **kwargs
-    ) -> pd.DataFrame:
+    def step10_portfolio_build(self, scores: pd.Series, **kwargs) -> pd.DataFrame:
         """
         Step 10: 组合构建
 
@@ -218,10 +216,9 @@ class DailyPipeline:
         - 100股整数倍
         """
         logger.info("[Step 10] 组合构建")
-        portfolio = self.portfolio_builder.build(scores, **kwargs)
-        return portfolio
+        return self.portfolio_builder.build(scores, **kwargs)
 
-    def step11_factor_health_check(self, trade_date: date, **kwargs) -> Dict[str, Any]:
+    def step11_factor_health_check(self, trade_date: date, **kwargs) -> dict[str, Any]:
         """
         Step 11: 因子健康检查与告警
 
@@ -237,7 +234,7 @@ class DailyPipeline:
             "critical_factors": 0,
         }
 
-    def step12_archive(self, trade_date: date, results: Dict, **kwargs) -> Dict[str, Any]:
+    def step12_archive(self, trade_date: date, results: dict, **kwargs) -> dict[str, Any]:
         """
         Step 12: 结果存档与版本管理
 
@@ -250,7 +247,7 @@ class DailyPipeline:
             "archived": True,
         }
 
-    def run(self, trade_date: date, **kwargs) -> Dict[str, Any]:
+    def run(self, trade_date: date, **kwargs) -> dict[str, Any]:
         """
         执行V2完整12步流水线
 
@@ -315,10 +312,11 @@ class DailyPipeline:
             if not df.empty and module_scores is not None:
                 regime = kwargs.get("regime", "trending")
                 scores, meta = self.step6_ensemble(
-                    df, regime=regime,
+                    df,
+                    regime=regime,
                     precomputed_module_scores=module_scores,
                     precomputed_risk_penalty=risk_penalty,
-                    **kwargs
+                    **kwargs,
                 )
                 results["steps"]["step6_ensemble"] = {
                     "status": "ok",

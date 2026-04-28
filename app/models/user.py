@@ -1,6 +1,6 @@
-from typing import Optional
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
@@ -10,19 +10,19 @@ class User(Base):
     id: int = Column(Integer, primary_key=True, index=True)
     username: str = Column(String(50), unique=True, index=True, nullable=False)
     email: str = Column(String(100), unique=True, index=True, nullable=False)
-    real_name: Optional[str] = Column(String(100))
-    phone: Optional[str] = Column(String(20))
+    real_name: str | None = Column(String(100))
+    phone: str | None = Column(String(20))
     hashed_password: str = Column(String(255), nullable=False)
     role: str = Column(String(50), default="user")  # admin, researcher, pm, risk_manager, client, org_admin
     user_type: str = Column(String(20), default="user")  # admin, researcher, client
-    org_id: Optional[int] = Column(Integer)  # 所属机构
+    org_id: int | None = Column(Integer)  # 所属机构
     is_active: bool = Column(Boolean, default=True)
     is_superuser: bool = Column(Boolean, default=False)
-    risk_level: Optional[str] = Column(String(10), nullable=True, comment='风险等级: C1/C2/C3/C4')
-    avatar_url: Optional[str] = Column(String(255))
-    reset_token: Optional[str] = Column(String(255), nullable=True, comment='密码重置令牌')
-    reset_token_expires: Optional[DateTime] = Column(DateTime, nullable=True, comment='重置令牌过期时间')
-    last_login_at: Optional[DateTime] = Column(DateTime)
+    risk_level: str | None = Column(String(10), nullable=True, comment="风险等级: C1/C2/C3/C4")
+    avatar_url: str | None = Column(String(255))
+    reset_token: str | None = Column(String(255), nullable=True, comment="密码重置令牌")
+    reset_token_expires: DateTime | None = Column(DateTime, nullable=True, comment="重置令牌过期时间")
+    last_login_at: DateTime | None = Column(DateTime)
     login_count: int = Column(Integer, default=0)
     created_at: DateTime = Column(DateTime, server_default=func.now())
     updated_at: DateTime = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -37,7 +37,7 @@ class Role(Base):
     id: int = Column(Integer, primary_key=True, index=True)
     role_name: str = Column(String(50), unique=True, nullable=False)
     role_code: str = Column(String(50), unique=True, nullable=False)
-    description: Optional[str] = Column(String(200))
+    description: str | None = Column(String(200))
     created_at: DateTime = Column(DateTime, server_default=func.now())
 
 
@@ -57,8 +57,8 @@ class APIKey(Base):
     user_id: int = Column(Integer, index=True, nullable=False)
     api_key: str = Column(String(100), unique=True, index=True, nullable=False)
     secret_hash: str = Column(String(255), nullable=False)
-    name: Optional[str] = Column(String(100))
+    name: str | None = Column(String(100))
     status: str = Column(String(20), default="active")  # active, revoked
-    expired_at: Optional[DateTime] = Column(DateTime)
-    last_used_at: Optional[DateTime] = Column(DateTime)
+    expired_at: DateTime | None = Column(DateTime)
+    last_used_at: DateTime | None = Column(DateTime)
     created_at: DateTime = Column(DateTime, server_default=func.now())

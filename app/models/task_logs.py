@@ -1,10 +1,12 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, JSON, Text, Index
+from sqlalchemy import JSON, Column, DateTime, Float, Index, Integer, String, Text
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class TaskLog(Base):
     """任务运行表"""
+
     __tablename__ = "task_logs"
     __table_args__ = (
         Index("ix_tl_type", "task_type"),
@@ -33,6 +35,7 @@ class TaskLog(Base):
 
 class AuditLog(Base):
     """审计日志表"""
+
     __tablename__ = "audit_logs"
     __table_args__ = (
         Index("ix_al_user", "user_id"),

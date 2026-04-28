@@ -1,11 +1,13 @@
 """PIT财务表"""
 
-from sqlalchemy import Column, BigInteger, Date, Integer, Numeric, String
+from sqlalchemy import BigInteger, Column, Date, Integer, Numeric, String
+
 from app.db.base import Base
 
 
 class PITFinancial(Base):
     """PIT财务表 - 严格版本管理, 预告/快报/正式报表优先级"""
+
     __tablename__ = "pit_financial"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -29,6 +31,4 @@ class PITFinancial(Base):
     asset_liability_ratio = Column(Numeric(12, 4), comment="资产负债率")
     snapshot_id = Column(String(50), index=True, comment="快照ID")
 
-    __table_args__ = (
-        {"comment": "PIT财务表"},
-    )
+    __table_args__ = ({"comment": "PIT财务表"},)

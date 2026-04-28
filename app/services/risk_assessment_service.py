@@ -5,14 +5,16 @@
 - 等级判定
 """
 
-from typing import List, Dict, Optional
-from datetime import datetime
 from sqlalchemy.orm import Session
+
 from app.models.risk_assessment import RiskAssessment
 from app.models.user import User
 from app.schemas.risk_assessment import (
-    RiskAnswer, RiskAssessmentSubmit, RiskAssessmentResult,
-    RiskQuestion, RiskAssessmentOut,
+    RiskAnswer,
+    RiskAssessmentOut,
+    RiskAssessmentResult,
+    RiskAssessmentSubmit,
+    RiskQuestion,
 )
 
 # ============================================================
@@ -21,7 +23,7 @@ from app.schemas.risk_assessment import (
 # 总分范围0-20，映射到C1-C4四个风险等级
 # ============================================================
 
-RISK_QUESTIONS: List[RiskQuestion] = [
+RISK_QUESTIONS: list[RiskQuestion] = [
     RiskQuestion(
         id=1,
         question="您的投资经验年限？",
@@ -59,23 +61,39 @@ RISK_QUESTIONS: List[RiskQuestion] = [
 # 分值区间：C1(0-6,7分) > C2(7-12,6分) > C3(13-17,5分) > C4(18-20,3分)
 # 低分区间更宽，因为保守型判定应更宽松；高分区间更窄，激进型需明确高分确认
 RISK_LEVELS = {
-    "C1": {"name": "保守型", "min_score": 0, "max_score": 6,
-            "description": "您属于保守型投资者，适合低风险产品，追求资产保值。"},
-    "C2": {"name": "稳健型", "min_score": 7, "max_score": 12,
-            "description": "您属于稳健型投资者，适合中低风险产品，追求稳健收益。"},
-    "C3": {"name": "积极型", "min_score": 13, "max_score": 17,
-            "description": "您属于积极型投资者，适合中高风险产品，追求较高收益。"},
-    "C4": {"name": "激进型", "min_score": 18, "max_score": 20,
-            "description": "您属于激进型投资者，适合高风险产品，追求最大化收益。"},
+    "C1": {
+        "name": "保守型",
+        "min_score": 0,
+        "max_score": 6,
+        "description": "您属于保守型投资者，适合低风险产品，追求资产保值。",
+    },
+    "C2": {
+        "name": "稳健型",
+        "min_score": 7,
+        "max_score": 12,
+        "description": "您属于稳健型投资者，适合中低风险产品，追求稳健收益。",
+    },
+    "C3": {
+        "name": "积极型",
+        "min_score": 13,
+        "max_score": 17,
+        "description": "您属于积极型投资者，适合中高风险产品，追求较高收益。",
+    },
+    "C4": {
+        "name": "激进型",
+        "min_score": 18,
+        "max_score": 20,
+        "description": "您属于激进型投资者，适合高风险产品，追求最大化收益。",
+    },
 }
 
 
-def get_questions() -> List[RiskQuestion]:
+def get_questions() -> list[RiskQuestion]:
     """获取测评题目"""
     return RISK_QUESTIONS
 
 
-def calculate_score(answers: List[RiskAnswer]) -> int:
+def calculate_score(answers: list[RiskAnswer]) -> int:
     """计算测评得分"""
     score_map = {q.id: q.scores for q in RISK_QUESTIONS}
     total = 0
@@ -126,7 +144,7 @@ def submit_assessment(db: Session, user_id: int, submit: RiskAssessmentSubmit) -
     )
 
 
-def get_latest_assessment(db: Session, user_id: int) -> Optional[RiskAssessmentOut]:
+def get_latest_assessment(db: Session, user_id: int) -> RiskAssessmentOut | None:
     """获取用户最新测评结果"""
     assessment = (
         db.query(RiskAssessment)

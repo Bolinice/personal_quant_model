@@ -1,10 +1,12 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, JSON, Text, Index, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Column, Date, DateTime, Float, Index, Integer, String
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class Portfolio(Base):
     """目标组合表"""
+
     __tablename__ = "portfolios"
     __table_args__ = (
         Index("ix_port_model", "model_id"),
@@ -26,10 +28,9 @@ class Portfolio(Base):
 
 class PortfolioPosition(Base):
     """目标持仓明细表"""
+
     __tablename__ = "portfolio_positions"
-    __table_args__ = (
-        Index("ix_pp_portfolio", "portfolio_id"),
-    )
+    __table_args__ = (Index("ix_pp_portfolio", "portfolio_id"),)
 
     id: int = Column(Integer, primary_key=True, index=True)
     portfolio_id: int = Column(Integer, index=True, nullable=False)
@@ -44,10 +45,9 @@ class PortfolioPosition(Base):
 
 class RebalanceRecord(Base):
     """调仓记录表"""
+
     __tablename__ = "rebalance_records"
-    __table_args__ = (
-        Index("ix_rr_model_date", "model_id", "trade_date"),
-    )
+    __table_args__ = (Index("ix_rr_model_date", "model_id", "trade_date"),)
 
     id: int = Column(Integer, primary_key=True, index=True)
     model_id: int = Column(Integer, index=True, nullable=False)
@@ -63,15 +63,16 @@ class RebalanceRecord(Base):
     created_at: DateTime = Column(DateTime, server_default=func.now())
 
     def __repr__(self):
-        return f"<RebalanceRecord(model_id={self.model_id}, trade_date='{self.trade_date}', type='{self.rebalance_type}')>"
+        return (
+            f"<RebalanceRecord(model_id={self.model_id}, trade_date='{self.trade_date}', type='{self.rebalance_type}')>"
+        )
 
 
 class TimingSignal(Base):
     """择时信号表"""
+
     __tablename__ = "timing_signals"
-    __table_args__ = (
-        Index("ix_ts_model_date", "model_id", "trade_date"),
-    )
+    __table_args__ = (Index("ix_ts_model_date", "model_id", "trade_date"),)
 
     id: int = Column(Integer, primary_key=True, index=True)
     model_id: int = Column(Integer, index=True, nullable=False)
@@ -88,6 +89,7 @@ class TimingSignal(Base):
 
 class TimingConfig(Base):
     """择时配置表"""
+
     __tablename__ = "timing_configs"
 
     id: int = Column(Integer, primary_key=True, index=True)

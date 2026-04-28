@@ -2,17 +2,21 @@
 自适应因子选择与权重优化引擎
 核心: 滚动因子筛选、多目标权重优化、因子状态机、正交化选择、过拟合检测
 """
-from typing import Dict, List, Optional, Tuple, Any
-from enum import Enum
-from dataclasses import dataclass, field
-from datetime import date, datetime
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date
+from enum import Enum, StrEnum
+from typing import Any
+
 import numpy as np
 import pandas as pd
-from scipy import stats as sp_stats
+
 from app.core.logging import logger
 
 
-class FactorState(str, Enum):
+class FactorState(StrEnum):
     ACTIVE = "active"
     MONITORING = "monitoring"
     INACTIVE = "inactive"
@@ -21,6 +25,7 @@ class FactorState(str, Enum):
 @dataclass
 class FactorProfile:
     """因子画像: 跟踪每个因子的实时状态"""
+
     factor_code: str
     state: FactorState = FactorState.ACTIVE
     ic_mean: float = 0.0
@@ -30,7 +35,7 @@ class FactorProfile:
     decay_half_life: int = 60
     n_periods: int = 0
     consecutive_low_ic: int = 0
-    last_active_date: Optional[date] = None
+    last_active_date: date | None = None
     weight: float = 0.0
 
 
@@ -41,23 +46,22 @@ class AdaptiveFactorEngine:
     """
 
     # 因子筛选阈值
-    MIN_IC_MEAN = 0.02          # A股横截面IC低于0.02基本无选股区分度
-    MIN_ICIR = 0.3              # ICIR<0.3意味着IC波动大于均值的3倍，信号不可靠
-    MIN_COVERAGE = 0.6          # 覆盖率低于60%的因子易产生生存偏差
-    MAX_TURNOVER_COST = 0.02    # 换手成本2bp，超过则因子净收益被交易费用侵蚀
-    MONITORING_ICIR = 0.5       # ICIR降至0.5以下开始监控，尚未失效但需要关注
-    CONSECUTIVE_LOW_LIMIT = 5   # 连续5期(约1个月)低IC才降权，避免单期噪声误判
-    RECOVERY_ICIR = 0.8         # 恢复阈值高于监控阈值(0.5)，迟滞设计防止状态反复跳动
+    MIN_IC_MEAN = 0.02  # A股横截面IC低于0.02基本无选股区分度
+    MIN_ICIR = 0.3  # ICIR<0.3意味着IC波动大于均值的3倍，信号不可靠
+    MIN_COVERAGE = 0.6  # 覆盖率低于60%的因子易产生生存偏差
+    MAX_TURNOVER_COST = 0.02  # 换手成本2bp，超过则因子净收益被交易费用侵蚀
+    MONITORING_ICIR = 0.5  # ICIR降至0.5以下开始监控，尚未失效但需要关注
+    CONSECUTIVE_LOW_LIMIT = 5  # 连续5期(约1个月)低IC才降权，避免单期噪声误判
+    RECOVERY_ICIR = 0.8  # 恢复阈值高于监控阈值(0.5)，迟滞设计防止状态反复跳动
 
-    def __init__(self, factor_profiles: Optional[Dict[str, FactorProfile]] = None):
+    def __init__(self, factor_profiles: dict[str, FactorProfile] | None = None):
         self.factor_profiles = factor_profiles or {}
 
     # ==================== 1. 滚动因子筛选 ====================
 
-    def select_factors_rolling(self, ic_history: pd.DataFrame,
-                                lookback: int = 60,
-                                min_factors: int = 8,
-                                max_factors: int = 30) -> List[str]:
+    def select_factors_rolling(
+        self, ic_history: pd.DataFrame, lookback: int = 60, min_factors: int = 8, max_factors: int = 30
+    ) -> list[str]:
         """
         滚动因子筛选
         基于近期IC/ICIR/覆盖率/换手成本综合评分，选择有效因子子集
@@ -74,25 +78,25 @@ class AdaptiveFactorEngine:
         recent = ic_history.tail(lookback)
         factor_scores = {}
 
-        for factor_code in recent['factor_code'].unique():
-            f_ic = recent[recent['factor_code'] == factor_code]
+        for factor_code in recent["factor_code"].unique():
+            f_ic = recent[recent["factor_code"] == factor_code]
             if len(f_ic) < 10:
                 continue  # 10个观测点以下IC统计量不具备参考价值
 
-            ic_mean = f_ic['ic'].mean()
-            ic_std = f_ic['ic'].std()
+            ic_mean = f_ic["ic"].mean()
+            ic_std = f_ic["ic"].std()
             icir = ic_mean / ic_std if ic_std > 0 else 0
-            rank_ic_mean = f_ic['rank_ic'].mean() if 'rank_ic' in f_ic.columns else 0
+            rank_ic_mean = f_ic["rank_ic"].mean() if "rank_ic" in f_ic.columns else 0
             coverage = len(f_ic) / lookback
-            ic_positive_rate = (f_ic['ic'] > 0).mean()
+            ic_positive_rate = (f_ic["ic"] > 0).mean()
 
             # 综合评分: ICIR为主 + IC胜率 + RankIC辅助
             # ICIR权重0.5最大，因其同时衡量方向和稳定性；胜率0.3次之，RankIC仅作辅助
             # 因为RankIC通常与IC高度相关，给过高权重会重复计算信息
             score = (
-                0.5 * abs(icir) +
-                0.3 * (ic_positive_rate - 0.5) * 2 +  # 减0.5再乘2，将[0.5,1]映射到[0,1]
-                0.2 * abs(rank_ic_mean) * 10  # RankIC量级约0.01-0.05，乘10对齐ICIR量级
+                0.5 * abs(icir)
+                + 0.3 * (ic_positive_rate - 0.5) * 2  # 减0.5再乘2，将[0.5,1]映射到[0,1]
+                + 0.2 * abs(rank_ic_mean) * 10  # RankIC量级约0.01-0.05，乘10对齐ICIR量级
             )
 
             # 方向惩罚: IC为负的因子降权，保留0.3而非直接归零
@@ -101,23 +105,23 @@ class AdaptiveFactorEngine:
                 score *= 0.3
 
             factor_scores[factor_code] = {
-                'score': score,
-                'ic_mean': ic_mean,
-                'icir': icir,
-                'coverage': coverage,
-                'ic_positive_rate': ic_positive_rate,
+                "score": score,
+                "ic_mean": ic_mean,
+                "icir": icir,
+                "coverage": coverage,
+                "ic_positive_rate": ic_positive_rate,
             }
 
         if not factor_scores:
             return []
 
         # 按综合评分排序
-        sorted_factors = sorted(factor_scores.items(), key=lambda x: -x[1]['score'])
+        sorted_factors = sorted(factor_scores.items(), key=lambda x: -x[1]["score"])
 
         # 筛选: 评分>0 且满足最低条件
         selected = []
         for factor_code, metrics in sorted_factors:
-            if metrics['icir'] >= self.MIN_ICIR and metrics['coverage'] >= self.MIN_COVERAGE:
+            if metrics["icir"] >= self.MIN_ICIR and metrics["coverage"] >= self.MIN_COVERAGE:
                 selected.append(factor_code)
             if len(selected) >= max_factors:
                 break
@@ -144,14 +148,16 @@ class AdaptiveFactorEngine:
 
     # ==================== 2. 多目标权重优化 ====================
 
-    def optimize_weights_multi_objective(self,
-                                          icir_values: Dict[str, float],
-                                          turnover_costs: Dict[str, float] = None,
-                                          factor_decay: Dict[str, float] = None,
-                                          prev_weights: Dict[str, float] = None,
-                                          turnover_penalty: float = 0.3,
-                                          decay_penalty: float = 0.1,
-                                          stability_penalty: float = 0.2) -> Dict[str, float]:
+    def optimize_weights_multi_objective(
+        self,
+        icir_values: dict[str, float],
+        turnover_costs: dict[str, float] | None = None,
+        factor_decay: dict[str, float] | None = None,
+        prev_weights: dict[str, float] | None = None,
+        turnover_penalty: float = 0.3,
+        decay_penalty: float = 0.1,
+        stability_penalty: float = 0.2,
+    ) -> dict[str, float]:
         # 换手惩罚0.3为默认值，在ICIR均约1.0时约30%权重变化被抑制
         # 稳定性惩罚0.2与换手惩罚互补：换手惩罚约束一阶差异，稳定性约束二阶波动
         """
@@ -176,22 +182,13 @@ class AdaptiveFactorEngine:
         icir = np.array([icir_values[f] for f in factors])
 
         # 换手成本
-        if turnover_costs:
-            tc = np.array([turnover_costs.get(f, 0) for f in factors])
-        else:
-            tc = np.zeros(n)
+        _tc = np.array([turnover_costs.get(f, 0) for f in factors]) if turnover_costs else np.zeros(n)
 
         # 因子衰减
-        if factor_decay:
-            decay = np.array([factor_decay.get(f, 0) for f in factors])
-        else:
-            decay = np.zeros(n)
+        decay = np.array([factor_decay.get(f, 0) for f in factors]) if factor_decay else np.zeros(n)
 
         # 上期权重
-        if prev_weights:
-            w_prev = np.array([prev_weights.get(f, 1.0 / n) for f in factors])
-        else:
-            w_prev = np.ones(n) / n
+        w_prev = np.array([prev_weights.get(f, 1.0 / n) for f in factors]) if prev_weights else np.ones(n) / n
 
         # 只保留正ICIR的因子
         positive_mask = icir > 0
@@ -205,10 +202,7 @@ class AdaptiveFactorEngine:
         # 等权作为fallback：当所有ICIR接近0时ICIR加权退化为等权
         abs_icir = np.abs(icir) * positive_mask
         total_icir = abs_icir.sum()
-        if total_icir > 0:
-            w = abs_icir / total_icir
-        else:
-            w = np.ones(n) / n
+        w = abs_icir / total_icir if total_icir > 0 else np.ones(n) / n
 
         # 迭代优化: 梯度下降 + 投影
         learning_rate = 0.01
@@ -299,10 +293,9 @@ class AdaptiveFactorEngine:
 
     # ==================== 3. 因子状态机 ====================
 
-    def update_factor_state(self, factor_code: str,
-                             recent_ic: pd.Series,
-                             coverage: float = 1.0,
-                             trade_date: Optional[date] = None) -> FactorProfile:
+    def update_factor_state(
+        self, factor_code: str, recent_ic: pd.Series, coverage: float = 1.0, trade_date: date | None = None
+    ) -> FactorProfile:
         """
         更新因子状态
         状态转换规则:
@@ -378,14 +371,11 @@ class AdaptiveFactorEngine:
 
         return profile
 
-    def get_active_factors(self) -> List[str]:
+    def get_active_factors(self) -> list[str]:
         """获取所有活跃因子"""
-        return [
-            f for f, p in self.factor_profiles.items()
-            if p.state in (FactorState.ACTIVE, FactorState.MONITORING)
-        ]
+        return [f for f, p in self.factor_profiles.items() if p.state in (FactorState.ACTIVE, FactorState.MONITORING)]
 
-    def get_factor_weights_by_state(self) -> Dict[str, float]:
+    def get_factor_weights_by_state(self) -> dict[str, float]:
         """根据状态分配权重: ACTIVE=1.0, MONITORING=0.5, INACTIVE=0.0"""
         # 监控态0.5权重：不完全排除但降低敞口，避免因子刚进监控就大幅调仓
         weights = {}
@@ -400,10 +390,13 @@ class AdaptiveFactorEngine:
 
     # ==================== 4. 正交化因子选择 ====================
 
-    def select_orthogonal_subset(self, factor_corr_matrix: pd.DataFrame,
-                                   factor_icir: Dict[str, float],
-                                   max_factors: int = 30,
-                                   corr_threshold: float = 0.6) -> List[str]:
+    def select_orthogonal_subset(
+        self,
+        factor_corr_matrix: pd.DataFrame,
+        factor_icir: dict[str, float],
+        max_factors: int = 30,
+        corr_threshold: float = 0.6,
+    ) -> list[str]:
         # corr_threshold=0.6: A股因子间相关系数超0.6时信息重叠严重
         # 0.6比常见0.5更宽松，因A股因子池有限，过严会损失因子多样性
         """
@@ -468,11 +461,14 @@ class AdaptiveFactorEngine:
 
     # ==================== 5. 过拟合检测 ====================
 
-    def detect_overfitting(self, train_sharpe: float,
-                            test_sharpe: float,
-                            n_trials: int = 1,
-                            backtest_years: float = 2.0,
-                            returns: pd.Series = None) -> Dict[str, Any]:
+    def detect_overfitting(
+        self,
+        train_sharpe: float,
+        test_sharpe: float,
+        n_trials: int = 1,
+        backtest_years: float = 2.0,
+        returns: pd.Series = None,
+    ) -> dict[str, Any]:
         """
         过拟合检测
         综合使用: 通胀夏普比率(DSR) + 训练/测试Sharpe衰减 + 蒙特卡洛置换检验
@@ -485,27 +481,28 @@ class AdaptiveFactorEngine:
             returns: 策略收益率序列(用于置换检验)
         """
         result = {
-            'train_sharpe': train_sharpe,
-            'test_sharpe': test_sharpe,
-            'sharpe_decay': 0.0,
-            'is_overfit': False,
-            'overfitting_score': 0.0,
+            "train_sharpe": train_sharpe,
+            "test_sharpe": test_sharpe,
+            "sharpe_decay": 0.0,
+            "is_overfit": False,
+            "overfitting_score": 0.0,
         }
 
         # 1. Sharpe衰减率
         if abs(train_sharpe) > 0.01:
             decay = 1 - test_sharpe / train_sharpe
-            result['sharpe_decay'] = round(decay, 4)
+            result["sharpe_decay"] = round(decay, 4)
             # 衰减>50%视为过拟合信号
             # A股策略样本外衰减50%以上通常意味着训练期过度挖掘了数据特征
             if decay > 0.5:
-                result['is_overfit'] = True
-                result['overfitting_score'] += 0.4
+                result["is_overfit"] = True
+                result["overfitting_score"] += 0.4
 
         # 2. 通胀夏普比率 (DSR)
         if n_trials > 1 and abs(test_sharpe) > 0.01:
             try:
                 from scipy.stats import norm
+
                 # E[max_SR] ≈ sqrt(2*ln(N) / T)
                 var_sr = 1.0 / max(backtest_years, 0.5)
                 expected_max_sr = np.sqrt(var_sr) * np.sqrt(2 * np.log(max(n_trials, 2)))
@@ -515,13 +512,13 @@ class AdaptiveFactorEngine:
                 else:
                     dsr = 1.0 if test_sharpe > expected_max_sr else 0.0
 
-                result['dsr'] = round(dsr, 4)
-                result['expected_max_sharpe'] = round(expected_max_sr, 2)
+                result["dsr"] = round(dsr, 4)
+                result["expected_max_sharpe"] = round(expected_max_sr, 2)
                 # DSR<0.95表示测试Sharpe未能显著超越多重检验下的期望最大Sharpe
                 # 95%置信度是金融研究中的常用门槛
                 if dsr < 0.95:
-                    result['is_overfit'] = True
-                    result['overfitting_score'] += 0.3 * (1 - dsr)
+                    result["is_overfit"] = True
+                    result["overfitting_score"] += 0.3 * (1 - dsr)
             except Exception:
                 pass
 
@@ -529,30 +526,28 @@ class AdaptiveFactorEngine:
         if returns is not None and len(returns) > 60:
             # 至少60个观测点(约3个月)才进行置换检验，样本过少结果无意义
             mc_result = self._permutation_test(returns, n_permutations=500)
-            result['permutation_p_value'] = mc_result['p_value']
-            if mc_result['p_value'] > 0.05:
+            result["permutation_p_value"] = mc_result["p_value"]
+            if mc_result["p_value"] > 0.05:
                 # p>0.05说明策略Sharpe在随机排列下也容易出现，过拟合嫌疑大
-                result['is_overfit'] = True
-                result['overfitting_score'] += 0.3
+                result["is_overfit"] = True
+                result["overfitting_score"] += 0.3
 
         # 综合评分
-        result['overfitting_score'] = round(result['overfitting_score'], 4)
+        result["overfitting_score"] = round(result["overfitting_score"], 4)
 
         logger.info(
             "Overfitting detection completed",
             extra={
                 "train_sharpe": train_sharpe,
                 "test_sharpe": test_sharpe,
-                "is_overfit": result['is_overfit'],
-                "overfitting_score": result['overfitting_score'],
+                "is_overfit": result["is_overfit"],
+                "overfitting_score": result["overfitting_score"],
             },
         )
 
         return result
 
-    def _permutation_test(self, returns: pd.Series,
-                           n_permutations: int = 500,
-                           block_size: int = 5) -> Dict[str, float]:
+    def _permutation_test(self, returns: pd.Series, n_permutations: int = 500, block_size: int = 5) -> dict[str, float]:
         """块置换检验"""
         # block_size=5保留5日内的收益率自相关结构，单纯打乱会低估方差
         actual_sharpe = returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0
@@ -563,10 +558,9 @@ class AdaptiveFactorEngine:
             n_blocks = n // block_size
             block_indices = np.arange(n_blocks)
             np.random.shuffle(block_indices)
-            permuted = np.concatenate([
-                returns.iloc[i * block_size:(i + 1) * block_size].values
-                for i in block_indices
-            ])
+            permuted = np.concatenate(
+                [returns.iloc[i * block_size : (i + 1) * block_size].values for i in block_indices]
+            )
             remainder = n % block_size
             if remainder > 0:
                 permuted = np.concatenate([permuted, returns.iloc[-remainder:].values])
@@ -574,12 +568,11 @@ class AdaptiveFactorEngine:
             permuted_sharpes.append(perm_sharpe)
 
         p_value = sum(1 for s in permuted_sharpes if s >= actual_sharpe) / n_permutations
-        return {'p_value': p_value, 'actual_sharpe': actual_sharpe}
+        return {"p_value": p_value, "actual_sharpe": actual_sharpe}
 
     # ==================== 6. 因子衰减分析 ====================
 
-    def analyze_factor_decay(self, ic_series: pd.Series,
-                              half_life_init: int = 60) -> Dict[str, Any]:
+    def analyze_factor_decay(self, ic_series: pd.Series, half_life_init: int = 60) -> dict[str, Any]:
         """
         分析因子IC衰减
         用指数衰减模型拟合IC时间序列: IC(t) = IC_0 * exp(-t/τ) + noise
@@ -587,7 +580,7 @@ class AdaptiveFactorEngine:
         """
         ic = ic_series.dropna()
         if len(ic) < 20:
-            return {'half_life': np.nan, 'is_decaying': False}
+            return {"half_life": np.nan, "is_decaying": False}
 
         # 拟合指数衰减: IC(t) = a * exp(-b*t) + c
         t = np.arange(len(ic))
@@ -600,26 +593,25 @@ class AdaptiveFactorEngine:
                 return a * np.exp(-b * t) + c
 
             popt, _ = curve_fit(
-                exp_decay, t, ic_values,
+                exp_decay,
+                t,
+                ic_values,
                 p0=[ic_values[0], 0.01, ic_values.mean()],
                 maxfev=5000,
             )
             a, b, c = popt
 
-            if b > 0:
-                half_life = np.log(2) / b
-            else:
-                half_life = np.inf
+            half_life = np.log(2) / b if b > 0 else np.inf
 
             is_decaying = b > 0.005 and half_life < len(ic) * 0.8
             # b>0.005排除伪衰减(拟合噪声)，半衰期<80%序列长度确认衰减在观测期内可观测
 
             return {
-                'half_life': round(half_life, 1),
-                'decay_rate': round(b, 6),
-                'initial_ic': round(a, 4),
-                'steady_state_ic': round(c, 4),
-                'is_decaying': is_decaying,
+                "half_life": round(half_life, 1),
+                "decay_rate": round(b, 6),
+                "initial_ic": round(a, 4),
+                "steady_state_ic": round(c, 4),
+                "is_decaying": is_decaying,
             }
         except Exception:
             # 回退: 用前后半段IC均值比较
@@ -631,25 +623,25 @@ class AdaptiveFactorEngine:
             # 后半段IC降至前半段70%以下判定为衰减，阈值0.7容忍正常波动
 
             return {
-                'half_life': np.nan,
-                'first_half_ic': round(first_half_ic, 4),
-                'second_half_ic': round(second_half_ic, 4),
-                'is_decaying': is_decaying,
+                "half_life": np.nan,
+                "first_half_ic": round(first_half_ic, 4),
+                "second_half_ic": round(second_half_ic, 4),
+                "is_decaying": is_decaying,
             }
 
     # ==================== 7. 批量更新因子画像 ====================
 
-    def batch_update_profiles(self, ic_history: pd.DataFrame,
-                               coverage_data: Optional[Dict[str, float]] = None,
-                               trade_date: Optional[date] = None) -> Dict[str, FactorProfile]:
+    def batch_update_profiles(
+        self, ic_history: pd.DataFrame, coverage_data: dict[str, float] | None = None, trade_date: date | None = None
+    ) -> dict[str, FactorProfile]:
         """
         批量更新所有因子画像
         """
         if ic_history.empty:
             return self.factor_profiles
 
-        for factor_code in ic_history['factor_code'].unique():
-            f_ic = ic_history[ic_history['factor_code'] == factor_code]['ic']
+        for factor_code in ic_history["factor_code"].unique():
+            f_ic = ic_history[ic_history["factor_code"] == factor_code]["ic"]
             coverage = coverage_data.get(factor_code, 1.0) if coverage_data else 1.0
             self.update_factor_state(factor_code, f_ic, coverage, trade_date)
 

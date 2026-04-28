@@ -1,10 +1,12 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Index
+from sqlalchemy import Column, Date, DateTime, Float, Index, Integer, String
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class IndexComponent(Base):
     """指数成分股历史表"""
+
     __tablename__ = "index_components"
     __table_args__ = (
         Index("ix_ic_code_date", "index_code", "trade_date"),

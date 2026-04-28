@@ -5,32 +5,35 @@ A股回测引擎
 机构级增强: 参与率滑点模型、Walk-Forward验证、蒙特卡洛置换检验、通胀夏普比率
 事件驱动架构: BacktestEvent/Order/OrderBook + EventDrivenBacktestEngine + 自适应调仓
 """
-from typing import Any, Callable, Dict, List, Optional, Tuple, Protocol
-from datetime import datetime, date, timedelta
+
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum
+from datetime import date
+from enum import Enum, StrEnum
+from typing import Any, Protocol
+
 import numpy as np
 import pandas as pd
 from sqlalchemy.orm import Session
-from app.core.logging import logger
-from app.core.config import settings
 
+from app.core.config import settings
+from app.core.logging import logger
 
 # A股交易成本常量 (ADD 11节)
 DEFAULT_COMMISSION_RATE = 0.00025  # 万2.5，当前主流券商机构费率
-DEFAULT_STAMP_TAX_RATE = 0.001     # 千1，A股单边征收（仅卖出），2023年减半后现行税率
+DEFAULT_STAMP_TAX_RATE = 0.001  # 千1，A股单边征收（仅卖出），2023年减半后现行税率
 DEFAULT_TRANSFER_FEE_RATE = 0.00001  # 过户费率，十万分之一
-DEFAULT_SLIPPAGE_RATE = 0.001      # 固定滑点0.1%，兜底值；有成交量和波动率时使用参与率模型
-MIN_COMMISSION = 5.0               # 交易所规定每笔最低佣金5元
+DEFAULT_SLIPPAGE_RATE = 0.001  # 固定滑点0.1%，兜底值；有成交量和波动率时使用参与率模型
+MIN_COMMISSION = 5.0  # 交易所规定每笔最低佣金5元
 
 # 涨跌停限制 (ADD 12.4节)
 # 各板块涨跌停幅度不同，必须按板块分别判断，否则会误判停板状态
 # 注意: pct_chg在数据源中为百分比形式(如10.0表示10%), 以下常量也使用百分比
-MAIN_BOARD_LIMIT_PCT = 10.0   # 主板 10%
-GEM_LIMIT_PCT = 20.0         # 创业板 20% — 2020年注册制改革后由10%放宽
-STAR_LIMIT_PCT = 20.0        # 科创板 20% — 首日不设限，此后20%
-ST_LIMIT_PCT = 5.0          # ST 5% — 风险警示股流动性更差，涨跌停更窄
-NORTH_LIMIT_PCT = 30.0       # 北交所 30%
+MAIN_BOARD_LIMIT_PCT = 10.0  # 主板 10%
+GEM_LIMIT_PCT = 20.0  # 创业板 20% — 2020年注册制改革后由10%放宽
+STAR_LIMIT_PCT = 20.0  # 科创板 20% — 首日不设限，此后20%
+ST_LIMIT_PCT = 5.0  # ST 5% — 风险警示股流动性更差，涨跌停更窄
+NORTH_LIMIT_PCT = 30.0  # 北交所 30%
 
 # 保留旧常量名(小数形式)以兼容外部引用
 MAIN_BOARD_LIMIT = 0.10
@@ -45,8 +48,10 @@ LOT_SIZE = 100  # A股最小交易单位100股，不足100股无法下单
 
 # ==================== 事件驱动架构 ====================
 
-class BacktestEventType(str, Enum):
+
+class BacktestEventType(StrEnum):
     """回测事件类型"""
+
     MARKET_OPEN = "market_open"
     MARKET_CLOSE = "market_close"
     REBALANCE = "rebalance"
@@ -57,13 +62,15 @@ class BacktestEventType(str, Enum):
 @dataclass
 class BacktestEvent:
     """回测事件"""
+
     event_type: BacktestEventType
     trade_date: date
-    data: Dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
 
 
-class OrderStatus(str, Enum):
+class OrderStatus(StrEnum):
     """订单状态"""
+
     PENDING = "pending"
     FILLED = "filled"
     PARTIAL_FILLED = "partial_filled"
@@ -74,6 +81,7 @@ class OrderStatus(str, Enum):
 @dataclass
 class Order:
     """订单 (目标权重→订单→成交的完整链路)"""
+
     order_id: str
     ts_code: str
     direction: str  # 'buy' or 'sell'
@@ -93,8 +101,9 @@ class Order:
 @dataclass
 class OrderBook:
     """订单簿 - 管理当日所有订单"""
-    orders: List[Order] = field(default_factory=list)
-    rejected_orders: List[Order] = field(default_factory=list)
+
+    orders: list[Order] = field(default_factory=list)
+    rejected_orders: list[Order] = field(default_factory=list)
 
     def add_order(self, order: Order) -> None:
         self.orders.append(order)
@@ -103,14 +112,14 @@ class OrderBook:
         order.status = OrderStatus.REJECTED
         self.rejected_orders.append(order)
 
-    def filled_orders(self) -> List[Order]:
+    def filled_orders(self) -> list[Order]:
         return [o for o in self.orders if o.status == OrderStatus.FILLED]
 
     def total_buy_amount(self) -> float:
-        return sum(o.filled_amount for o in self.orders if o.direction == 'buy' and o.status == OrderStatus.FILLED)
+        return sum(o.filled_amount for o in self.orders if o.direction == "buy" and o.status == OrderStatus.FILLED)
 
     def total_sell_amount(self) -> float:
-        return sum(o.filled_amount for o in self.orders if o.direction == 'sell' and o.status == OrderStatus.FILLED)
+        return sum(o.filled_amount for o in self.orders if o.direction == "sell" and o.status == OrderStatus.FILLED)
 
     def clear(self) -> None:
         self.orders.clear()
@@ -119,12 +128,14 @@ class OrderBook:
 
 class SignalGenerator(Protocol):
     """信号生成器协议 (替代Callable，类型安全)"""
-    def __call__(self, trade_date: date, universe: List[str], state: Any) -> Dict[str, float]: ...
+
+    def __call__(self, trade_date: date, universe: list[str], state: Any) -> dict[str, float]: ...
 
 
 @dataclass
 class TransactionCost:
     """交易成本模型 (ADD 11节 + 机构级增强)"""
+
     commission_rate: float = DEFAULT_COMMISSION_RATE
     stamp_tax_rate: float = DEFAULT_STAMP_TAX_RATE
     transfer_fee_rate: float = DEFAULT_TRANSFER_FEE_RATE
@@ -134,9 +145,9 @@ class TransactionCost:
     impact_coefficient: float = 0.3  # 市场冲击系数 — Almgren-Chriss模型简化参数
     base_spread: float = 0.0005  # 基础价差 5bps — 即使参与率极低也无法避免的买卖价差
 
-    def calc_buy_cost(self, amount: float,
-                      daily_volume: Optional[float] = None,
-                      volatility: Optional[float] = None) -> Dict[str, float]:
+    def calc_buy_cost(
+        self, amount: float, daily_volume: float | None = None, volatility: float | None = None
+    ) -> dict[str, float]:
         """
         计算买入成本
         支持参与率滑点模型: slippage = base_spread + impact * sqrt(participation_rate)
@@ -155,16 +166,16 @@ class TransactionCost:
 
         total = commission + transfer_fee + slippage
         return {
-            'commission': round(commission, 2),
-            'stamp_tax': 0.0,
-            'transfer_fee': round(transfer_fee, 2),
-            'slippage': round(slippage, 2),
-            'total_cost': round(total, 2),
+            "commission": round(commission, 2),
+            "stamp_tax": 0.0,
+            "transfer_fee": round(transfer_fee, 2),
+            "slippage": round(slippage, 2),
+            "total_cost": round(total, 2),
         }
 
-    def calc_sell_cost(self, amount: float,
-                       daily_volume: Optional[float] = None,
-                       volatility: Optional[float] = None) -> Dict[str, float]:
+    def calc_sell_cost(
+        self, amount: float, daily_volume: float | None = None, volatility: float | None = None
+    ) -> dict[str, float]:
         """计算卖出成本（含印花税）"""
         commission = max(amount * self.commission_rate, self.min_commission)
         stamp_tax = amount * self.stamp_tax_rate
@@ -178,24 +189,25 @@ class TransactionCost:
 
         total = commission + stamp_tax + transfer_fee + slippage
         return {
-            'commission': round(commission, 2),
-            'stamp_tax': round(stamp_tax, 2),
-            'transfer_fee': round(transfer_fee, 2),
-            'slippage': round(slippage, 2),
-            'total_cost': round(total, 2),
+            "commission": round(commission, 2),
+            "stamp_tax": round(stamp_tax, 2),
+            "transfer_fee": round(transfer_fee, 2),
+            "slippage": round(slippage, 2),
+            "total_cost": round(total, 2),
         }
 
 
 @dataclass
 class Position:
     """持仓信息"""
+
     security_id: str
     shares: int = 0
     cost_price: float = 0.0
     market_value: float = 0.0
     weight: float = 0.0
-    board_type: str = 'main'  # main, gem, star, st
-    entry_date: Optional[date] = None  # 首次买入日期
+    board_type: str = "main"  # main, gem, star, st
+    entry_date: date | None = None  # 首次买入日期
     shares_bought_today: int = 0  # 当日买入股数 — T+1规则：当日买入不可当日卖出，需跟踪隔离
     dividend_income: float = 0.0  # 累计分红收入(现金分红) — 用于计算含分红总收益
 
@@ -203,22 +215,26 @@ class Position:
 @dataclass
 class BacktestState:
     """回测状态"""
+
     cash: float = 1000000.0
     initial_capital: float = 1000000.0
-    positions: Dict[str, Position] = field(default_factory=dict)
-    nav_history: List[Dict] = field(default_factory=list)
-    trade_records: List[Dict] = field(default_factory=list)
-    position_history: List[Dict] = field(default_factory=list)
-    holdings_snapshots: List[Dict] = field(default_factory=list)  # 每调仓日持仓快照
+    positions: dict[str, Position] = field(default_factory=dict)
+    nav_history: list[dict] = field(default_factory=list)
+    trade_records: list[dict] = field(default_factory=list)
+    position_history: list[dict] = field(default_factory=list)
+    holdings_snapshots: list[dict] = field(default_factory=list)  # 每调仓日持仓快照
 
 
 class ABShareBacktestEngine:
     """A股回测引擎 - 符合ADD 12节和PRD 9.8节"""
 
-    def __init__(self, db: Optional[Session] = None,
-                 commission_rate: float = DEFAULT_COMMISSION_RATE,
-                 stamp_tax_rate: float = DEFAULT_STAMP_TAX_RATE,
-                 slippage_rate: float = DEFAULT_SLIPPAGE_RATE) -> None:
+    def __init__(
+        self,
+        db: Session | None = None,
+        commission_rate: float = DEFAULT_COMMISSION_RATE,
+        stamp_tax_rate: float = DEFAULT_STAMP_TAX_RATE,
+        slippage_rate: float = DEFAULT_SLIPPAGE_RATE,
+    ) -> None:
         self.db = db
         self.cost_model = TransactionCost(
             commission_rate=commission_rate,
@@ -228,8 +244,9 @@ class ABShareBacktestEngine:
 
     # ==================== 分红派息处理 ====================
 
-    def process_dividend(self, state: BacktestState, trade_date: date,
-                         dividend_data: Optional[Dict[str, Dict]] = None) -> None:
+    def process_dividend(
+        self, state: BacktestState, trade_date: date, dividend_data: dict[str, dict] | None = None
+    ) -> None:
         """处理分红派息: 现金分红计入现金，送股/转增调整持仓股数
         Args:
             state: 回测状态
@@ -258,7 +275,7 @@ class ABShareBacktestEngine:
                 tax_rate = 0.20  # 短线交易惩罚性税率
 
             # 现金分红: 每股现金分红 × 持仓股数
-            cash_div_per_share = div_info.get('cash_div', 0)
+            cash_div_per_share = div_info.get("cash_div", 0)
             if cash_div_per_share > 0:
                 net_cash_div = cash_div_per_share * (1 - tax_rate) * pos.shares
                 state.cash += net_cash_div
@@ -270,8 +287,8 @@ class ABShareBacktestEngine:
                 )
 
             # 送股/转增: 调整持仓股数和成本价
-            bonus_per_share = div_info.get('bonus_shares', 0)
-            converted_per_share = div_info.get('converted_shares', 0)
+            bonus_per_share = div_info.get("bonus_shares", 0)
+            converted_per_share = div_info.get("converted_shares", 0)
             total_new_shares = (bonus_per_share + converted_per_share) * pos.shares
 
             if total_new_shares > 0:
@@ -295,36 +312,34 @@ class ABShareBacktestEngine:
 
     def get_board_type(self, ts_code: str) -> str:
         """判断板块类型"""
-        if ts_code.endswith('.SZ') and ts_code.startswith('3'):
-            return 'gem'  # 创业板
-        elif ts_code.endswith('.SH') and ts_code.startswith('688'):
-            return 'star'  # 科创板
-        elif ts_code.endswith('.BJ'):
-            return 'north'  # 北交所
-        return 'main'
+        if ts_code.endswith(".SZ") and ts_code.startswith("3"):
+            return "gem"  # 创业板
+        if ts_code.endswith(".SH") and ts_code.startswith("688"):
+            return "star"  # 科创板
+        if ts_code.endswith(".BJ"):
+            return "north"  # 北交所
+        return "main"
 
     def get_limit_pct(self, board_type: str, is_st: bool = False) -> float:
         """获取涨跌停比例(百分比形式, 如10.0表示10%)"""
         if is_st:
             return ST_LIMIT_PCT
         limits = {
-            'main': MAIN_BOARD_LIMIT_PCT,
-            'gem': GEM_LIMIT_PCT,
-            'star': STAR_LIMIT_PCT,
-            'north': NORTH_LIMIT_PCT,
+            "main": MAIN_BOARD_LIMIT_PCT,
+            "gem": GEM_LIMIT_PCT,
+            "star": STAR_LIMIT_PCT,
+            "north": NORTH_LIMIT_PCT,
         }
         return limits.get(board_type, MAIN_BOARD_LIMIT_PCT)
 
-    def is_limit_up(self, pct_chg: float, board_type: str = 'main',
-                    is_st: bool = False) -> bool:
+    def is_limit_up(self, pct_chg: float, board_type: str = "main", is_st: bool = False) -> bool:
         """判断是否涨停 (ADD 12.4节)
         pct_chg为百分比形式(如10.0表示10%)
         """
         limit_pct = self.get_limit_pct(board_type, is_st)
         return pct_chg >= (limit_pct - 0.01)  # 允许0.01%误差 — 浮点精度和数据源四舍五入可能导致略低于理论涨停
 
-    def is_limit_down(self, pct_chg: float, board_type: str = 'main',
-                      is_st: bool = False) -> bool:
+    def is_limit_down(self, pct_chg: float, board_type: str = "main", is_st: bool = False) -> bool:
         """判断是否跌停
         pct_chg为百分比形式(如-10.0表示-10%)
         """
@@ -335,8 +350,9 @@ class ABShareBacktestEngine:
         """调整为100股整数倍 (ADD 12.4节)"""
         return int(shares // LOT_SIZE) * LOT_SIZE
 
-    def is_tradable(self, ts_code: str, trade_date: date,
-                    action: str, stock_data: Optional[Dict[str, Any]] = None) -> Tuple[bool, str]:
+    def is_tradable(
+        self, ts_code: str, trade_date: date, action: str, stock_data: dict[str, Any] | None = None
+    ) -> tuple[bool, str]:
         """
         判断是否可交易 (ADD 12.4节 + 11.2.2节)
 
@@ -347,31 +363,37 @@ class ABShareBacktestEngine:
             return False, "无数据"
 
         # 停牌检查
-        if stock_data.get('is_suspended', False):
+        if stock_data.get("is_suspended", False):
             return False, "停牌"
 
         # 涨跌停检查
-        pct_chg = stock_data.get('pct_chg', 0)
+        pct_chg = stock_data.get("pct_chg", 0)
         board_type = self.get_board_type(ts_code)
-        is_st = stock_data.get('is_st', False)
+        is_st = stock_data.get("is_st", False)
 
-        if action == 'buy' and self.is_limit_up(pct_chg, board_type, is_st):
+        if action == "buy" and self.is_limit_up(pct_chg, board_type, is_st):
             return False, "涨停无法买入"  # 涨停时买盘排队，实际无法成交
 
-        if action == 'sell' and self.is_limit_down(pct_chg, board_type, is_st):
+        if action == "sell" and self.is_limit_down(pct_chg, board_type, is_st):
             return False, "跌停无法卖出"  # 跌停时卖盘排队，持仓被冻结无法脱手
 
         # 退市整理检查
-        if stock_data.get('is_delist', False):
+        if stock_data.get("is_delist", False):
             return False, "退市整理"
 
         return True, ""
 
     # ==================== 交易执行 ====================
 
-    def execute_buy(self, state: BacktestState, ts_code: str,
-                    target_amount: float, price: float,
-                    trade_date: date, stock_data: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+    def execute_buy(
+        self,
+        state: BacktestState,
+        ts_code: str,
+        target_amount: float,
+        price: float,
+        trade_date: date,
+        stock_data: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
         """
         执行买入 (ADD 12.3节)
 
@@ -384,13 +406,15 @@ class ABShareBacktestEngine:
             stock_data: 当日行情数据
         """
         # 可交易性检查
-        tradable, reason = self.is_tradable(ts_code, trade_date, 'buy', stock_data)
+        tradable, reason = self.is_tradable(ts_code, trade_date, "buy", stock_data)
         if not tradable:
             return None
 
         # 计算可买入金额（考虑成本）
         # 必须预留交易成本，否则会出现现金透支
-        max_amount = state.cash / (1 + self.cost_model.commission_rate + self.cost_model.transfer_fee_rate + self.cost_model.slippage_rate)
+        max_amount = state.cash / (
+            1 + self.cost_model.commission_rate + self.cost_model.transfer_fee_rate + self.cost_model.slippage_rate
+        )
         buy_amount = min(target_amount, max_amount)
 
         if buy_amount <= 0:
@@ -404,13 +428,13 @@ class ABShareBacktestEngine:
         # 计算成交金额和成本
         amount = shares * price
         cost_detail = self.cost_model.calc_buy_cost(amount)
-        total_cost = cost_detail['total_cost']
+        total_cost = cost_detail["total_cost"]
 
         if amount + total_cost > state.cash:
             return None
 
         # 更新状态
-        state.cash -= (amount + total_cost)
+        state.cash -= amount + total_cost
 
         if ts_code in state.positions:
             pos = state.positions[ts_code]
@@ -431,23 +455,29 @@ class ABShareBacktestEngine:
             )
 
         trade = {
-            'trade_date': trade_date,
-            'security_id': ts_code,
-            'action': 'buy',
-            'price': price,
-            'quantity': shares,
-            'amount': round(amount, 2),
+            "trade_date": trade_date,
+            "security_id": ts_code,
+            "action": "buy",
+            "price": price,
+            "quantity": shares,
+            "amount": round(amount, 2),
             **cost_detail,
-            'trade_status': 'success',
+            "trade_status": "success",
         }
         state.trade_records.append(trade)
         return trade
 
-    def execute_sell(self, state: BacktestState, ts_code: str,
-                     shares: int, price: float,
-                     trade_date: date, stock_data: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+    def execute_sell(
+        self,
+        state: BacktestState,
+        ts_code: str,
+        shares: int,
+        price: float,
+        trade_date: date,
+        stock_data: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
         """执行卖出 (含T+1限制: 当日买入的部分不可卖出，原有持仓可卖出)"""
-        tradable, reason = self.is_tradable(ts_code, trade_date, 'sell', stock_data)
+        tradable, reason = self.is_tradable(ts_code, trade_date, "sell", stock_data)
         if not tradable:
             return None
 
@@ -461,8 +491,12 @@ class ABShareBacktestEngine:
         if sellable_shares <= 0:
             logger.debug(
                 "T+1 restriction: cannot sell stock bought today",
-                extra={"ts_code": ts_code, "trade_date": str(trade_date),
-                       "total_shares": pos.shares, "bought_today": pos.shares_bought_today},
+                extra={
+                    "ts_code": ts_code,
+                    "trade_date": str(trade_date),
+                    "total_shares": pos.shares,
+                    "bought_today": pos.shares_bought_today,
+                },
             )
             return None
 
@@ -474,30 +508,34 @@ class ABShareBacktestEngine:
         amount = sell_shares * price
         cost_detail = self.cost_model.calc_sell_cost(amount)
 
-        state.cash += (amount - cost_detail['total_cost'])
+        state.cash += amount - cost_detail["total_cost"]
         pos.shares -= sell_shares
 
         if pos.shares <= 0:
             del state.positions[ts_code]
 
         trade = {
-            'trade_date': trade_date,
-            'security_id': ts_code,
-            'action': 'sell',
-            'price': price,
-            'quantity': sell_shares,
-            'amount': round(amount, 2),
+            "trade_date": trade_date,
+            "security_id": ts_code,
+            "action": "sell",
+            "price": price,
+            "quantity": sell_shares,
+            "amount": round(amount, 2),
             **cost_detail,
-            'trade_status': 'success',
+            "trade_status": "success",
         }
         state.trade_records.append(trade)
         return trade
 
     # ==================== 净值计算 ====================
 
-    def calc_nav(self, state: BacktestState, trade_date: date,
-                 price_data: Dict[str, float],
-                 prev_price_data: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+    def calc_nav(
+        self,
+        state: BacktestState,
+        trade_date: date,
+        price_data: dict[str, float],
+        prev_price_data: dict[str, float] | None = None,
+    ) -> dict[str, Any]:
         """
         计算当日净值 (含持仓级P&L归因)
 
@@ -520,11 +558,11 @@ class ABShareBacktestEngine:
             if prev_price > 0:
                 pnl = pos.shares * (price - prev_price)
                 position_pnl[ts_code] = {
-                    'shares': pos.shares,
-                    'price': price,
-                    'prev_price': prev_price,
-                    'pnl': round(pnl, 2),
-                    'weight': 0,  # 后面计算
+                    "shares": pos.shares,
+                    "price": price,
+                    "prev_price": prev_price,
+                    "pnl": round(pnl, 2),
+                    "weight": 0,  # 后面计算
                 }
 
         total_nav = state.cash + position_value
@@ -533,27 +571,25 @@ class ABShareBacktestEngine:
         # 填充权重
         for ts_code in position_pnl:
             if total_nav > 0:
-                position_pnl[ts_code]['weight'] = round(
-                    state.positions[ts_code].market_value / total_nav, 6
-                )
+                position_pnl[ts_code]["weight"] = round(state.positions[ts_code].market_value / total_nav, 6)
 
         # 计算回撤 (nav和peak均为比率, drawdown = (nav - peak) / peak)
         if state.nav_history:
-            peak = max(h['nav'] for h in state.nav_history)
+            peak = max(h["nav"] for h in state.nav_history)
             drawdown = (nav - peak) / peak
         else:
             peak = nav
             drawdown = 0
 
         nav_record = {
-            'trade_date': trade_date,
-            'nav': nav,
-            'total_value': total_nav,
-            'cash': state.cash,
-            'position_value': position_value,
-            'drawdown': drawdown,
-            'num_positions': len(state.positions),
-            'position_pnl': position_pnl,
+            "trade_date": trade_date,
+            "nav": nav,
+            "total_value": total_nav,
+            "cash": state.cash,
+            "position_value": position_value,
+            "drawdown": drawdown,
+            "num_positions": len(state.positions),
+            "position_pnl": position_pnl,
         }
         state.nav_history.append(nav_record)
 
@@ -569,8 +605,9 @@ class ABShareBacktestEngine:
         )
         return nav_record
 
-    def position_pnl_attribution(self, nav_history: List[Dict[str, Any]],
-                                  factor_exposures: Optional[Dict[str, Dict[str, float]]] = None) -> Dict[str, Any]:
+    def position_pnl_attribution(
+        self, nav_history: list[dict[str, Any]], factor_exposures: dict[str, dict[str, float]] | None = None
+    ) -> dict[str, Any]:
         """
         持仓级P&L因子归因
         将P&L按因子暴露聚合: pnl_from_factor_k = Σ_i pnl_i * exposure_i_k
@@ -588,11 +625,11 @@ class ABShareBacktestEngine:
         # 汇总各持仓的总P&L
         total_pnl_by_stock = {}
         for record in nav_history:
-            position_pnl = record.get('position_pnl', {})
+            position_pnl = record.get("position_pnl", {})
             for ts_code, pnl_info in position_pnl.items():
                 if ts_code not in total_pnl_by_stock:
                     total_pnl_by_stock[ts_code] = 0
-                total_pnl_by_stock[ts_code] += pnl_info.get('pnl', 0)
+                total_pnl_by_stock[ts_code] += pnl_info.get("pnl", 0)
 
         # 按因子暴露聚合
         factor_pnl = {}
@@ -619,10 +656,10 @@ class ABShareBacktestEngine:
         total_pnl = sum(total_pnl_by_stock.values())
 
         result = {
-            'factor_pnl': {k: round(v, 2) for k, v in factor_pnl.items()},
-            'unattributed_pnl': round(unattributed_pnl, 2),
-            'total_pnl': round(total_pnl, 2),
-            'factor_pnl_pct': {k: round(v / total_pnl, 4) for k, v in factor_pnl.items()} if total_pnl != 0 else {},
+            "factor_pnl": {k: round(v, 2) for k, v in factor_pnl.items()},
+            "unattributed_pnl": round(unattributed_pnl, 2),
+            "total_pnl": round(total_pnl, 2),
+            "factor_pnl_pct": {k: round(v / total_pnl, 4) for k, v in factor_pnl.items()} if total_pnl != 0 else {},
         }
         logger.info(
             "P&L attribution computed",
@@ -637,15 +674,18 @@ class ABShareBacktestEngine:
 
     # ==================== 回测指标计算 ====================
 
-    def calc_metrics(self, nav_history: List[Dict[str, Any]],
-                     trade_records: List[Dict[str, Any]],
-                     benchmark_nav: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    def calc_metrics(
+        self,
+        nav_history: list[dict[str, Any]],
+        trade_records: list[dict[str, Any]],
+        benchmark_nav: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         """计算回测指标 (PRD 9.8.2节)"""
         if not nav_history:
             return {}
 
         nav_df = pd.DataFrame(nav_history)
-        nav_series = nav_df['nav']
+        nav_series = nav_df["nav"]
 
         # 收益率
         returns = nav_series.pct_change().dropna()
@@ -684,10 +724,12 @@ class ABShareBacktestEngine:
 
         # 换手率 (双边: 买入+卖出)
         # 除以2因为买卖双向计算会重复，再年化以统一不同回测长度的比较
-        total_buy = sum(t.get('amount', 0) for t in trade_records if t.get('action') == 'buy')
-        total_sell = sum(t.get('amount', 0) for t in trade_records if t.get('action') == 'sell')
-        avg_nav = nav_df['total_value'].mean()
-        turnover_rate = (total_buy + total_sell) / (2 * avg_nav) / (total_days / 252) if avg_nav > 0 and total_days > 0 else 0
+        total_buy = sum(t.get("amount", 0) for t in trade_records if t.get("action") == "buy")
+        total_sell = sum(t.get("amount", 0) for t in trade_records if t.get("action") == "sell")
+        avg_nav = nav_df["total_value"].mean()
+        turnover_rate = (
+            (total_buy + total_sell) / (2 * avg_nav) / (total_days / 252) if avg_nav > 0 and total_days > 0 else 0
+        )
 
         # 胜率
         win_rate = (returns > 0).sum() / len(returns) if len(returns) > 0 else 0
@@ -698,33 +740,33 @@ class ABShareBacktestEngine:
         pl_ratio = profits.mean() / abs(losses.mean()) if len(losses) > 0 and losses.mean() != 0 else 0
 
         # 成本侵蚀率 — 衡量交易成本对收益的消耗程度，过高说明换手过于频繁
-        total_cost = sum(t.get('total_cost', 0) for t in trade_records)
-        value_change = nav_df['total_value'].iloc[-1] - nav_df['total_value'].iloc[0]
+        total_cost = sum(t.get("total_cost", 0) for t in trade_records)
+        value_change = nav_df["total_value"].iloc[-1] - nav_df["total_value"].iloc[0]
         cost_erosion = total_cost / abs(value_change) if abs(value_change) > 1e-6 else 0
 
         result = {
-            'total_return': round(cum_return, 4),
-            'annual_return': round(annual_return, 4),
-            'max_drawdown': round(max_drawdown, 4),
-            'max_drawdown_duration': int(max_dd_duration),
-            'volatility': round(volatility, 4),
-            'downside_volatility': round(downside_vol, 4),
-            'sharpe': round(sharpe, 2),
-            'sortino': round(sortino, 2),
-            'calmar': round(calmar, 2),
-            'turnover_rate': round(turnover_rate, 4),
-            'win_rate': round(win_rate, 4),
-            'profit_loss_ratio': round(pl_ratio, 2),
-            'cost_erosion': round(cost_erosion, 4),
-            'total_trades': len(trade_records),
-            'total_cost': round(total_cost, 2),
+            "total_return": round(cum_return, 4),
+            "annual_return": round(annual_return, 4),
+            "max_drawdown": round(max_drawdown, 4),
+            "max_drawdown_duration": int(max_dd_duration),
+            "volatility": round(volatility, 4),
+            "downside_volatility": round(downside_vol, 4),
+            "sharpe": round(sharpe, 2),
+            "sortino": round(sortino, 2),
+            "calmar": round(calmar, 2),
+            "turnover_rate": round(turnover_rate, 4),
+            "win_rate": round(win_rate, 4),
+            "profit_loss_ratio": round(pl_ratio, 2),
+            "cost_erosion": round(cost_erosion, 4),
+            "total_trades": len(trade_records),
+            "total_cost": round(total_cost, 2),
         }
 
         # 基准对比
         if benchmark_nav and len(benchmark_nav) > 0:
             bm_df = pd.DataFrame(benchmark_nav)
-            bm_returns = bm_df['nav'].pct_change().dropna()
-            bm_annual_return = (bm_df['nav'].iloc[-1] / bm_df['nav'].iloc[0]) ** (252 / len(bm_df)) - 1
+            bm_returns = bm_df["nav"].pct_change().dropna()
+            bm_annual_return = (bm_df["nav"].iloc[-1] / bm_df["nav"].iloc[0]) ** (252 / len(bm_df)) - 1
 
             # 对齐
             common_idx = returns.index.intersection(bm_returns.index)
@@ -741,26 +783,27 @@ class ABShareBacktestEngine:
                 excess_ret = aligned_ret - aligned_bm
                 info_ratio = excess_ret.mean() / excess_ret.std() * np.sqrt(252) if excess_ret.std() > 0 else 0
 
-                result.update({
-                    'benchmark_return': round(bm_annual_return, 4),
-                    'excess_return': round(annual_return - bm_annual_return, 4),
-                    'alpha': round(alpha, 4),
-                    'beta': round(beta, 4),
-                    'information_ratio': round(info_ratio, 2),
-                })
+                result.update(
+                    {
+                        "benchmark_return": round(bm_annual_return, 4),
+                        "excess_return": round(annual_return - bm_annual_return, 4),
+                        "alpha": round(alpha, 4),
+                        "beta": round(beta, 4),
+                        "information_ratio": round(info_ratio, 2),
+                    }
+                )
 
         return result
 
     # ==================== 调仓判断 ====================
 
-    def should_rebalance(self, trade_date: date, freq: str,
-                         trading_days: Optional[List[date]] = None) -> bool:
+    def should_rebalance(self, trade_date: date, freq: str, trading_days: list[date] | None = None) -> bool:
         """判断是否需要调仓 (ADD 12.1节)"""
-        if freq == 'daily':
+        if freq == "daily":
             return True
-        elif freq == 'weekly':
+        if freq == "weekly":
             return trade_date.weekday() == 4  # 周五调仓 — 确保周末前完成建仓
-        elif freq == 'biweekly':
+        if freq == "biweekly":
             # 双周：每两周的周五
             if trade_date.weekday() != 4:
                 return False
@@ -768,7 +811,7 @@ class ABShareBacktestEngine:
                 idx = trading_days.index(trade_date) if trade_date in trading_days else -1
                 return idx >= 0 and idx % 10 == 0  # 每10个交易日(约双周)触发一次
             return trade_date.day <= 7  # 简化：每月前7天内的周五（无交易日历时的退避方案）
-        elif freq == 'monthly':
+        if freq == "monthly":
             # 月频：每月最后一个交易日 — 避免跨月持仓不确定性
             if trading_days:
                 idx = trading_days.index(trade_date) if trade_date in trading_days else -1
@@ -780,11 +823,14 @@ class ABShareBacktestEngine:
 
     # ==================== 机构级回测增强 ====================
 
-    def walk_forward_validation(self, nav_series: pd.Series,
-                                 train_window: int = 504,
-                                 test_window: int = 63,
-                                 gap: int = 20,  # 间隔期 — 隔离训练集和测试集，防止因子回看期信息泄漏
-                                 min_periods: int = 252) -> Dict[str, Any]:
+    def walk_forward_validation(
+        self,
+        nav_series: pd.Series,
+        train_window: int = 504,
+        test_window: int = 63,
+        gap: int = 20,  # 间隔期 — 隔离训练集和测试集，防止因子回看期信息泄漏
+        min_periods: int = 252,
+    ) -> dict[str, Any]:
         """
         Walk-Forward滚动窗口验证
         避免过拟合，模拟真实投资中的模型更新过程
@@ -800,8 +846,8 @@ class ABShareBacktestEngine:
             各窗口回测结果汇总
         """
         T = len(nav_series)
-        if T < min_periods:
-            return {'error': 'Insufficient data for walk-forward validation'}
+        if min_periods > T:
+            return {"error": "Insufficient data for walk-forward validation"}
 
         results = []
         start = 0
@@ -811,7 +857,7 @@ class ABShareBacktestEngine:
             test_start = train_end + gap  # gap隔离期：训练集末尾到测试集开始的间隔，防止信息泄漏
             test_end = test_start + test_window
 
-            train_nav = nav_series.iloc[start:train_end]
+            _train_nav = nav_series.iloc[start:train_end]
             test_nav = nav_series.iloc[test_start:test_end]
 
             # 计算测试期指标
@@ -821,39 +867,43 @@ class ABShareBacktestEngine:
                 cummax = test_nav.cummax()
                 max_dd = ((test_nav - cummax) / cummax).min()
 
-                results.append({
-                    'train_start': nav_series.index[start],
-                    'train_end': nav_series.index[train_end - 1],
-                    'test_start': nav_series.index[test_start],
-                    'test_end': nav_series.index[min(test_end - 1, T - 1)],
-                    'sharpe': round(sharpe, 2),
-                    'max_drawdown': round(max_dd, 4),
-                    'cum_return': round(test_nav.iloc[-1] / test_nav.iloc[0] - 1, 4),
-                })
+                results.append(
+                    {
+                        "train_start": nav_series.index[start],
+                        "train_end": nav_series.index[train_end - 1],
+                        "test_start": nav_series.index[test_start],
+                        "test_end": nav_series.index[min(test_end - 1, T - 1)],
+                        "sharpe": round(sharpe, 2),
+                        "max_drawdown": round(max_dd, 4),
+                        "cum_return": round(test_nav.iloc[-1] / test_nav.iloc[0] - 1, 4),
+                    }
+                )
 
             start += test_window  # 滚动 — 非重叠，每个窗口独立测试
 
         if not results:
-            return {'error': 'No valid walk-forward windows'}
+            return {"error": "No valid walk-forward windows"}
 
         # 汇总
-        sharpes = [r['sharpe'] for r in results]
-        drawdowns = [r['max_drawdown'] for r in results]
-        returns_list = [r['cum_return'] for r in results]
+        sharpes = [r["sharpe"] for r in results]
+        drawdowns = [r["max_drawdown"] for r in results]
+        returns_list = [r["cum_return"] for r in results]
 
         return {
-            'n_windows': len(results),
-            'window_results': results,
-            'avg_sharpe': round(np.mean(sharpes), 2),
-            'std_sharpe': round(np.std(sharpes), 2),
-            'avg_max_drawdown': round(np.mean(drawdowns), 4),
-            'avg_return': round(np.mean(returns_list), 4),
-            'consistency': round(sum(1 for s in sharpes if s > 0) / len(sharpes), 4),  # 正Sharpe比例 — 衡量策略稳定性，越高越好
+            "n_windows": len(results),
+            "window_results": results,
+            "avg_sharpe": round(np.mean(sharpes), 2),
+            "std_sharpe": round(np.std(sharpes), 2),
+            "avg_max_drawdown": round(np.mean(drawdowns), 4),
+            "avg_return": round(np.mean(returns_list), 4),
+            "consistency": round(
+                sum(1 for s in sharpes if s > 0) / len(sharpes), 4
+            ),  # 正Sharpe比例 — 衡量策略稳定性，越高越好
         }
 
-    def monte_carlo_permutation_test(self, strategy_returns: pd.Series,
-                                      n_permutations: int = 1000,
-                                      block_size: int = 5) -> Dict[str, Any]:
+    def monte_carlo_permutation_test(
+        self, strategy_returns: pd.Series, n_permutations: int = 1000, block_size: int = 5
+    ) -> dict[str, Any]:
         """
         蒙特卡洛置换检验
         打乱信号与收益的对应关系，检验策略是否统计显著
@@ -863,7 +913,9 @@ class ABShareBacktestEngine:
             n_permutations: 置换次数
             block_size: 块大小(保留自相关结构)
         """
-        actual_sharpe = strategy_returns.mean() / strategy_returns.std() * np.sqrt(252) if strategy_returns.std() > 0 else 0
+        actual_sharpe = (
+            strategy_returns.mean() / strategy_returns.std() * np.sqrt(252) if strategy_returns.std() > 0 else 0
+        )
 
         # 块置换: 保持时间序列结构 — 普通随机打乱会破坏自相关，导致显著性检验失真
         n = len(strategy_returns)
@@ -875,10 +927,9 @@ class ABShareBacktestEngine:
             block_indices = np.arange(n_blocks)
             np.random.shuffle(block_indices)
 
-            permuted = np.concatenate([
-                strategy_returns.iloc[i * block_size:(i + 1) * block_size].values
-                for i in block_indices
-            ])
+            permuted = np.concatenate(
+                [strategy_returns.iloc[i * block_size : (i + 1) * block_size].values for i in block_indices]
+            )
             # 处理剩余
             remainder = n % block_size
             if remainder > 0:
@@ -891,18 +942,17 @@ class ABShareBacktestEngine:
         p_value = sum(1 for s in permuted_sharpes if s >= actual_sharpe) / n_permutations
 
         return {
-            'actual_sharpe': round(actual_sharpe, 2),
-            'p_value': round(p_value, 4),
-            'is_significant': p_value < 0.05,  # 5%显著性水平，低于此则拒绝"策略无效"零假设
-            'permuted_sharpe_mean': round(np.mean(permuted_sharpes), 2),
-            'permuted_sharpe_std': round(np.std(permuted_sharpes), 2),
-            'n_permutations': n_permutations,
+            "actual_sharpe": round(actual_sharpe, 2),
+            "p_value": round(p_value, 4),
+            "is_significant": p_value < 0.05,  # 5%显著性水平，低于此则拒绝"策略无效"零假设
+            "permuted_sharpe_mean": round(np.mean(permuted_sharpes), 2),
+            "permuted_sharpe_std": round(np.std(permuted_sharpes), 2),
+            "n_permutations": n_permutations,
         }
 
-    def deflated_sharpe_ratio(self, sharpe: float, n_trials: int,
-                               backtest_length_years: float,
-                               skewness: float = 0,
-                               kurtosis: float = 3) -> Dict[str, Any]:
+    def deflated_sharpe_ratio(
+        self, sharpe: float, n_trials: int, backtest_length_years: float, skewness: float = 0, kurtosis: float = 3
+    ) -> dict[str, Any]:
         """
         通胀夏普比率 (Deflated Sharpe Ratio, DSR)
         考虑多次测试后最佳Sharpe的统计显著性
@@ -927,21 +977,18 @@ class ABShareBacktestEngine:
 
         # DSR = Phi((SR - E[max_SR]) / SE(SR))
         se_sr = np.sqrt(var_sr)
-        if se_sr > 0:
-            dsr = norm.cdf((sharpe - expected_max_sr) / se_sr)
-        else:
-            dsr = 1.0 if sharpe > expected_max_sr else 0.0
+        dsr = norm.cdf((sharpe - expected_max_sr) / se_sr) if se_sr > 0 else 1.0 if sharpe > expected_max_sr else 0.0
 
         return {
-            'sharpe': round(sharpe, 2),
-            'expected_max_sharpe': round(expected_max_sr, 2),
-            'dsr': round(dsr, 4),
-            'is_significant': dsr > 0.95,  # DSR>0.95表示即使考虑多次测试，Sharpe仍有统计显著性
-            'n_trials': n_trials,
-            'backtest_years': backtest_length_years,
+            "sharpe": round(sharpe, 2),
+            "expected_max_sharpe": round(expected_max_sr, 2),
+            "dsr": round(dsr, 4),
+            "is_significant": dsr > 0.95,  # DSR>0.95表示即使考虑多次测试，Sharpe仍有统计显著性
+            "n_trials": n_trials,
+            "backtest_years": backtest_length_years,
         }
 
-    def min_backtest_length(self, sharpe: float, confidence: float = 0.95) -> Dict[str, Any]:
+    def min_backtest_length(self, sharpe: float, confidence: float = 0.95) -> dict[str, Any]:
         """
         最小回测长度 (Bailey & Lopez de Prado)
         回测太短则Sharpe不可信
@@ -950,24 +997,28 @@ class ABShareBacktestEngine:
         若实际回测长度不足MinBTL，则观测到的Sharpe可能只是随机波动
         """
         from scipy.stats import norm
+
         z = norm.ppf(confidence)
 
         if abs(sharpe) < 0.01:  # Sharpe接近零时MinBTL趋向无穷，说明策略不具统计意义
-            return {'min_years': float('inf'), 'is_sufficient': False}
+            return {"min_years": float("inf"), "is_sufficient": False}
 
         min_years = (z / sharpe) ** 2
 
         return {
-            'min_years': round(min_years, 2),
-            'confidence': confidence,
-            'sharpe': round(sharpe, 2),
+            "min_years": round(min_years, 2),
+            "confidence": confidence,
+            "sharpe": round(sharpe, 2),
         }
 
-    def bootstrap_confidence_interval(self, returns: pd.Series,
-                                       metric: str = 'sharpe',
-                                       n_bootstrap: int = 1000,
-                                       confidence: float = 0.95,
-                                       block_size: int = 5) -> Dict[str, Any]:
+    def bootstrap_confidence_interval(
+        self,
+        returns: pd.Series,
+        metric: str = "sharpe",
+        n_bootstrap: int = 1000,
+        confidence: float = 0.95,
+        block_size: int = 5,
+    ) -> dict[str, Any]:
         """
         Bootstrap置信区间
         使用块Bootstrap保留自相关结构
@@ -994,13 +1045,13 @@ class ABShareBacktestEngine:
             sample = returns.iloc[indices]
 
             # 计算指标
-            if metric == 'sharpe':
+            if metric == "sharpe":
                 val = sample.mean() / sample.std() * np.sqrt(252) if sample.std() > 0 else 0
-            elif metric == 'max_drawdown':
+            elif metric == "max_drawdown":
                 cum = (1 + sample).cumprod()
                 dd = ((cum - cum.cummax()) / cum.cummax()).min()
                 val = dd
-            elif metric == 'annual_return':
+            elif metric == "annual_return":
                 val = (1 + sample).prod() ** (252 / n) - 1
             else:
                 val = sample.mean() / sample.std() * np.sqrt(252) if sample.std() > 0 else 0
@@ -1012,12 +1063,12 @@ class ABShareBacktestEngine:
         upper = np.percentile(bootstrap_metrics, (1 - alpha) * 100)
 
         return {
-            'metric': metric,
-            'point_estimate': round(bootstrap_metrics[len(bootstrap_metrics)//2], 4),
-            'lower': round(lower, 4),
-            'upper': round(upper, 4),
-            'confidence': confidence,
-            'n_bootstrap': n_bootstrap,
+            "metric": metric,
+            "point_estimate": round(bootstrap_metrics[len(bootstrap_metrics) // 2], 4),
+            "lower": round(lower, 4),
+            "upper": round(upper, 4),
+            "confidence": confidence,
+            "n_bootstrap": n_bootstrap,
         }
 
     def close(self) -> None:
@@ -1026,17 +1077,20 @@ class ABShareBacktestEngine:
 
     # ==================== Walk-Forward模型重训练回测 ====================
 
-    def walk_forward_backtest(self, model_factory: Callable[[date, date], Any],
-                               train_start: date,
-                               train_end: date,
-                               test_end: date,
-                               retrain_freq: int = 63,  # 约1个季度重训练一次，平衡模型时效性与计算成本
-                               train_window: int = 504,
-                               gap: int = 60,  # 60个交易日间隔 — 覆盖最大因子回看期，杜绝训练数据泄漏到测试期
-                               initial_capital: float = 1000000.0,
-                               universe: Optional[List[str]] = None,
-                               price_data: Optional[Dict[Tuple[str, date], Dict[str, Any]]] = None,
-                               trading_days: Optional[List[date]] = None) -> Dict[str, Any]:
+    def walk_forward_backtest(
+        self,
+        model_factory: Callable[[date, date], Any],
+        train_start: date,
+        train_end: date,
+        test_end: date,
+        retrain_freq: int = 63,  # 约1个季度重训练一次，平衡模型时效性与计算成本
+        train_window: int = 504,
+        gap: int = 60,  # 60个交易日间隔 — 覆盖最大因子回看期，杜绝训练数据泄漏到测试期
+        initial_capital: float = 1000000.0,
+        universe: list[str] | None = None,
+        price_data: dict[tuple[str, date], dict[str, Any]] | None = None,
+        trading_days: list[date] | None = None,
+    ) -> dict[str, Any]:
         """
         Walk-Forward模型重训练回测
         每个窗口: 训练模型 → 测试期交易 → 下一窗口重新训练
@@ -1059,7 +1113,7 @@ class ABShareBacktestEngine:
             各窗口回测结果汇总
         """
         if trading_days is None:
-            return {'error': 'trading_days required for walk_forward_backtest'}
+            return {"error": "trading_days required for walk_forward_backtest"}
 
         # 按时间排序交易日
         trading_days = sorted(trading_days)
@@ -1087,10 +1141,7 @@ class ABShareBacktestEngine:
             current_train_end = trading_days[current_train_end_idx]
 
             # 测试期
-            current_test_end_idx = min(
-                current_train_end_idx + gap + retrain_freq,
-                len(trading_days) - 1
-            )
+            current_test_end_idx = min(current_train_end_idx + gap + retrain_freq, len(trading_days) - 1)
             current_test_end = trading_days[current_test_end_idx]
             actual_test_start = trading_days[current_train_end_idx + gap]
 
@@ -1114,26 +1165,28 @@ class ABShareBacktestEngine:
                     universe=universe or [],
                     start_date=actual_test_start,
                     end_date=current_test_end,
-                    rebalance_freq='weekly',
+                    rebalance_freq="weekly",
                     initial_capital=initial_capital,
                     trading_days=window_trading_days,
                     price_data=price_data or {},
                 )
 
-                results.append({
-                    'window_id': window_id,
-                    'train_start': current_train_start,
-                    'train_end': current_train_end,
-                    'test_start': actual_test_start,
-                    'test_end': current_test_end,
-                    'metrics': window_result.get('metrics', {}),
-                    'total_days': window_result.get('total_days', 0),
-                })
+                results.append(
+                    {
+                        "window_id": window_id,
+                        "train_start": current_train_start,
+                        "train_end": current_train_end,
+                        "test_start": actual_test_start,
+                        "test_end": current_test_end,
+                        "metrics": window_result.get("metrics", {}),
+                        "total_days": window_result.get("total_days", 0),
+                    }
+                )
 
-                if 'nav_history' in window_result:
-                    all_nav.extend(window_result['nav_history'])
-                if 'trade_records' in window_result:
-                    all_trades.extend(window_result['trade_records'])
+                if "nav_history" in window_result:
+                    all_nav.extend(window_result["nav_history"])
+                if "trade_records" in window_result:
+                    all_trades.extend(window_result["trade_records"])
 
             except Exception as e:
                 logger.warning(f"Walk-forward window {window_id}: backtest failed: {e}")
@@ -1142,11 +1195,11 @@ class ABShareBacktestEngine:
             window_id += 1
 
         if not results:
-            return {'error': 'No valid walk-forward windows completed'}
+            return {"error": "No valid walk-forward windows completed"}
 
         # 汇总
-        window_sharpes = [r['metrics'].get('sharpe_ratio', 0) for r in results if r.get('metrics')]
-        window_returns = [r['metrics'].get('total_return', 0) for r in results if r.get('metrics')]
+        window_sharpes = [r["metrics"].get("sharpe_ratio", 0) for r in results if r.get("metrics")]
+        window_returns = [r["metrics"].get("total_return", 0) for r in results if r.get("metrics")]
 
         avg_sharpe = round(np.mean(window_sharpes), 2) if window_sharpes else 0
         avg_return = round(np.mean(window_returns), 4) if window_returns else 0
@@ -1158,33 +1211,41 @@ class ABShareBacktestEngine:
                 "avg_sharpe": avg_sharpe,
                 "avg_return": avg_return,
                 "std_sharpe": round(np.std(window_sharpes), 2) if window_sharpes else 0,
-                "consistency": round(sum(1 for s in window_sharpes if s > 0) / len(window_sharpes), 4) if window_sharpes else 0,
+                "consistency": round(sum(1 for s in window_sharpes if s > 0) / len(window_sharpes), 4)
+                if window_sharpes
+                else 0,
             },
         )
 
         return {
-            'n_windows': len(results),
-            'window_results': results,
-            'avg_sharpe': avg_sharpe,
-            'std_sharpe': round(np.std(window_sharpes), 2) if window_sharpes else 0,
-            'avg_return': avg_return,
-            'consistency': round(sum(1 for s in window_sharpes if s > 0) / len(window_sharpes), 4) if window_sharpes else 0,
-            'nav_history': all_nav,
-            'trade_records': all_trades,
+            "n_windows": len(results),
+            "window_results": results,
+            "avg_sharpe": avg_sharpe,
+            "std_sharpe": round(np.std(window_sharpes), 2) if window_sharpes else 0,
+            "avg_return": avg_return,
+            "consistency": round(sum(1 for s in window_sharpes if s > 0) / len(window_sharpes), 4)
+            if window_sharpes
+            else 0,
+            "nav_history": all_nav,
+            "trade_records": all_trades,
         }
 
     # ==================== 回测主循环 ====================
 
-    def run_backtest(self, signal_generator: Callable[[date, List[str], BacktestState], Dict[str, float]],
-                     universe: List[str],
-                     start_date: date, end_date: date,
-                     rebalance_freq: str = 'monthly',
-                     initial_capital: float = 1000000.0,
-                     trading_days: Optional[List[date]] = None,
-                     price_data: Optional[Dict[Tuple[str, date], Dict[str, Any]]] = None,
-                     max_turnover: float = 1.0,  # 单次最大换手率，1.0=无限制；设低可模拟流动性约束
-                     benchmark_nav: Optional[List[Dict[str, Any]]] = None,
-                     use_next_day_open: bool = True) -> Dict[str, Any]:  # 默认True — 实盘中信号收盘后才生成，只能在次日开盘执行
+    def run_backtest(
+        self,
+        signal_generator: Callable[[date, list[str], BacktestState], dict[str, float]],
+        universe: list[str],
+        start_date: date,
+        end_date: date,
+        rebalance_freq: str = "monthly",
+        initial_capital: float = 1000000.0,
+        trading_days: list[date] | None = None,
+        price_data: dict[tuple[str, date], dict[str, Any]] | None = None,
+        max_turnover: float = 1.0,  # 单次最大换手率，1.0=无限制；设低可模拟流动性约束
+        benchmark_nav: list[dict[str, Any]] | None = None,
+        use_next_day_open: bool = True,
+    ) -> dict[str, Any]:  # 默认True — 实盘中信号收盘后才生成，只能在次日开盘执行
         """
         回测主循环 (机构级: 完整信号→权重→交易→NAV流程)
 
@@ -1213,12 +1274,18 @@ class ABShareBacktestEngine:
             try:
                 from app.db.base import SessionLocal
                 from app.models.market import TradingCalendar
+
                 db = SessionLocal()
-                cal = db.query(TradingCalendar).filter(
-                    TradingCalendar.cal_date >= start_date.strftime('%Y%m%d'),
-                    TradingCalendar.cal_date <= end_date.strftime('%Y%m%d'),
-                    TradingCalendar.is_open == 1,
-                ).order_by(TradingCalendar.cal_date).all()
+                cal = (
+                    db.query(TradingCalendar)
+                    .filter(
+                        TradingCalendar.cal_date >= start_date.strftime("%Y%m%d"),
+                        TradingCalendar.cal_date <= end_date.strftime("%Y%m%d"),
+                        TradingCalendar.is_open == 1,
+                    )
+                    .order_by(TradingCalendar.cal_date)
+                    .all()
+                )
                 db.close()
                 if cal:
                     trading_days = [pd.Timestamp(c.cal_date).date() for c in cal]
@@ -1282,9 +1349,7 @@ class ABShareBacktestEngine:
 
                     # 执行交易: 先卖后买 — 先释放现金再用于买入，避免现金不足
                     # 计算当前持仓市值
-                    current_total = state.cash + sum(
-                        pos.market_value for pos in state.positions.values()
-                    )
+                    current_total = state.cash + sum(pos.market_value for pos in state.positions.values())
 
                     # 卖出: 不在目标组合中的持仓 — 目标权重为零或极低则清仓
                     for ts_code in list(state.positions.keys()):
@@ -1294,11 +1359,10 @@ class ABShareBacktestEngine:
                             stock_info = price_data.get(stock_key, {}) if price_data else {}
                             # 使用次日开盘价成交(实盘真实)，回退到收盘价 — 开盘价缺失时用收盘价兜底
                             if use_next_day_open:
-                                sell_price = stock_info.get('open', stock_info.get('close', pos.cost_price))
+                                sell_price = stock_info.get("open", stock_info.get("close", pos.cost_price))
                             else:
-                                sell_price = stock_info.get('close', pos.cost_price)
-                            self.execute_sell(state, ts_code, pos.shares, sell_price,
-                                            exec_date, stock_info)
+                                sell_price = stock_info.get("close", pos.cost_price)
+                            self.execute_sell(state, ts_code, pos.shares, sell_price, exec_date, stock_info)
 
                     # 买入: 目标组合中的持仓 — 按目标权重分配资金
                     for ts_code, weight in target_w.items():
@@ -1310,9 +1374,9 @@ class ABShareBacktestEngine:
                         stock_info = price_data.get(stock_key, {}) if price_data else {}
                         # 使用次日开盘价成交(实盘真实)，回退到收盘价
                         if use_next_day_open:
-                            buy_price = stock_info.get('open', stock_info.get('close', 0))
+                            buy_price = stock_info.get("open", stock_info.get("close", 0))
                         else:
-                            buy_price = stock_info.get('close', 0)
+                            buy_price = stock_info.get("close", 0)
 
                         if buy_price <= 0:
                             continue
@@ -1324,32 +1388,69 @@ class ABShareBacktestEngine:
 
                         # 只在需要增仓时买入
                         if target_amount > current_amount * 1.05:  # 5%缓冲 — 偏离不足5%不调仓，降低摩擦成本和无效换手
-                            self.execute_buy(state, ts_code, target_amount - current_amount,
-                                           buy_price, exec_date, stock_info)
+                            self.execute_buy(
+                                state, ts_code, target_amount - current_amount, buy_price, exec_date, stock_info
+                            )
 
                     # 更新上期权重
                     total_value = state.cash + sum(
-                        pos.shares * (price_data.get((ts_code, trade_date), {}).get('close', pos.cost_price) if price_data else pos.cost_price)
+                        pos.shares
+                        * (
+                            price_data.get((ts_code, trade_date), {}).get("close", pos.cost_price)
+                            if price_data
+                            else pos.cost_price
+                        )
                         for ts_code, pos in state.positions.items()
                     )
                     if total_value > 0:
-                        prev_weights = pd.Series({
-                            ts_code: (pos.shares * (price_data.get((ts_code, trade_date), {}).get('close', pos.cost_price) if price_data else pos.cost_price)) / total_value
-                            for ts_code, pos in state.positions.items()
-                        })
+                        prev_weights = pd.Series(
+                            {
+                                ts_code: (
+                                    pos.shares
+                                    * (
+                                        price_data.get((ts_code, trade_date), {}).get("close", pos.cost_price)
+                                        if price_data
+                                        else pos.cost_price
+                                    )
+                                )
+                                / total_value
+                                for ts_code, pos in state.positions.items()
+                            }
+                        )
 
                     # 记录调仓日持仓快照
                     holdings_snapshot = {
-                        'trade_date': trade_date,
-                        'total_value': total_value,
-                        'cash': state.cash,
-                        'positions': {
+                        "trade_date": trade_date,
+                        "total_value": total_value,
+                        "cash": state.cash,
+                        "positions": {
                             ts_code: {
-                                'shares': pos.shares,
-                                'cost_price': round(pos.cost_price, 2),
-                                'market_value': round(pos.shares * (price_data.get((ts_code, trade_date), {}).get('close', pos.cost_price) if price_data else pos.cost_price), 2),
-                                'weight': round((pos.shares * (price_data.get((ts_code, trade_date), {}).get('close', pos.cost_price) if price_data else pos.cost_price)) / total_value, 6) if total_value > 0 else 0,
-                                'entry_date': str(pos.entry_date) if pos.entry_date else None,
+                                "shares": pos.shares,
+                                "cost_price": round(pos.cost_price, 2),
+                                "market_value": round(
+                                    pos.shares
+                                    * (
+                                        price_data.get((ts_code, trade_date), {}).get("close", pos.cost_price)
+                                        if price_data
+                                        else pos.cost_price
+                                    ),
+                                    2,
+                                ),
+                                "weight": round(
+                                    (
+                                        pos.shares
+                                        * (
+                                            price_data.get((ts_code, trade_date), {}).get("close", pos.cost_price)
+                                            if price_data
+                                            else pos.cost_price
+                                        )
+                                    )
+                                    / total_value,
+                                    6,
+                                )
+                                if total_value > 0
+                                else 0,
+                                "entry_date": str(pos.entry_date) if pos.entry_date else None,
                             }
                             for ts_code, pos in state.positions.items()
                         },
@@ -1362,8 +1463,8 @@ class ABShareBacktestEngine:
                 for ts_code in state.positions:
                     stock_key = (ts_code, trade_date)
                     stock_info = price_data.get(stock_key, {})
-                    if 'close' in stock_info:
-                        price_dict[ts_code] = stock_info['close']
+                    if "close" in stock_info:
+                        price_dict[ts_code] = stock_info["close"]
 
             if price_dict or state.positions:
                 self.calc_nav(state, trade_date, price_dict)
@@ -1372,25 +1473,28 @@ class ABShareBacktestEngine:
         metrics = self.calc_metrics(state.nav_history, state.trade_records, benchmark_nav)
 
         return {
-            'nav_history': state.nav_history,
-            'trade_records': state.trade_records,
-            'holdings_snapshots': state.holdings_snapshots,
-            'metrics': metrics,
-            'initial_capital': initial_capital,
-            'final_value': state.cash + sum(pos.market_value for pos in state.positions.values()),
-            'total_trades': len(state.trade_records),
-            'total_days': len(state.nav_history),
+            "nav_history": state.nav_history,
+            "trade_records": state.trade_records,
+            "holdings_snapshots": state.holdings_snapshots,
+            "metrics": metrics,
+            "initial_capital": initial_capital,
+            "final_value": state.cash + sum(pos.market_value for pos in state.positions.values()),
+            "total_trades": len(state.trade_records),
+            "total_days": len(state.nav_history),
         }
 
     # ==================== 自适应调仓 ====================
 
-    def should_rebalance_adaptive(self, trade_date: date,
-                                   current_weights: pd.Series,
-                                   target_weights: pd.Series,
-                                   tracking_error_threshold: float = 0.02,
-                                   min_rebalance_days: int = 10,
-                                   last_rebalance_date: Optional[date] = None,
-                                   trading_days: Optional[List[date]] = None) -> bool:
+    def should_rebalance_adaptive(
+        self,
+        trade_date: date,
+        current_weights: pd.Series,
+        target_weights: pd.Series,
+        tracking_error_threshold: float = 0.02,
+        min_rebalance_days: int = 10,
+        last_rebalance_date: date | None = None,
+        trading_days: list[date] | None = None,
+    ) -> bool:
         """
         自适应调仓: 基于跟踪误差阈值触发
         当实际组合与目标组合的跟踪误差超过阈值时才调仓
@@ -1418,15 +1522,15 @@ class ABShareBacktestEngine:
             return True
 
         diff = current_weights.reindex(common, fill_value=0) - target_weights.reindex(common, fill_value=0)
-        tracking_error = np.sqrt((diff ** 2).sum())
+        tracking_error = np.sqrt((diff**2).sum())
 
         return tracking_error > tracking_error_threshold
 
     # ==================== 行业约束检查 ====================
 
-    def check_industry_constraints(self, target_weights: pd.Series,
-                                    industry_data: Dict[str, str],
-                                    max_industry_weight: float = 0.30) -> Dict[str, Any]:  # 30%上限 — 防止单行业过度集中，合规风控要求
+    def check_industry_constraints(
+        self, target_weights: pd.Series, industry_data: dict[str, str], max_industry_weight: float = 0.30
+    ) -> dict[str, Any]:  # 30%上限 — 防止单行业过度集中，合规风控要求
         """
         行业权重约束检查
         单个行业权重不超过阈值
@@ -1441,7 +1545,7 @@ class ABShareBacktestEngine:
         """
         industry_weights = {}
         for ts_code, weight in target_weights.items():
-            industry = industry_data.get(ts_code, 'unknown')
+            industry = industry_data.get(ts_code, "unknown")
             industry_weights[industry] = industry_weights.get(industry, 0) + weight
 
         violations = {ind: w for ind, w in industry_weights.items() if w > max_industry_weight}
@@ -1460,13 +1564,14 @@ class ABShareBacktestEngine:
                 adjusted = adjusted / adjusted.sum()
 
         return {
-            'is_valid': is_valid,
-            'violations': violations,
-            'adjusted_weights': adjusted,
+            "is_valid": is_valid,
+            "violations": violations,
+            "adjusted_weights": adjusted,
         }
 
 
 # ==================== 事件驱动回测引擎 ====================
+
 
 class EventDrivenBacktestEngine(ABShareBacktestEngine):
     """
@@ -1474,16 +1579,17 @@ class EventDrivenBacktestEngine(ABShareBacktestEngine):
     支持自定义事件处理器、多组合并行回测、订单追踪
     """
 
-    def __init__(self, db: Optional[Session] = None,
-                 commission_rate: float = DEFAULT_COMMISSION_RATE,
-                 stamp_tax_rate: float = DEFAULT_STAMP_TAX_RATE,
-                 slippage_rate: float = DEFAULT_SLIPPAGE_RATE) -> None:
+    def __init__(
+        self,
+        db: Session | None = None,
+        commission_rate: float = DEFAULT_COMMISSION_RATE,
+        stamp_tax_rate: float = DEFAULT_STAMP_TAX_RATE,
+        slippage_rate: float = DEFAULT_SLIPPAGE_RATE,
+    ) -> None:
         super().__init__(db, commission_rate, stamp_tax_rate, slippage_rate)
-        self.event_handlers: Dict[BacktestEventType, List[Callable]] = {
-            et: [] for et in BacktestEventType
-        }
+        self.event_handlers: dict[BacktestEventType, list[Callable]] = {et: [] for et in BacktestEventType}
         self.order_book = OrderBook()
-        self.all_order_books: Dict[date, OrderBook] = {}
+        self.all_order_books: dict[date, OrderBook] = {}
 
     def register_handler(self, event_type: BacktestEventType, handler: Callable) -> None:
         """注册事件处理器"""
@@ -1497,19 +1603,22 @@ class EventDrivenBacktestEngine(ABShareBacktestEngine):
             except Exception as e:
                 logger.warning(f"Event handler failed: {e}")
 
-    def run_backtest_event_driven(self,
-                                   signal_generator: SignalGenerator,
-                                   universe: List[str],
-                                   start_date: date, end_date: date,
-                                   rebalance_freq: str = 'monthly',
-                                   initial_capital: float = 1000000.0,
-                                   trading_days: Optional[List[date]] = None,
-                                   price_data: Optional[Dict[Tuple[str, date], Dict[str, Any]]] = None,
-                                   max_turnover: float = 1.0,
-                                   benchmark_nav: Optional[List[Dict[str, Any]]] = None,
-                                   industry_data: Optional[Dict[str, str]] = None,
-                                   max_industry_weight: float = 0.30,
-                                   use_next_day_open: bool = True) -> Dict[str, Any]:
+    def run_backtest_event_driven(
+        self,
+        signal_generator: SignalGenerator,
+        universe: list[str],
+        start_date: date,
+        end_date: date,
+        rebalance_freq: str = "monthly",
+        initial_capital: float = 1000000.0,
+        trading_days: list[date] | None = None,
+        price_data: dict[tuple[str, date], dict[str, Any]] | None = None,
+        max_turnover: float = 1.0,
+        benchmark_nav: list[dict[str, Any]] | None = None,
+        industry_data: dict[str, str] | None = None,
+        max_industry_weight: float = 0.30,
+        use_next_day_open: bool = True,
+    ) -> dict[str, Any]:
         """
         事件驱动回测主循环
         完整链路: 信号→订单→成交→NAV，记录未成交订单和行业约束
@@ -1560,8 +1669,8 @@ class EventDrivenBacktestEngine(ABShareBacktestEngine):
                         constraint_result = self.check_industry_constraints(
                             target_w, industry_data, max_industry_weight
                         )
-                        if not constraint_result['is_valid']:
-                            target_w = constraint_result['adjusted_weights']
+                        if not constraint_result["is_valid"]:
+                            target_w = constraint_result["adjusted_weights"]
 
                     # 换手率控制
                     if not prev_weights.empty and max_turnover < 1.0:
@@ -1574,9 +1683,7 @@ class EventDrivenBacktestEngine(ABShareBacktestEngine):
                             if target_w.sum() > 0:
                                 target_w = target_w / target_w.sum()
 
-                    current_total = state.cash + sum(
-                        pos.market_value for pos in state.positions.values()
-                    )
+                    current_total = state.cash + sum(pos.market_value for pos in state.positions.values())
 
                     # T+1执行: 信号T日收盘生成 → T+1日开盘价成交 — 消除前视偏差的核心机制
                     if use_next_day_open:
@@ -1595,19 +1702,21 @@ class EventDrivenBacktestEngine(ABShareBacktestEngine):
                             stock_key = (ts_code, exec_date)
                             stock_info = price_data.get(stock_key, {}) if price_data else {}
                             if use_next_day_open:
-                                sell_price = stock_info.get('open', stock_info.get('close', pos.cost_price))
+                                sell_price = stock_info.get("open", stock_info.get("close", pos.cost_price))
                             else:
-                                sell_price = stock_info.get('close', pos.cost_price)
+                                sell_price = stock_info.get("close", pos.cost_price)
 
                             order = Order(
                                 order_id=f"sell_{ts_code}_{exec_date}",
-                                ts_code=ts_code, direction='sell',
+                                ts_code=ts_code,
+                                direction="sell",
                                 target_amount=pos.shares * sell_price,
-                                price=sell_price, trade_date=exec_date,
+                                price=sell_price,
+                                trade_date=exec_date,
                             )
 
                             # 可交易性检查
-                            tradable, reason = self.is_tradable(ts_code, exec_date, 'sell', stock_info)
+                            tradable, reason = self.is_tradable(ts_code, exec_date, "sell", stock_info)
                             if not tradable:
                                 order.reject_reason = reason
                                 self.order_book.add_rejected(order)
@@ -1616,7 +1725,7 @@ class EventDrivenBacktestEngine(ABShareBacktestEngine):
                             result = self.execute_sell(state, ts_code, pos.shares, sell_price, exec_date, stock_info)
                             if result:
                                 order.status = OrderStatus.FILLED
-                                order.filled_amount = result['amount']
+                                order.filled_amount = result["amount"]
                                 order.filled_price = sell_price
                             self.order_book.add_order(order)
 
@@ -1629,9 +1738,9 @@ class EventDrivenBacktestEngine(ABShareBacktestEngine):
                         stock_key = (ts_code, exec_date)
                         stock_info = price_data.get(stock_key, {}) if price_data else {}
                         if use_next_day_open:
-                            buy_price = stock_info.get('open', stock_info.get('close', 0))
+                            buy_price = stock_info.get("open", stock_info.get("close", 0))
                         else:
-                            buy_price = stock_info.get('close', 0)
+                            buy_price = stock_info.get("close", 0)
 
                         if buy_price <= 0:
                             continue
@@ -1643,45 +1752,69 @@ class EventDrivenBacktestEngine(ABShareBacktestEngine):
                         if target_amount > current_amount * 1.05:  # 5%缓冲 — 与基础引擎一致，偏离不足5%不调仓
                             order = Order(
                                 order_id=f"buy_{ts_code}_{exec_date}",
-                                ts_code=ts_code, direction='buy',
+                                ts_code=ts_code,
+                                direction="buy",
                                 target_amount=target_amount - current_amount,
-                                price=buy_price, trade_date=exec_date,
+                                price=buy_price,
+                                trade_date=exec_date,
                             )
 
-                            tradable, reason = self.is_tradable(ts_code, exec_date, 'buy', stock_info)
+                            tradable, reason = self.is_tradable(ts_code, exec_date, "buy", stock_info)
                             if not tradable:
                                 order.reject_reason = reason
                                 self.order_book.add_rejected(order)
                                 continue
 
-                            result = self.execute_buy(state, ts_code, target_amount - current_amount, buy_price, exec_date, stock_info)
+                            result = self.execute_buy(
+                                state, ts_code, target_amount - current_amount, buy_price, exec_date, stock_info
+                            )
                             if result:
                                 order.status = OrderStatus.FILLED
-                                order.filled_amount = result['amount']
+                                order.filled_amount = result["amount"]
                                 order.filled_price = buy_price
                             self.order_book.add_order(order)
 
                     # FILL事件
-                    self._emit_event(BacktestEvent(
-                        BacktestEventType.FILL, trade_date,
-                        {'filled': self.order_book.filled_orders(), 'rejected': self.order_book.rejected_orders}
-                    ))
+                    self._emit_event(
+                        BacktestEvent(
+                            BacktestEventType.FILL,
+                            trade_date,
+                            {"filled": self.order_book.filled_orders(), "rejected": self.order_book.rejected_orders},
+                        )
+                    )
 
                     # 更新权重
                     total_value = state.cash + sum(
-                        pos.shares * (price_data.get((ts_code, trade_date), {}).get('close', pos.cost_price) if price_data else pos.cost_price)
+                        pos.shares
+                        * (
+                            price_data.get((ts_code, trade_date), {}).get("close", pos.cost_price)
+                            if price_data
+                            else pos.cost_price
+                        )
                         for ts_code, pos in state.positions.items()
                     )
                     if total_value > 0:
-                        prev_weights = pd.Series({
-                            ts_code: (pos.shares * (price_data.get((ts_code, trade_date), {}).get('close', pos.cost_price) if price_data else pos.cost_price)) / total_value
-                            for ts_code, pos in state.positions.items()
-                        })
+                        prev_weights = pd.Series(
+                            {
+                                ts_code: (
+                                    pos.shares
+                                    * (
+                                        price_data.get((ts_code, trade_date), {}).get("close", pos.cost_price)
+                                        if price_data
+                                        else pos.cost_price
+                                    )
+                                )
+                                / total_value
+                                for ts_code, pos in state.positions.items()
+                            }
+                        )
 
             # RISK_CHECK事件
-            self._emit_event(BacktestEvent(BacktestEventType.RISK_CHECK, trade_date, {
-                'positions': dict(state.positions), 'cash': state.cash
-            }))
+            self._emit_event(
+                BacktestEvent(
+                    BacktestEventType.RISK_CHECK, trade_date, {"positions": dict(state.positions), "cash": state.cash}
+                )
+            )
 
             # mark-to-market
             price_dict = {}
@@ -1689,8 +1822,8 @@ class EventDrivenBacktestEngine(ABShareBacktestEngine):
                 for ts_code in state.positions:
                     stock_key = (ts_code, trade_date)
                     stock_info = price_data.get(stock_key, {})
-                    if 'close' in stock_info:
-                        price_dict[ts_code] = stock_info['close']
+                    if "close" in stock_info:
+                        price_dict[ts_code] = stock_info["close"]
 
             if price_dict or state.positions:
                 self.calc_nav(state, trade_date, price_dict)
@@ -1711,29 +1844,34 @@ class EventDrivenBacktestEngine(ABShareBacktestEngine):
         total_filled = sum(len(ob.filled_orders()) for ob in self.all_order_books.values())
 
         return {
-            'nav_history': state.nav_history,
-            'trade_records': state.trade_records,
-            'metrics': metrics,
-            'initial_capital': initial_capital,
-            'final_value': state.cash + sum(pos.market_value for pos in state.positions.values()),
-            'total_trades': len(state.trade_records),
-            'total_days': len(state.nav_history),
-            'total_filled_orders': total_filled,
-            'total_rejected_orders': total_rejected,
-            'order_fill_rate': round(total_filled / (total_filled + total_rejected), 4) if (total_filled + total_rejected) > 0 else 1.0,  # 成交率过低说明策略在涨跌停/停牌时频繁受阻
+            "nav_history": state.nav_history,
+            "trade_records": state.trade_records,
+            "metrics": metrics,
+            "initial_capital": initial_capital,
+            "final_value": state.cash + sum(pos.market_value for pos in state.positions.values()),
+            "total_trades": len(state.trade_records),
+            "total_days": len(state.nav_history),
+            "total_filled_orders": total_filled,
+            "total_rejected_orders": total_rejected,
+            "order_fill_rate": round(total_filled / (total_filled + total_rejected), 4)
+            if (total_filled + total_rejected) > 0
+            else 1.0,  # 成交率过低说明策略在涨跌停/停牌时频繁受阻
         }
 
     # ==================== 多组合并行回测 ====================
 
-    def run_multi_portfolio_backtest(self,
-                                      signal_generators: Dict[str, SignalGenerator],
-                                      universe: List[str],
-                                      start_date: date, end_date: date,
-                                      rebalance_freq: str = 'monthly',
-                                      initial_capital: float = 1000000.0,
-                                      trading_days: Optional[List[date]] = None,
-                                      price_data: Optional[Dict[Tuple[str, date], Dict[str, Any]]] = None,
-                                      benchmark_nav: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Dict[str, Any]]:
+    def run_multi_portfolio_backtest(
+        self,
+        signal_generators: dict[str, SignalGenerator],
+        universe: list[str],
+        start_date: date,
+        end_date: date,
+        rebalance_freq: str = "monthly",
+        initial_capital: float = 1000000.0,
+        trading_days: list[date] | None = None,
+        price_data: dict[tuple[str, date], dict[str, Any]] | None = None,
+        benchmark_nav: list[dict[str, Any]] | None = None,
+    ) -> dict[str, dict[str, Any]]:
         """
         多组合并行回测
         同一universe下不同策略同时回测，用于策略比较

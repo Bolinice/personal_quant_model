@@ -1,10 +1,12 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime
+from sqlalchemy import Column, DateTime, Integer, String
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class StockIndustry(Base):
     """股票行业分类表"""
+
     __tablename__ = "stock_industry"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -18,6 +20,7 @@ class StockIndustry(Base):
 
 class IndustryClassification(Base):
     """行业分类表"""
+
     __tablename__ = "industry_classification"
 
     id = Column(Integer, primary_key=True, index=True)

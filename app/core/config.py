@@ -1,10 +1,10 @@
-from pydantic_settings import BaseSettings
-from typing import List
 from pydantic import Field
+from pydantic_settings import BaseSettings
 
 
 class BacktestConfig(BaseSettings):
     """回测配置"""
+
     INITIAL_CAPITAL: float = 1_000_000.0
     COMMISSION_RATE: float = 0.00025
     STAMP_TAX_RATE: float = 0.001
@@ -22,6 +22,7 @@ class BacktestConfig(BaseSettings):
 
 class RiskConfig(BaseSettings):
     """风险模型配置"""
+
     COVARIANCE_HALFLIFE: int = 60
     BARRA_HALFLIFE: int = 168
     IDIOSYNCRATIC_HALFLIFE: int = 84
@@ -37,6 +38,7 @@ class RiskConfig(BaseSettings):
 
 class FactorConfig(BaseSettings):
     """因子配置"""
+
     MIN_COVERAGE: float = 0.8
     MAD_THRESHOLD: float = 3.0
     ZSCORE_CLIP: float = 3.0
@@ -52,17 +54,18 @@ class FactorConfig(BaseSettings):
 
 class MLConfig(BaseSettings):
     """ML模型训练配置"""
-    N_SPLITS: int = 5                # TimeSeriesSplit折数
-    MIN_TRAIN_SAMPLES: int = 200     # 最小训练样本数
+
+    N_SPLITS: int = 5  # TimeSeriesSplit折数
+    MIN_TRAIN_SAMPLES: int = 200  # 最小训练样本数
     EARLY_STOPPING_ROUNDS: int = 30  # 早停轮数
-    TRAIN_WINDOW: int = 504          # Walk-Forward训练窗口(交易日)
-    TEST_WINDOW: int = 63            # Walk-Forward测试窗口
-    GAP: int = 21                    # 训练/测试间隔(防信息泄漏)
-    RETRAIN_FREQ: int = 63           # 重训练频率
-    ML_WEIGHT: float = 0.4           # ML预测权重
-    IC_WEIGHT: float = 0.6           # IC加权权重
-    FUSION_METHOD: str = "simple"    # 融合方法: simple/dynamic/hierarchical
-    MODEL_DIR: str = "models/"       # 模型保存目录
+    TRAIN_WINDOW: int = 504  # Walk-Forward训练窗口(交易日)
+    TEST_WINDOW: int = 63  # Walk-Forward测试窗口
+    GAP: int = 21  # 训练/测试间隔(防信息泄漏)
+    RETRAIN_FREQ: int = 63  # 重训练频率
+    ML_WEIGHT: float = 0.4  # ML预测权重
+    IC_WEIGHT: float = 0.6  # IC加权权重
+    FUSION_METHOD: str = "simple"  # 融合方法: simple/dynamic/hierarchical
+    MODEL_DIR: str = "models/"  # 模型保存目录
 
     model_config = {"env_prefix": "ML_", "extra": "ignore"}
 
@@ -120,7 +123,7 @@ class Settings(BaseSettings):
         "case_sensitive": True,
     }
 
-    def check_production_safety(self) -> List[str]:
+    def check_production_safety(self) -> list[str]:
         """检查生产环境安全配置，返回警告列表；生产环境直接阻断"""
         warnings = []
         if self.SECRET_KEY == "CHANGE_ME_IN_PRODUCTION":

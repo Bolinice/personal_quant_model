@@ -1,13 +1,13 @@
 """
 日志模块 - 支持结构化JSON日志 + 性能计时装饰器
 """
+
+import functools
+import json
 import logging
 import sys
-import json
 import time
-import functools
 from pathlib import Path
-from typing import Optional, Dict, Any
 
 # 创建日志目录
 log_dir = Path("logs")
@@ -29,12 +29,11 @@ class JsonFormatter(logging.Formatter):
         }
 
         # 合并extra字段
-        if hasattr(record, 'extra') and isinstance(record.extra, dict):
+        if hasattr(record, "extra") and isinstance(record.extra, dict):
             log_entry.update(record.extra)
 
         # 标准extra字段
-        for key in ('trade_date', 'factor_id', 'security_id', 'n_stocks',
-                     'duration_ms', 'cache_hit', 'error_type'):
+        for key in ("trade_date", "factor_id", "security_id", "n_stocks", "duration_ms", "cache_hit", "error_type"):
             if hasattr(record, key):
                 log_entry[key] = getattr(record, key)
 
@@ -51,8 +50,7 @@ class TextFormatter(logging.Formatter):
         base = super().format(record)
         # 附加extra字段
         extra_parts = []
-        for key in ('trade_date', 'factor_id', 'security_id', 'n_stocks',
-                     'duration_ms', 'cache_hit'):
+        for key in ("trade_date", "factor_id", "security_id", "n_stocks", "duration_ms", "cache_hit"):
             if hasattr(record, key):
                 extra_parts.append(f"{key}={getattr(record, key)}")
         if extra_parts:
@@ -72,8 +70,7 @@ def setup_logging(log_level: str = "INFO", log_format: str = "text") -> logging.
         formatter = JsonFormatter(datefmt="%Y-%m-%dT%H:%M:%S")
     else:
         formatter = TextFormatter(
-            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
+            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
         )
 
     # 文件handler
@@ -105,6 +102,7 @@ def log_execution_time(func=None, *, level: str = "info"):
         @log_execution_time(level="warning")
         def potentially_slow(): ...
     """
+
     def decorator(fn):
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
@@ -113,18 +111,15 @@ def log_execution_time(func=None, *, level: str = "info"):
                 result = fn(*args, **kwargs)
                 elapsed_ms = (time.perf_counter() - start) * 1000
                 log_method = getattr(logger, level, logger.info)
-                log_method(
-                    f"{fn.__name__} completed",
-                    extra={"duration_ms": round(elapsed_ms, 2)}
-                )
+                log_method(f"{fn.__name__} completed", extra={"duration_ms": round(elapsed_ms, 2)})
                 return result
             except Exception as e:
                 elapsed_ms = (time.perf_counter() - start) * 1000
                 logger.error(
-                    f"{fn.__name__} failed after {elapsed_ms:.0f}ms: {e}",
-                    extra={"duration_ms": round(elapsed_ms, 2)}
+                    f"{fn.__name__} failed after {elapsed_ms:.0f}ms: {e}", extra={"duration_ms": round(elapsed_ms, 2)}
                 )
                 raise
+
         return wrapper
 
     if func is not None:

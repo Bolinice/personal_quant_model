@@ -1,18 +1,24 @@
-from typing import List
-from sqlalchemy.orm import Session
-from app.db.base import with_db
-from app.models.portfolios import TimingSignal, TimingConfig
-from app.schemas.timing import TimingSignalCreate, TimingConfigCreate
-import pandas as pd
 import numpy as np
+from sqlalchemy.orm import Session
+
+from app.db.base import with_db
+from app.models.portfolios import TimingConfig, TimingSignal
+from app.schemas.timing import TimingConfigCreate, TimingConfigUpdate, TimingSignalCreate
+from app.services.market_service import get_index_daily
+
 
 @with_db
 def get_timing_signals(model_id: int, start_date: str, end_date: str, db: Session = None):
-    return db.query(TimingSignal).filter(
-        TimingSignal.model_id == model_id,
-        TimingSignal.trade_date >= start_date,
-        TimingSignal.trade_date <= end_date
-    ).all()
+    return (
+        db.query(TimingSignal)
+        .filter(
+            TimingSignal.model_id == model_id,
+            TimingSignal.trade_date >= start_date,
+            TimingSignal.trade_date <= end_date,
+        )
+        .all()
+    )
+
 
 @with_db
 def create_timing_signal(signal: TimingSignalCreate, db: Session = None):
@@ -22,9 +28,11 @@ def create_timing_signal(signal: TimingSignalCreate, db: Session = None):
     db.refresh(db_signal)
     return db_signal
 
+
 @with_db
 def get_timing_config(model_id: int, db: Session = None):
     return db.query(TimingConfig).filter(TimingConfig.model_id == model_id).first()
+
 
 @with_db
 def create_timing_config(config: TimingConfigCreate, db: Session = None):
@@ -33,6 +41,7 @@ def create_timing_config(config: TimingConfigCreate, db: Session = None):
     db.commit()
     db.refresh(db_config)
     return db_config
+
 
 @with_db
 def update_timing_config(model_id: int, config_update: TimingConfigUpdate, db: Session = None):
@@ -45,6 +54,7 @@ def update_timing_config(model_id: int, config_update: TimingConfigUpdate, db: S
     db.commit()
     db.refresh(db_config)
     return db_config
+
 
 @with_db
 def calculate_ma_timing(model_id: int, trade_date: str, db: Session = None):
@@ -65,9 +75,9 @@ def calculate_ma_timing(model_id: int, trade_date: str, db: Session = None):
         return None
 
     # 获取历史数据计算移动平均线
-    hist_data = get_index_daily("000300.SH",
-                             f"{int(trade_date[:4])-1}-{trade_date[5:7]}-{trade_date[8:10]}",
-                             trade_date, db=db)
+    hist_data = get_index_daily(
+        "000300.SH", f"{int(trade_date[:4]) - 1}-{trade_date[5:7]}-{trade_date[8:10]}", trade_date, db=db
+    )
     if not hist_data or len(hist_data) < ma_window:
         return None
 
@@ -84,12 +94,8 @@ def calculate_ma_timing(model_id: int, trade_date: str, db: Session = None):
         signal_type = "short"
         exposure = below_ma_exposure
 
-    return TimingSignalCreate(
-        model_id=model_id,
-        trade_date=trade_date,
-        signal_type=signal_type,
-        exposure=exposure
-    )
+    return TimingSignalCreate(model_id=model_id, trade_date=trade_date, signal_type=signal_type, exposure=exposure)
+
 
 @with_db
 def calculate_breadth_timing(model_id: int, trade_date: str, db: Session = None):
@@ -112,12 +118,8 @@ def calculate_breadth_timing(model_id: int, trade_date: str, db: Session = None)
         signal_type = "short"
         exposure = 0.5
 
-    return TimingSignalCreate(
-        model_id=model_id,
-        trade_date=trade_date,
-        signal_type=signal_type,
-        exposure=exposure
-    )
+    return TimingSignalCreate(model_id=model_id, trade_date=trade_date, signal_type=signal_type, exposure=exposure)
+
 
 @with_db
 def calculate_volatility_timing(model_id: int, trade_date: str, db: Session = None):
@@ -140,9 +142,4 @@ def calculate_volatility_timing(model_id: int, trade_date: str, db: Session = No
         signal_type = "short"
         exposure = 0.3
 
-    return TimingSignalCreate(
-        model_id=model_id,
-        trade_date=trade_date,
-        signal_type=signal_type,
-        exposure=exposure
-    )
+    return TimingSignalCreate(model_id=model_id, trade_date=trade_date, signal_type=signal_type, exposure=exposure)

@@ -1,12 +1,11 @@
-from sqlalchemy import Column, Integer, String, DateTime, Date, Float, Numeric, Boolean, Index
-from sqlalchemy.sql import func
+from sqlalchemy import Boolean, Column, Date, Index, Integer, Numeric, String
+
 from app.db.base import Base
+
 
 class StockDaily(Base):
     __tablename__ = "stock_daily"
-    __table_args__ = (
-        Index("ix_sd_code_date", "ts_code", "trade_date"),
-    )
+    __table_args__ = (Index("ix_sd_code_date", "ts_code", "trade_date"),)
 
     id = Column(Integer, primary_key=True, index=True)
     ts_code = Column(String(16), index=True)
@@ -20,11 +19,11 @@ class StockDaily(Base):
     pct_chg = Column(Numeric(14, 4))
     vol = Column(Numeric(20, 4))
     amount = Column(Numeric(24, 4))
-    data_source = Column(String(20))           # 数据来源: tushare/akshare/crawler
+    data_source = Column(String(20))  # 数据来源: tushare/akshare/crawler
     amount_is_estimated = Column(Boolean, default=False)  # 成交额是否为估算值
-    large_order_volume = Column(Numeric(20, 4), comment='大单成交量(手)')
-    super_large_order_volume = Column(Numeric(20, 4), comment='超大单成交量(手)')
-    turnover_rate = Column(Numeric(10, 4), comment='换手率(%)')
+    large_order_volume = Column(Numeric(20, 4), comment="大单成交量(手)")
+    super_large_order_volume = Column(Numeric(20, 4), comment="超大单成交量(手)")
+    turnover_rate = Column(Numeric(10, 4), comment="换手率(%)")
 
     def __repr__(self):
         return f"<StockDaily(ts_code='{self.ts_code}', trade_date='{self.trade_date}', close={self.close})>"

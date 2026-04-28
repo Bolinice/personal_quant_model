@@ -4,10 +4,13 @@
 Mean-CVaR、HRP层次风险平价、稳健优化、交易成本感知优化、
 Alpha-Risk优化(GPT设计10.1节)、分数映射权重(GPT设计10.3节)
 """
+
+from typing import Any
+
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Tuple, Any
 from scipy.optimize import minimize
+
 from app.core.logging import logger
 
 
@@ -20,14 +23,16 @@ class PortfolioOptimizer:
     # ==================== A股实盘约束过滤 ====================
 
     @staticmethod
-    def filter_ashare_constraints(expected_returns: pd.Series,
-                                    cov_matrix: pd.DataFrame,
-                                    stock_status: Optional[Dict[str, Dict]] = None,
-                                    exclude_st: bool = True,
-                                    exclude_new_ipo_days: int = 60,  # A股新股上市初期波动剧烈且缺乏历史数据，60天过滤期兼顾数据充分性与覆盖面
-                                    exclude_limit_up: bool = True,  # 涨停股无法买入，纳入优化会导致不可执行权重
-                                    min_daily_volume: float = 0,
-                                    current_date: Optional[Any] = None) -> Tuple[pd.Series, pd.DataFrame]:
+    def filter_ashare_constraints(
+        expected_returns: pd.Series,
+        cov_matrix: pd.DataFrame,
+        stock_status: dict[str, dict] | None = None,
+        exclude_st: bool = True,
+        exclude_new_ipo_days: int = 60,  # A股新股上市初期波动剧烈且缺乏历史数据，60天过滤期兼顾数据充分性与覆盖面
+        exclude_limit_up: bool = True,  # 涨停股无法买入，纳入优化会导致不可执行权重
+        min_daily_volume: float = 0,
+        current_date: Any | None = None,
+    ) -> tuple[pd.Series, pd.DataFrame]:
         """
         A股实盘约束过滤: 在优化前排除不符合交易条件的股票
 
@@ -54,14 +59,15 @@ class PortfolioOptimizer:
             status = stock_status.get(ts_code, {})
 
             # 排除ST股
-            if exclude_st and status.get('is_st', False):
+            if exclude_st and status.get("is_st", False):
                 excluded.add(ts_code)
 
             # 排除新股
             if exclude_new_ipo_days > 0 and current_date is not None:
-                list_date = status.get('list_date')
+                list_date = status.get("list_date")
                 if list_date is not None:
                     from datetime import date as date_type
+
                     if isinstance(list_date, str):
                         list_date = pd.Timestamp(list_date).date()
                     if isinstance(current_date, date_type):
@@ -72,16 +78,16 @@ class PortfolioOptimizer:
                         excluded.add(ts_code)
 
             # 排除涨停股
-            if exclude_limit_up and status.get('is_limit_up', False):
+            if exclude_limit_up and status.get("is_limit_up", False):
                 excluded.add(ts_code)
 
             # 排除停牌股
-            if status.get('is_suspended', False):
+            if status.get("is_suspended", False):
                 excluded.add(ts_code)
 
             # 排除低流动性股
             if min_daily_volume > 0:
-                daily_vol = status.get('daily_volume', 0)
+                daily_vol = status.get("daily_volume", 0)
                 if daily_vol < min_daily_volume:
                     excluded.add(ts_code)
 
@@ -97,14 +103,17 @@ class PortfolioOptimizer:
 
     # ==================== 均值方差优化 ====================
 
-    def mean_variance_optimize(self, expected_returns: pd.Series,
-                                cov_matrix: pd.DataFrame,
-                                risk_aversion: float = 1.0,  # λ=1对应中等风险偏好，A股增强策略通常0.5~2.0
-                                max_position: float = 0.10,  # 10%个股权重上限，防止单票过度集中
-                                min_position: float = 0.0,
-                                industry_data: pd.Series = None,
-                                max_industry_weight: float = 0.30,  # 单行业30%上限，对标沪深300行业权重分散度
-                                long_only: bool = True) -> pd.Series:
+    def mean_variance_optimize(
+        self,
+        expected_returns: pd.Series,
+        cov_matrix: pd.DataFrame,
+        risk_aversion: float = 1.0,  # λ=1对应中等风险偏好，A股增强策略通常0.5~2.0
+        max_position: float = 0.10,  # 10%个股权重上限，防止单票过度集中
+        min_position: float = 0.0,
+        industry_data: pd.Series = None,
+        max_industry_weight: float = 0.30,  # 单行业30%上限，对标沪深300行业权重分散度
+        long_only: bool = True,
+    ) -> pd.Series:
         """
         均值方差优化
 
@@ -144,7 +153,7 @@ class PortfolioOptimizer:
             return -mu + risk_aversion * Sigma @ w
 
         # 约束: 权重之和=1 (全仓约束)
-        constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1.0}]
+        constraints = [{"type": "eq", "fun": lambda w: np.sum(w) - 1.0}]
 
         # 权重边界: A股融券限制大，long_only为默认；max_position防止单票过度集中
         if long_only:
@@ -160,22 +169,20 @@ class PortfolioOptimizer:
                     continue
                 idx = np.where(ind.values == industry)[0]
                 if len(idx) > 0:
-                    constraints.append({
-                        'type': 'ineq',
-                        'fun': lambda w, idx=idx: max_industry_weight - np.sum(w[idx])
-                    })
+                    constraints.append({"type": "ineq", "fun": lambda w, idx=idx: max_industry_weight - np.sum(w[idx])})
 
         # 初始值: 等权 (凸优化下等权是安全起点)
         w0 = np.ones(n) / n
 
         # SLSQP适合中小规模凸优化(50~300只)，大规模需换ADMM类求解器
         result = minimize(
-            objective, w0,
-            method='SLSQP',
+            objective,
+            w0,
+            method="SLSQP",
             jac=gradient,
             bounds=bounds,
             constraints=constraints,
-            options={'maxiter': 500, 'ftol': 1e-10}
+            options={"maxiter": 500, "ftol": 1e-10},
         )
 
         if not result.success:
@@ -192,8 +199,9 @@ class PortfolioOptimizer:
         return self._filter_min_holding(weights)
 
     @staticmethod
-    def _filter_min_holding(weights: pd.Series,
-                            min_holding_value: float = 0.001) -> pd.Series:  # 0.1%≈100万资金下1000元，约1手A股
+    def _filter_min_holding(
+        weights: pd.Series, min_holding_value: float = 0.001
+    ) -> pd.Series:  # 0.1%≈100万资金下1000元，约1手A股
         """过滤不足最小持仓的权重 (A股最小交易单位100股)
         如果权重对应的金额不足一手，清零后重新归一化
 
@@ -212,12 +220,15 @@ class PortfolioOptimizer:
 
     # ==================== 分数映射权重 (GPT设计10.3方法B) ====================
 
-    def score_to_weight(self, scores: pd.Series,
-                        industry_data: Optional[pd.Series] = None,
-                        max_position: float = 0.03,  # 增强策略个股权重更严格(3% vs 均值方差的10%)，控制跟踪误差
-                        max_industry_weight: float = 0.30,
-                        benchmark_weights: Optional[pd.Series] = None,
-                        max_industry_dev: float = 0.03) -> pd.Series:  # 行业偏离3%对标增强指数常见约束，过大则失去行业中性
+    def score_to_weight(
+        self,
+        scores: pd.Series,
+        industry_data: pd.Series | None = None,
+        max_position: float = 0.03,  # 增强策略个股权重更严格(3% vs 均值方差的10%)，控制跟踪误差
+        max_industry_weight: float = 0.30,
+        benchmark_weights: pd.Series | None = None,
+        max_industry_dev: float = 0.03,
+    ) -> pd.Series:  # 行业偏离3%对标增强指数常见约束，过大则失去行业中性
         """
         分数映射权重 (GPT设计10.3方法B)
         w_i ∝ max(0, S_i), 然后约束单票和行业
@@ -256,7 +267,7 @@ class PortfolioOptimizer:
             industry_w = {}
             for ts_code, w in weights.items():
                 if w > 0:
-                    ind = industry_data.get(ts_code, 'unknown')
+                    ind = industry_data.get(ts_code, "unknown")
                     industry_w[ind] = industry_w.get(ind, 0) + w
 
             # 基准行业权重 (如果有)
@@ -264,7 +275,7 @@ class PortfolioOptimizer:
             if benchmark_weights is not None:
                 for ts_code, bw in benchmark_weights.items():
                     if bw > 0:
-                        ind = industry_data.get(ts_code, 'unknown')
+                        ind = industry_data.get(ts_code, "unknown")
                         bench_ind_w[ind] = bench_ind_w.get(ind, 0) + bw
 
             # 超限行业缩放: 同行业内等比例缩减，而非删除个股，保持行业内相对排序
@@ -288,18 +299,21 @@ class PortfolioOptimizer:
 
     # ==================== Alpha-Risk完整优化 (GPT设计10.1节) ====================
 
-    def alpha_risk_optimize(self, alpha_scores: pd.Series,
-                            risk_model_cov: pd.DataFrame,
-                            current_weights: Optional[pd.Series] = None,
-                            industry_data: Optional[pd.Series] = None,
-                            style_exposures: Optional[pd.DataFrame] = None,
-                            style_bounds: Optional[Dict[str, Tuple[float, float]]] = None,
-                            benchmark_industry_weights: Optional[Dict[str, float]] = None,
-                            risk_aversion: float = 1.0,
-                            turnover_penalty: float = 0.003,  # 30bps换手成本，近似A股双边佣金+滑点+印花税
-                            max_position: float = 0.03,  # 增强策略3%上限，对应约33只等权持仓
-                            max_industry_dev: float = 0.03,  # 行业偏离3%硬约束，控制主动行业暴露
-                            long_only: bool = True) -> pd.Series:
+    def alpha_risk_optimize(
+        self,
+        alpha_scores: pd.Series,
+        risk_model_cov: pd.DataFrame,
+        current_weights: pd.Series | None = None,
+        industry_data: pd.Series | None = None,
+        style_exposures: pd.DataFrame | None = None,
+        style_bounds: dict[str, tuple[float, float]] | None = None,
+        benchmark_industry_weights: dict[str, float] | None = None,
+        risk_aversion: float = 1.0,
+        turnover_penalty: float = 0.003,  # 30bps换手成本，近似A股双边佣金+滑点+印花税
+        max_position: float = 0.03,  # 增强策略3%上限，对应约33只等权持仓
+        max_industry_dev: float = 0.03,  # 行业偏离3%硬约束，控制主动行业暴露
+        long_only: bool = True,
+    ) -> pd.Series:
         """
         完整alpha-risk优化 (GPT设计10.1节)
 
@@ -383,7 +397,7 @@ class PortfolioOptimizer:
             except cp.SolverError:
                 problem.solve(solver=cp.ECOS, max_iters=500)  # ECOS作为备选，对中小规模更快
 
-            if problem.status in ['optimal', 'optimal_inaccurate'] and w.value is not None:
+            if problem.status in ["optimal", "optimal_inaccurate"] and w.value is not None:
                 # 投影到非负: 求解器可能产生极小负值(数值误差)，截断处理
                 weights = np.maximum(w.value, 0)
                 if weights.sum() > 0:
@@ -403,8 +417,10 @@ class PortfolioOptimizer:
         def gradient(w):
             return -alpha + risk_aversion * Sigma @ w + 2 * turnover_penalty * (w - w_prev)
 
-        constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1.0}]
-        bounds = [(0, max_position) for _ in range(n)] if long_only else [(-max_position, max_position) for _ in range(n)]
+        constraints = [{"type": "eq", "fun": lambda w: np.sum(w) - 1.0}]
+        bounds = (
+            [(0, max_position) for _ in range(n)] if long_only else [(-max_position, max_position) for _ in range(n)]
+        )
 
         # 行业偏离约束 (SLSQP回退路径，与cvxpy路径逻辑相同)
         if industry_data is not None and benchmark_industry_weights is not None:
@@ -415,19 +431,23 @@ class PortfolioOptimizer:
                 idx = np.where(ind.values == industry)[0]
                 bench_w = benchmark_industry_weights[industry]
                 if len(idx) > 0:
-                    constraints.append({
-                        'type': 'ineq',
-                        'fun': lambda w, idx=idx, bw=bench_w: max_industry_dev - (np.sum(w[idx]) - bw)
-                    })
-                    constraints.append({
-                        'type': 'ineq',
-                        'fun': lambda w, idx=idx, bw=bench_w: max_industry_dev - (bw - np.sum(w[idx]))
-                    })
+                    constraints.append(
+                        {"type": "ineq", "fun": lambda w, idx=idx, bw=bench_w: max_industry_dev - (np.sum(w[idx]) - bw)}
+                    )
+                    constraints.append(
+                        {"type": "ineq", "fun": lambda w, idx=idx, bw=bench_w: max_industry_dev - (bw - np.sum(w[idx]))}
+                    )
 
         w0 = np.ones(n) / n
-        result = minimize(objective, w0, method='SLSQP', jac=gradient,
-                          bounds=bounds, constraints=constraints,
-                          options={'maxiter': 500, 'ftol': 1e-10})
+        result = minimize(
+            objective,
+            w0,
+            method="SLSQP",
+            jac=gradient,
+            bounds=bounds,
+            constraints=constraints,
+            options={"maxiter": 500, "ftol": 1e-10},
+        )
 
         if result.success:
             weights = pd.Series(result.x, index=common)
@@ -443,9 +463,9 @@ class PortfolioOptimizer:
 
     # ==================== 风险平价优化 ====================
 
-    def risk_parity_optimize(self, cov_matrix: pd.DataFrame,
-                             max_position: float = 0.10,
-                             target_risk: Optional[pd.Series] = None) -> pd.Series:
+    def risk_parity_optimize(
+        self, cov_matrix: pd.DataFrame, max_position: float = 0.10, target_risk: pd.Series | None = None
+    ) -> pd.Series:
         """
         风险平价优化
 
@@ -477,12 +497,12 @@ class PortfolioOptimizer:
             if port_var <= 0:
                 return 1e10  # 无效组合返回大罚值，驱使优化器远离退化解
             mrc = Sigma @ w  # 边际风险贡献 (∂σ_p/∂w_i)
-            rc = w * mrc     # 风险贡献
+            rc = w * mrc  # 风险贡献
             rc_pct = rc / port_var  # 风险贡献占比
             return np.sum((rc_pct - target_risk) ** 2)
 
         # 约束
-        constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1.0}]
+        constraints = [{"type": "eq", "fun": lambda w: np.sum(w) - 1.0}]
         bounds = [(0, max_position) for _ in range(n)]
 
         # 初始值: 按波动率倒数加权 (风险平价的解析近似，加速收敛)
@@ -491,11 +511,12 @@ class PortfolioOptimizer:
         w0 = inv_vol / inv_vol.sum()
 
         result = minimize(
-            objective, w0,
-            method='SLSQP',
+            objective,
+            w0,
+            method="SLSQP",
             bounds=bounds,
             constraints=constraints,
-            options={'maxiter': 500, 'ftol': 1e-12}
+            options={"maxiter": 500, "ftol": 1e-12},
         )
 
         if not result.success:
@@ -511,10 +532,13 @@ class PortfolioOptimizer:
 
     # ==================== 最小方差组合 ====================
 
-    def min_variance_optimize(self, cov_matrix: pd.DataFrame,
-                              max_position: float = 0.10,
-                              industry_data: pd.Series = None,
-                              max_industry_weight: float = 0.30) -> pd.Series:
+    def min_variance_optimize(
+        self,
+        cov_matrix: pd.DataFrame,
+        max_position: float = 0.10,
+        industry_data: pd.Series = None,
+        max_industry_weight: float = 0.30,
+    ) -> pd.Series:
         """
         最小方差组合
 
@@ -541,7 +565,7 @@ class PortfolioOptimizer:
         def gradient(w):
             return 2 * Sigma @ w
 
-        constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1.0}]
+        constraints = [{"type": "eq", "fun": lambda w: np.sum(w) - 1.0}]
         bounds = [(0, max_position) for _ in range(n)]
 
         # 行业约束: 防止最小方差组合过度集中在低波动行业(如银行/公用事业)
@@ -552,20 +576,18 @@ class PortfolioOptimizer:
                     continue
                 idx = np.where(ind.values == industry)[0]
                 if len(idx) > 0:
-                    constraints.append({
-                        'type': 'ineq',
-                        'fun': lambda w, idx=idx: max_industry_weight - np.sum(w[idx])
-                    })
+                    constraints.append({"type": "ineq", "fun": lambda w, idx=idx: max_industry_weight - np.sum(w[idx])})
 
         w0 = np.ones(n) / n
 
         result = minimize(
-            objective, w0,
-            method='SLSQP',
+            objective,
+            w0,
+            method="SLSQP",
             jac=gradient,
             bounds=bounds,
             constraints=constraints,
-            options={'maxiter': 500, 'ftol': 1e-10}
+            options={"maxiter": 500, "ftol": 1e-10},
         )
 
         if not result.success:
@@ -581,8 +603,7 @@ class PortfolioOptimizer:
 
     # ==================== 最大去相关组合 ====================
 
-    def max_decorrelation_optimize(self, cov_matrix: pd.DataFrame,
-                                   max_position: float = 0.10) -> pd.Series:
+    def max_decorrelation_optimize(self, cov_matrix: pd.DataFrame, max_position: float = 0.10) -> pd.Series:
         """
         最大去相关组合
 
@@ -611,18 +632,19 @@ class PortfolioOptimizer:
         def gradient(w):
             return 2 * C @ w
 
-        constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1.0}]
+        constraints = [{"type": "eq", "fun": lambda w: np.sum(w) - 1.0}]
         bounds = [(0, max_position) for _ in range(n)]
 
         w0 = np.ones(n) / n
 
         result = minimize(
-            objective, w0,
-            method='SLSQP',
+            objective,
+            w0,
+            method="SLSQP",
             jac=gradient,
             bounds=bounds,
             constraints=constraints,
-            options={'maxiter': 500, 'ftol': 1e-10}
+            options={"maxiter": 500, "ftol": 1e-10},
         )
 
         if not result.success:
@@ -638,15 +660,19 @@ class PortfolioOptimizer:
 
     # ==================== Black-Litterman模型 ====================
 
-    def black_litterman_optimize(self, market_cap_weights: pd.Series,
-                                  cov_matrix: pd.DataFrame,
-                                  P: np.ndarray, Q: np.ndarray,
-                                  Omega: np.ndarray,
-                                  tau: float = 0.05,  # 均衡不确定性缩放: 越小越信任市场均衡，越大越信任主观观点
-                                  risk_aversion: float = 1.0,
-                                  delta: float = 2.5,  # 均衡风险厌恶系数，A股历史经验值2~4
-                                  max_position: float = 0.10,
-                                  long_only: bool = True) -> pd.Series:
+    def black_litterman_optimize(
+        self,
+        market_cap_weights: pd.Series,
+        cov_matrix: pd.DataFrame,
+        P: np.ndarray,
+        Q: np.ndarray,
+        Omega: np.ndarray,
+        tau: float = 0.05,  # 均衡不确定性缩放: 越小越信任市场均衡，越大越信任主观观点
+        risk_aversion: float = 1.0,
+        delta: float = 2.5,  # 均衡风险厌恶系数，A股历史经验值2~4
+        max_position: float = 0.10,
+        long_only: bool = True,
+    ) -> pd.Series:
         """
         Black-Litterman组合优化
         将模型观点(Q)与市场均衡结合，产生稳定的后验期望收益
@@ -716,16 +742,19 @@ class PortfolioOptimizer:
 
     # ==================== BL敏感性分析 ====================
 
-    def black_litterman_sensitivity(self,
-                                      market_cap_weights: pd.Series,
-                                      cov_matrix: pd.DataFrame,
-                                      P: np.ndarray, Q: np.ndarray,
-                                      Omega: np.ndarray,
-                                      tau_range: Optional[List[float]] = None,
-                                      risk_aversion: float = 1.0,
-                                      delta: float = 2.5,
-                                      max_position: float = 0.10,
-                                      long_only: bool = True) -> Dict[str, Any]:
+    def black_litterman_sensitivity(
+        self,
+        market_cap_weights: pd.Series,
+        cov_matrix: pd.DataFrame,
+        P: np.ndarray,
+        Q: np.ndarray,
+        Omega: np.ndarray,
+        tau_range: list[float] | None = None,
+        risk_aversion: float = 1.0,
+        delta: float = 2.5,
+        max_position: float = 0.10,
+        long_only: bool = True,
+    ) -> dict[str, Any]:
         """
         Black-Litterman tau敏感性分析
         tau对BL结果影响极大，需扫描范围观察权重稳定性
@@ -739,36 +768,46 @@ class PortfolioOptimizer:
         results = {}
         for tau in tau_range:
             weights = self.black_litterman_optimize(
-                market_cap_weights, cov_matrix, P, Q, Omega,
-                tau=tau, risk_aversion=risk_aversion, delta=delta,
-                max_position=max_position, long_only=long_only,
+                market_cap_weights,
+                cov_matrix,
+                P,
+                Q,
+                Omega,
+                tau=tau,
+                risk_aversion=risk_aversion,
+                delta=delta,
+                max_position=max_position,
+                long_only=long_only,
             )
-            results[f'tau={tau:.3f}'] = {
-                'weights': weights.to_dict(),
-                'max_weight': weights.max(),
-                'min_weight': weights[weights > 0].min() if (weights > 0).any() else 0,
-                'n_positions': (weights > 1e-4).sum(),
+            results[f"tau={tau:.3f}"] = {
+                "weights": weights.to_dict(),
+                "max_weight": weights.max(),
+                "min_weight": weights[weights > 0].min() if (weights > 0).any() else 0,
+                "n_positions": (weights > 1e-4).sum(),
             }
 
         # 计算权重稳定性: 各tau下权重的标准差
-        all_weights = pd.DataFrame({k: pd.Series(v['weights']) for k, v in results.items()})
+        all_weights = pd.DataFrame({k: pd.Series(v["weights"]) for k, v in results.items()})
         weight_stability = all_weights.std(axis=1).mean()
 
         return {
-            'tau_results': results,
-            'weight_stability': round(weight_stability, 6),
-            'is_stable': weight_stability < 0.01,  # 各tau下权重标准差<1%视为稳定，否则需谨慎选择tau
+            "tau_results": results,
+            "weight_stability": round(weight_stability, 6),
+            "is_stable": weight_stability < 0.01,  # 各tau下权重标准差<1%视为稳定，否则需谨慎选择tau
         }
 
     # ==================== 稳健优化 ====================
 
-    def robust_mean_variance_optimize(self, expected_returns: pd.Series,
-                                       cov_matrix: pd.DataFrame,
-                                       return_uncertainty: pd.Series,
-                                       risk_aversion: float = 1.0,
-                                       kappa: float = 1.0,  # 不确定性惩罚: kappa=0退化为均值方差，kappa=1对应Box不确定性集
-                                       max_position: float = 0.10,
-                                       long_only: bool = True) -> pd.Series:
+    def robust_mean_variance_optimize(
+        self,
+        expected_returns: pd.Series,
+        cov_matrix: pd.DataFrame,
+        return_uncertainty: pd.Series,
+        risk_aversion: float = 1.0,
+        kappa: float = 1.0,  # 不确定性惩罚: kappa=0退化为均值方差，kappa=1对应Box不确定性集
+        max_position: float = 0.10,
+        long_only: bool = True,
+    ) -> pd.Series:
         """
         稳健优化 (收益不确定性)
         最差情况优化: max_w: w'mu_hat - kappa*|w|'*sigma_mu - lambda/2*w'Sigma*w
@@ -828,7 +867,7 @@ class PortfolioOptimizer:
         except cp.SolverError:
             problem.solve(solver=cp.ECOS, max_iters=500)
 
-        if problem.status not in ['optimal', 'optimal_inaccurate'] or w.value is None:
+        if problem.status not in ["optimal", "optimal_inaccurate"] or w.value is None:
             # 回退到普通均值方差
             return self.mean_variance_optimize(
                 expected_returns.reindex(common),
@@ -845,14 +884,17 @@ class PortfolioOptimizer:
 
     # ==================== 交易成本感知优化 ====================
 
-    def transaction_cost_aware_optimize(self, expected_returns: pd.Series,
-                                         cov_matrix: pd.DataFrame,
-                                         prev_weights: pd.Series,
-                                         risk_aversion: float = 1.0,
-                                         linear_cost: float = 0.003,  # 单边30bps: 佣金~5bps+印花税10bps+滑点~15bps
-                                         quadratic_cost: float = 0.0,  # 二次项模拟市场冲击(大单推高成交价)，小资金可设0
-                                         max_position: float = 0.10,
-                                         long_only: bool = True) -> pd.Series:
+    def transaction_cost_aware_optimize(
+        self,
+        expected_returns: pd.Series,
+        cov_matrix: pd.DataFrame,
+        prev_weights: pd.Series,
+        risk_aversion: float = 1.0,
+        linear_cost: float = 0.003,  # 单边30bps: 佣金~5bps+印花税10bps+滑点~15bps
+        quadratic_cost: float = 0.0,  # 二次项模拟市场冲击(大单推高成交价)，小资金可设0
+        max_position: float = 0.10,
+        long_only: bool = True,
+    ) -> pd.Series:
         """
         交易成本感知优化
         max w'mu - lambda/2*w'Sigma*w - lambda_tc_linear*|w-w_prev|_1 - lambda_tc_quad*||w-w_prev||^2
@@ -886,8 +928,11 @@ class PortfolioOptimizer:
             delta_w = expected_returns.reindex(common) - prev_weights.reindex(common)
             adjusted_returns = expected_returns.reindex(common) - quadratic_cost * delta_w
             return self.mean_variance_optimize(
-                adjusted_returns, cov_matrix.loc[common, common],
-                risk_aversion=risk_aversion, max_position=max_position, long_only=long_only,
+                adjusted_returns,
+                cov_matrix.loc[common, common],
+                risk_aversion=risk_aversion,
+                max_position=max_position,
+                long_only=long_only,
             )
 
         w = cp.Variable(n)
@@ -916,10 +961,13 @@ class PortfolioOptimizer:
         except cp.SolverError:
             problem.solve(solver=cp.ECOS, max_iters=500)
 
-        if problem.status not in ['optimal', 'optimal_inaccurate'] or w.value is None:
+        if problem.status not in ["optimal", "optimal_inaccurate"] or w.value is None:
             return self.mean_variance_optimize(
-                expected_returns.reindex(common), cov_matrix.loc[common, common],
-                risk_aversion=risk_aversion, max_position=max_position, long_only=long_only,
+                expected_returns.reindex(common),
+                cov_matrix.loc[common, common],
+                risk_aversion=risk_aversion,
+                max_position=max_position,
+                long_only=long_only,
             )
 
         weights = np.maximum(w.value, 0)
@@ -929,10 +977,9 @@ class PortfolioOptimizer:
 
     # ==================== 优化结果分析 ====================
 
-    def analyze_optimization(self, weights: pd.Series,
-                              expected_returns: pd.Series,
-                              cov_matrix: pd.DataFrame,
-                              risk_free_rate: float = 0.03) -> Dict:  # 3%无风险利率对应A股十年期国债均值
+    def analyze_optimization(
+        self, weights: pd.Series, expected_returns: pd.Series, cov_matrix: pd.DataFrame, risk_free_rate: float = 0.03
+    ) -> dict:  # 3%无风险利率对应A股十年期国债均值
         """
         分析优化结果
 
@@ -969,17 +1016,17 @@ class PortfolioOptimizer:
         rc_pct = rc / port_var if port_var > 0 else rc
 
         # 有效持仓数: 1/Σw_i^2，等权时等于N，集中时趋近1
-        effective_n = 1 / np.sum(w ** 2)
+        effective_n = 1 / np.sum(w**2)
 
         return {
-            'expected_return': annual_return,
-            'volatility': annual_vol,
-            'sharpe_ratio': sharpe,
-            'effective_positions': effective_n,
-            'max_weight': weights.max(),
-            'min_weight': weights[weights > 0].min() if (weights > 0).any() else 0,
-            'non_zero_positions': (weights > 1e-4).sum(),
-            'risk_contributions': pd.Series(rc_pct, index=common),
+            "expected_return": annual_return,
+            "volatility": annual_vol,
+            "sharpe_ratio": sharpe,
+            "effective_positions": effective_n,
+            "max_weight": weights.max(),
+            "min_weight": weights[weights > 0].min() if (weights > 0).any() else 0,
+            "non_zero_positions": (weights > 1e-4).sum(),
+            "risk_contributions": pd.Series(rc_pct, index=common),
         }
 
     # ==================== Mean-CVaR优化 (从RiskModel迁入) ====================
@@ -994,13 +1041,16 @@ class PortfolioOptimizer:
         except np.linalg.LinAlgError:
             return matrix
 
-    def mean_cvar_optimize(self, expected_returns: np.ndarray,
-                           cov_matrix: np.ndarray,
-                           confidence: float = 0.95,
-                           risk_aversion: float = 1.0,
-                           max_weight: float = 0.05,  # CVaR优化更保守，5%上限防止尾部风险集中于少数资产
-                           min_weight: float = 0.0,
-                           long_only: bool = True) -> Dict[str, Any]:
+    def mean_cvar_optimize(
+        self,
+        expected_returns: np.ndarray,
+        cov_matrix: np.ndarray,
+        confidence: float = 0.95,
+        risk_aversion: float = 1.0,
+        max_weight: float = 0.05,  # CVaR优化更保守，5%上限防止尾部风险集中于少数资产
+        min_weight: float = 0.0,
+        long_only: bool = True,
+    ) -> dict[str, Any]:
         """
         Mean-CVaR组合优化 (Rockafellar-Uryasev 2000)
         直接优化尾部风险而非方差，对非正态分布更稳健
@@ -1052,7 +1102,7 @@ class PortfolioOptimizer:
         except cp.SolverError:
             problem.solve(solver=cp.SCS, max_iters=2000)
 
-        if problem.status not in ['optimal', 'optimal_inaccurate']:
+        if problem.status not in ["optimal", "optimal_inaccurate"]:
             return self._mean_variance_fallback(expected_returns, cov_matrix, max_weight)
 
         weights = w.value
@@ -1063,17 +1113,20 @@ class PortfolioOptimizer:
         weights = weights / weights.sum()
 
         return {
-            'weights': weights,
-            'expected_return': float(expected_returns @ weights),
-            'cvar': float(xi.value + (1.0 / ((1 - confidence) * n_scenarios)) * np.sum(np.maximum(0, -scenarios @ weights - xi.value))),
-            'var': float(xi.value),
-            'portfolio_vol': float(np.sqrt(weights @ cov_matrix @ weights)),
-            'status': problem.status,
+            "weights": weights,
+            "expected_return": float(expected_returns @ weights),
+            "cvar": float(
+                xi.value
+                + (1.0 / ((1 - confidence) * n_scenarios)) * np.sum(np.maximum(0, -scenarios @ weights - xi.value))
+            ),
+            "var": float(xi.value),
+            "portfolio_vol": float(np.sqrt(weights @ cov_matrix @ weights)),
+            "status": problem.status,
         }
 
-    def _mean_variance_fallback(self, expected_returns: np.ndarray,
-                                 cov_matrix: np.ndarray,
-                                 max_weight: float) -> Dict[str, Any]:
+    def _mean_variance_fallback(
+        self, expected_returns: np.ndarray, cov_matrix: np.ndarray, max_weight: float
+    ) -> dict[str, Any]:
         """均值-方差优化回退方案"""
         N = len(expected_returns)
         try:
@@ -1090,16 +1143,15 @@ class PortfolioOptimizer:
             weights = np.ones(N) / N
 
         return {
-            'weights': weights,
-            'expected_return': float(expected_returns @ weights),
-            'portfolio_vol': float(np.sqrt(weights @ cov_matrix @ weights)),
-            'status': 'fallback',
+            "weights": weights,
+            "expected_return": float(expected_returns @ weights),
+            "portfolio_vol": float(np.sqrt(weights @ cov_matrix @ weights)),
+            "status": "fallback",
         }
 
     # ==================== HRP层次风险平价 (从ModelScorer迁入) ====================
 
-    def hrp_optimize(self, cov_matrix: np.ndarray,
-                     index: pd.Index = None) -> pd.Series:
+    def hrp_optimize(self, cov_matrix: np.ndarray, index: pd.Index = None) -> pd.Series:
         """
         层次风险平价 (Hierarchical Risk Parity, Lopez de Prado 2016)
         基于相关性的聚类分配，避免矩阵求逆的不稳定性
@@ -1122,8 +1174,9 @@ class PortfolioOptimizer:
             np.fill_diagonal(dist, 0)
 
             from scipy.cluster.hierarchy import linkage, to_tree
+
             condensed = dist[np.triu_indices(n, k=1)]
-            link = linkage(condensed, method='single')  # single linkage避免链式效应弱于complete，但对金融数据更稳定
+            link = linkage(condensed, method="single")  # single linkage避免链式效应弱于complete，但对金融数据更稳定
 
             # Lopez de Prado标准HRP: 按linkage树拓扑结构递归分配
             root = to_tree(link, rd=True)
@@ -1151,7 +1204,6 @@ class PortfolioOptimizer:
         Returns:
             权重向量 (n,)
         """
-        from scipy.cluster.hierarchy import ClusterNode
 
         # 叶节点: 返回1(后续归一化)
         if not cluster_node.left and not cluster_node.right:
@@ -1177,7 +1229,7 @@ class PortfolioOptimizer:
         return alpha * left_weights + (1 - alpha) * right_weights
 
     @staticmethod
-    def _get_cluster_items(cluster_node) -> List[int]:
+    def _get_cluster_items(cluster_node) -> list[int]:
         """获取聚类节点下所有叶节点的索引列表"""
         if cluster_node is None:
             return []

@@ -1,18 +1,33 @@
 """模拟组合 API。"""
 
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
+from app.core.response import success
 from app.db.base import get_db
-from app.services.simulated_portfolios_service import get_simulated_portfolios, create_simulated_portfolio, get_simulated_portfolio_positions, create_simulated_portfolio_positions, get_simulated_portfolio_navs, create_simulated_portfolio_nav, update_simulated_portfolio, calculate_simulated_portfolio_nav
-from app.schemas.simulated_portfolios import SimulatedPortfolioCreate, SimulatedPortfolioPositionCreate, SimulatedPortfolioNavCreate, SimulatedPortfolioOut, SimulatedPortfolioPositionOut, SimulatedPortfolioNavOut
-from app.core.response import success, error
+from app.schemas.simulated_portfolios import (
+    SimulatedPortfolioCreate,
+    SimulatedPortfolioPositionCreate,
+)
+from app.services.simulated_portfolios_service import (
+    calculate_simulated_portfolio_nav,
+    create_simulated_portfolio,
+    create_simulated_portfolio_positions,
+    get_simulated_portfolio_navs,
+    get_simulated_portfolio_positions,
+    get_simulated_portfolios,
+    update_simulated_portfolio,
+)
 
 router = APIRouter()
 
 
 @router.get("/")
-def read_simulated_portfolios(model_id: int = None, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_simulated_portfolios(
+    model_id: int | None = None, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
+):
     """获取模拟组合列表"""
     portfolios = get_simulated_portfolios(model_id=model_id, skip=skip, limit=limit, db=db)
     return success(portfolios)
@@ -26,21 +41,25 @@ def create_simulated_portfolio_endpoint(portfolio: SimulatedPortfolioCreate, db:
 
 
 @router.get("/{portfolio_id}/positions")
-def read_simulated_portfolio_positions(portfolio_id: int, trade_date: str = None, db: Session = Depends(get_db)):
+def read_simulated_portfolio_positions(portfolio_id: int, trade_date: str | None = None, db: Session = Depends(get_db)):
     """获取模拟组合持仓"""
     positions = get_simulated_portfolio_positions(portfolio_id, trade_date, db=db)
     return success(positions)
 
 
 @router.post("/{portfolio_id}/positions")
-def create_simulated_portfolio_positions_endpoint(portfolio_id: int, positions: List[SimulatedPortfolioPositionCreate], db: Session = Depends(get_db)):
+def create_simulated_portfolio_positions_endpoint(
+    portfolio_id: int, positions: list[SimulatedPortfolioPositionCreate], db: Session = Depends(get_db)
+):
     """创建模拟组合持仓"""
     result = create_simulated_portfolio_positions(portfolio_id, positions, db=db)
     return success(result)
 
 
 @router.get("/{portfolio_id}/navs")
-def read_simulated_portfolio_navs(portfolio_id: int, start_date: str = None, end_date: str = None, db: Session = Depends(get_db)):
+def read_simulated_portfolio_navs(
+    portfolio_id: int, start_date: str | None = None, end_date: str | None = None, db: Session = Depends(get_db)
+):
     """获取模拟组合净值"""
     navs = get_simulated_portfolio_navs(portfolio_id, start_date, end_date, db=db)
     return success(navs)

@@ -1,21 +1,34 @@
 """组合管理 API。"""
 
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
+from app.core.compliance import add_disclaimer
+from app.core.permissions import require_permission
+from app.core.response import success
 from app.db.base import get_db
 from app.models.user import User
-from app.services.portfolios_service import get_portfolios, create_portfolio, get_portfolio_positions, create_portfolio_positions, get_rebalance_records, create_rebalance_record, generate_research_snapshot, generate_change_observation
-from app.schemas.portfolios import PortfolioCreate, PortfolioUpdate, PortfolioOut, PortfolioPositionCreate, PortfolioPositionOut, RebalanceRecordCreate, RebalanceRecordOut
-from app.core.response import success, error
-from app.core.permissions import require_permission
-from app.core.compliance import add_disclaimer
+from app.schemas.portfolios import (
+    PortfolioCreate,
+    PortfolioPositionCreate,
+)
+from app.services.portfolios_service import (
+    create_portfolio,
+    create_portfolio_positions,
+    generate_change_observation,
+    generate_research_snapshot,
+    get_portfolio_positions,
+    get_portfolios,
+    get_rebalance_records,
+)
 
 router = APIRouter()
 
 
 @router.get("/")
-def read_portfolios(model_id: int, trade_date: str = None, db: Session = Depends(get_db)):
+def read_portfolios(model_id: int, trade_date: str | None = None, db: Session = Depends(get_db)):
     """获取组合列表"""
     portfolios = get_portfolios(model_id, trade_date, db=db)
     return success(portfolios)
@@ -36,7 +49,9 @@ def read_portfolio_positions(portfolio_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{portfolio_id}/positions")
-def create_portfolio_positions_endpoint(portfolio_id: int, positions: List[PortfolioPositionCreate], db: Session = Depends(get_db)):
+def create_portfolio_positions_endpoint(
+    portfolio_id: int, positions: list[PortfolioPositionCreate], db: Session = Depends(get_db)
+):
     """创建组合持仓"""
     result = create_portfolio_positions(portfolio_id, positions, db=db)
     return success(result)

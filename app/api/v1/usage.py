@@ -1,21 +1,22 @@
 """用量统计 API。"""
 
 from datetime import date
-from typing import Optional
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from app.db.base import get_db
-from app.services import usage_service
+
 from app.api.v1.auth import get_current_user
-from app.models.user import User
 from app.core.response import success
+from app.db.base import get_db
+from app.models.user import User
+from app.services import usage_service
 
 router = APIRouter()
 
 
 @router.get("/")
 def get_my_usage(
-    usage_date: Optional[date] = Query(None, description="查询日期，默认今天"),
+    usage_date: date | None = Query(None, description="查询日期，默认今天"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

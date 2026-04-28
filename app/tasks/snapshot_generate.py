@@ -1,12 +1,15 @@
 """数据快照生成任务"""
 
+from __future__ import annotations
+
 from datetime import date
+
 from app.core.celery_config import celery_app
 from app.core.logging import logger
 
 
 @celery_app.task(name="generate_snapshot")
-def generate_snapshot(trade_date: str = None):
+def generate_snapshot(trade_date: str | None = None):
     """
     生成每日数据快照
 

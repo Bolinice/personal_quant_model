@@ -1,13 +1,13 @@
 """用户管理 API。"""
 
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
+from app.core.response import success
 from app.db.base import get_db
-from app.services.auth_service import AuthService
 from app.models.user import User
-from app.schemas.user import UserCreate, UserUpdate, UserOut
-from app.core.response import success, error
+from app.schemas.user import UserCreate, UserUpdate
+from app.services.auth_service import AuthService
 
 router = APIRouter()
 
@@ -16,9 +16,13 @@ router = APIRouter()
 def create_user_endpoint(user: UserCreate, db: Session = Depends(get_db)):
     """创建用户"""
     result = AuthService.create_user(
-        db, username=user.username, email=user.email,
-        password=user.password, role=user.role,
-        real_name=user.real_name, phone=user.phone,
+        db,
+        username=user.username,
+        email=user.email,
+        password=user.password,
+        role=user.role,
+        real_name=user.real_name,
+        phone=user.phone,
     )
     return success(result)
 

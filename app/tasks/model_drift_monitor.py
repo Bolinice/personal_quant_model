@@ -1,12 +1,15 @@
 """模型漂移监控任务"""
 
+from __future__ import annotations
+
 from datetime import date
+
 from app.core.celery_config import celery_app
 from app.core.logging import logger
 
 
 @celery_app.task(name="check_model_drift")
-def check_model_drift(trade_date: str = None):
+def check_model_drift(trade_date: str | None = None):
     """
     模型漂移监控
 

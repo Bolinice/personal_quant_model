@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, DateTime, Date, Boolean
-from sqlalchemy.sql import func
+from sqlalchemy import Boolean, Column, Date, Integer, String
+
 from app.db.base import Base
+
 
 class TradingCalendar(Base):
     __tablename__ = "trading_calendar"

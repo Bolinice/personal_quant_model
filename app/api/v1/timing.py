@@ -1,12 +1,21 @@
 """择时管理 API。"""
 
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
+from app.core.response import success
 from app.db.base import get_db
-from app.services.timing_service import get_timing_signals, create_timing_signal, get_timing_config, create_timing_config, update_timing_config, calculate_ma_timing, calculate_breadth_timing, calculate_volatility_timing
-from app.schemas.timing import TimingSignalCreate, TimingConfigCreate, TimingConfigUpdate, TimingSignalOut, TimingConfigOut
-from app.core.response import success, error
+from app.schemas.timing import TimingConfigCreate, TimingConfigUpdate, TimingSignalCreate
+from app.services.timing_service import (
+    calculate_breadth_timing,
+    calculate_ma_timing,
+    calculate_volatility_timing,
+    create_timing_config,
+    create_timing_signal,
+    get_timing_config,
+    get_timing_signals,
+    update_timing_config,
+)
 
 router = APIRouter()
 

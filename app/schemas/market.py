@@ -1,79 +1,87 @@
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional
-from datetime import datetime, date
+from datetime import date, datetime
+
+from pydantic import BaseModel, ConfigDict
+
 
 class StockDailyBase(BaseModel):
     ts_code: str
     trade_date: date
-    open: Optional[float] = None
-    high: Optional[float] = None
-    low: Optional[float] = None
-    close: Optional[float] = None
-    pre_close: Optional[float] = None
-    change: Optional[float] = None
-    pct_chg: Optional[float] = None
-    vol: Optional[float] = None
-    amount: Optional[float] = None
-    data_source: Optional[str] = None
-    amount_is_estimated: Optional[bool] = False
+    open: float | None = None
+    high: float | None = None
+    low: float | None = None
+    close: float | None = None
+    pre_close: float | None = None
+    change: float | None = None
+    pct_chg: float | None = None
+    vol: float | None = None
+    amount: float | None = None
+    data_source: str | None = None
+    amount_is_estimated: bool | None = False
+
 
 class StockDailyCreate(StockDailyBase):
     pass
 
+
 class StockDailyUpdate(BaseModel):
-    open: Optional[float] = None
-    high: Optional[float] = None
-    low: Optional[float] = None
-    close: Optional[float] = None
-    pre_close: Optional[float] = None
-    change: Optional[float] = None
-    pct_chg: Optional[float] = None
-    vol: Optional[float] = None
-    amount: Optional[float] = None
-    data_source: Optional[str] = None
-    amount_is_estimated: Optional[bool] = None
+    open: float | None = None
+    high: float | None = None
+    low: float | None = None
+    close: float | None = None
+    pre_close: float | None = None
+    change: float | None = None
+    pct_chg: float | None = None
+    vol: float | None = None
+    amount: float | None = None
+    data_source: str | None = None
+    amount_is_estimated: bool | None = None
+
 
 class StockDailyOut(StockDailyBase):
     id: int
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
 
 class IndexDailyBase(BaseModel):
     index_code: str
     trade_date: date
-    open: Optional[float] = None
-    high: Optional[float] = None
-    low: Optional[float] = None
-    close: Optional[float] = None
-    pre_close: Optional[float] = None
-    change: Optional[float] = None
-    pct_chg: Optional[float] = None
-    vol: Optional[float] = None
-    amount: Optional[float] = None
-    data_source: Optional[str] = None
-    amount_is_estimated: Optional[bool] = False
+    open: float | None = None
+    high: float | None = None
+    low: float | None = None
+    close: float | None = None
+    pre_close: float | None = None
+    change: float | None = None
+    pct_chg: float | None = None
+    vol: float | None = None
+    amount: float | None = None
+    data_source: str | None = None
+    amount_is_estimated: bool | None = False
+
 
 class IndexDailyCreate(IndexDailyBase):
     pass
 
+
 class IndexDailyUpdate(BaseModel):
-    open: Optional[float] = None
-    high: Optional[float] = None
-    low: Optional[float] = None
-    close: Optional[float] = None
-    pre_close: Optional[float] = None
-    change: Optional[float] = None
-    pct_chg: Optional[float] = None
-    vol: Optional[float] = None
-    amount: Optional[float] = None
-    data_source: Optional[str] = None
-    amount_is_estimated: Optional[bool] = None
+    open: float | None = None
+    high: float | None = None
+    low: float | None = None
+    close: float | None = None
+    pre_close: float | None = None
+    change: float | None = None
+    pct_chg: float | None = None
+    vol: float | None = None
+    amount: float | None = None
+    data_source: str | None = None
+    amount_is_estimated: bool | None = None
+
 
 class IndexDailyOut(IndexDailyBase):
     id: int
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)

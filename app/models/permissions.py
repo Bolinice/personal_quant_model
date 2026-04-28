@@ -4,15 +4,17 @@
 - RolePermission: 角色-权限关联
 """
 
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, UniqueConstraint, DateTime
-from sqlalchemy.orm import relationship
 from datetime import datetime
+
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.orm import relationship
 
 from app.db.base import Base
 
 
 class Permission(Base):
     """权限定义表"""
+
     __tablename__ = "permissions"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -30,10 +32,9 @@ class Permission(Base):
 
 class RolePermission(Base):
     """角色-权限关联表"""
+
     __tablename__ = "role_permissions"
-    __table_args__ = (
-        UniqueConstraint("role", "permission_id", name="uq_role_permission"),
-    )
+    __table_args__ = (UniqueConstraint("role", "permission_id", name="uq_role_permission"),)
 
     id = Column(Integer, primary_key=True, index=True)
     role = Column(String(32), nullable=False, index=True, comment="角色: trial/free/pro/institution")

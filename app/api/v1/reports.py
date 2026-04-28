@@ -1,21 +1,37 @@
 """报告管理 API。"""
 
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
+from app.core.response import success
 from app.db.base import get_db
-from app.services.reports_service import (
-    get_reports, get_report_by_id, create_report, update_report, delete_report,
-    get_report_templates, get_report_template_by_id, create_report_template, update_report_template, delete_report_template,
-    get_report_schedules, get_report_schedule_by_id, create_report_schedule, update_report_schedule, delete_report_schedule,
-    generate_report, schedule_report_generation,
-)
 from app.schemas.reports import (
-    ReportCreate, ReportUpdate, ReportOut,
-    ReportTemplateCreate, ReportTemplateUpdate, ReportTemplateOut,
-    ReportScheduleCreate, ReportScheduleUpdate, ReportScheduleOut,
+    ReportCreate,
+    ReportScheduleCreate,
+    ReportScheduleUpdate,
+    ReportTemplateCreate,
+    ReportTemplateUpdate,
+    ReportUpdate,
 )
-from app.core.response import success, error
+from app.services.reports_service import (
+    create_report,
+    create_report_schedule,
+    create_report_template,
+    delete_report,
+    delete_report_schedule,
+    delete_report_template,
+    generate_report,
+    get_report_by_id,
+    get_report_schedule_by_id,
+    get_report_schedules,
+    get_report_template_by_id,
+    get_report_templates,
+    get_reports,
+    schedule_report_generation,
+    update_report,
+    update_report_schedule,
+    update_report_template,
+)
 
 router = APIRouter()
 
@@ -63,6 +79,7 @@ def delete_report_endpoint(report_id: int, db: Session = Depends(get_db)):
 
 # ─── 报告模板 ───
 
+
 @router.get("/templates/")
 def read_report_templates(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """获取报告模板列表"""
@@ -87,7 +104,9 @@ def create_report_template_endpoint(template: ReportTemplateCreate, db: Session 
 
 
 @router.put("/templates/{template_id}")
-def update_report_template_endpoint(template_id: int, template_update: ReportTemplateUpdate, db: Session = Depends(get_db)):
+def update_report_template_endpoint(
+    template_id: int, template_update: ReportTemplateUpdate, db: Session = Depends(get_db)
+):
     """更新报告模板"""
     template = update_report_template(template_id, template_update, db=db)
     if template is None:
@@ -105,6 +124,7 @@ def delete_report_template_endpoint(template_id: int, db: Session = Depends(get_
 
 
 # ─── 报告调度 ───
+
 
 @router.get("/schedules/")
 def read_report_schedules(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
@@ -130,7 +150,9 @@ def create_report_schedule_endpoint(schedule: ReportScheduleCreate, db: Session 
 
 
 @router.put("/schedules/{schedule_id}")
-def update_report_schedule_endpoint(schedule_id: int, schedule_update: ReportScheduleUpdate, db: Session = Depends(get_db)):
+def update_report_schedule_endpoint(
+    schedule_id: int, schedule_update: ReportScheduleUpdate, db: Session = Depends(get_db)
+):
     """更新报告调度"""
     schedule = update_report_schedule(schedule_id, schedule_update, db=db)
     if schedule is None:
@@ -148,6 +170,7 @@ def delete_report_schedule_endpoint(schedule_id: int, db: Session = Depends(get_
 
 
 # ─── 报告操作 ───
+
 
 @router.post("/generate/{report_id}")
 def generate_report_endpoint(report_id: int, db: Session = Depends(get_db)):

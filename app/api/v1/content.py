@@ -1,20 +1,23 @@
 """内容管理 API。"""
 
-from typing import List
-from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
+from app.core.compliance import SAFE_REPLACEMENTS, check_high_risk_text
+from app.core.response import success
 from app.db.base import get_db
-from app.services.content_service import (
-    get_page_content, get_section_content, get_available_pages,
-    create_content_block, update_content_block,
-)
 from app.schemas.content import (
-    ContentBlockCreate, ContentBlockUpdate, ContentBlockOut,
-    PageContentOut, ContentSectionOut,
+    ContentBlockCreate,
+    ContentBlockUpdate,
 )
-from app.core.response import success, error
-from app.core.compliance import check_high_risk_text, SAFE_REPLACEMENTS
+from app.services.content_service import (
+    create_content_block,
+    get_available_pages,
+    get_page_content,
+    get_section_content,
+    update_content_block,
+)
 
 router = APIRouter()
 
@@ -25,7 +28,7 @@ class CheckTextRequest(BaseModel):
 
 class CheckTextResponse(BaseModel):
     has_risk: bool
-    found_terms: List[str]
+    found_terms: list[str]
     replacements: dict
 
 
@@ -76,8 +79,10 @@ def check_text(req: CheckTextRequest):
     """
     found_terms = check_high_risk_text(req.text)
     replacements = {term: SAFE_REPLACEMENTS[term] for term in found_terms if term in SAFE_REPLACEMENTS}
-    return success({
-        "has_risk": len(found_terms) > 0,
-        "found_terms": found_terms,
-        "replacements": replacements,
-    })
+    return success(
+        {
+            "has_risk": len(found_terms) > 0,
+            "found_terms": found_terms,
+            "replacements": replacements,
+        }
+    )

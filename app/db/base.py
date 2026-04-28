@@ -1,8 +1,9 @@
+from collections.abc import Generator
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from typing import Generator, Optional
+from sqlalchemy.orm import Session, sessionmaker
+
 from app.core.config import settings
-from app.core.logging import logger
 
 engine = create_engine(
     settings.DATABASE_URL,
@@ -26,15 +27,17 @@ def get_db() -> Generator[Session, None, None]:
 
 def with_db(func):
     """数据库会话装饰器 - 如果调用者未提供db则自动创建"""
+
     def wrapper(*args, **kwargs):
-        if 'db' in kwargs and kwargs['db'] is not None:
+        if "db" in kwargs and kwargs["db"] is not None:
             return func(*args, **kwargs)
         db = SessionLocal()
         try:
-            kwargs['db'] = db
+            kwargs["db"] = db
             return func(*args, **kwargs)
         finally:
             db.close()
+
     return wrapper
 
 

@@ -1,10 +1,12 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, JSON, Text, Index
+from sqlalchemy import JSON, Boolean, Column, DateTime, Index, Integer, String, Text
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class AlertLog(Base):
     """告警日志表"""
+
     __tablename__ = "alert_logs"
     __table_args__ = (
         Index("ix_al_rule", "rule_id"),
@@ -30,10 +32,9 @@ class AlertLog(Base):
 
 class AlertRule(Base):
     """告警规则表"""
+
     __tablename__ = "alert_rules"
-    __table_args__ = (
-        Index("ix_ar_type", "alert_type"),
-    )
+    __table_args__ = (Index("ix_ar_type", "alert_type"),)
 
     id: int = Column(Integer, primary_key=True, index=True)
     rule_name: str = Column(String(100), nullable=False)
@@ -51,6 +52,7 @@ class AlertRule(Base):
 
 class Notification(Base):
     """通知表"""
+
     __tablename__ = "notifications"
     __table_args__ = (
         Index("ix_notif_user", "user_id"),

@@ -9,11 +9,10 @@
 - 每个worker持有独立DB session，避免多线程共享session的并发问题
 """
 
-import time
 import logging
-from datetime import datetime, timedelta, date
-from typing import Dict, List, Optional, Set
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date, datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -22,6 +21,7 @@ from sqlalchemy import text
 from app.core.config import settings
 from app.data_sources.tushare_source import TushareDataSource
 from app.db.base import SessionLocal
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ class ConcurrentDataSyncer:
 
     def __init__(
         self,
-        token: Optional[str] = None,
+        token: str | None = None,
         max_workers: int = 8,
         rate_limit: float = 0.35,  # Tushare代理API限流：每分钟约200次，0.35s间隔≈170次/分，留余量
     ):
@@ -69,10 +69,10 @@ class ConcurrentDataSyncer:
 
     def sync_all(
         self,
-        trade_date: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-    ) -> Dict[str, int]:
+        trade_date: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> dict[str, int]:
         """
         并发同步所有数据到数据库
 
@@ -97,7 +97,7 @@ class ConcurrentDataSyncer:
         logger.info("========== 开始全量数据同步 ==========")
         logger.info("  trade_date=%s, range=%s~%s", trade_date, start_date, end_date)
 
-        results: Dict[str, int] = {}
+        results: dict[str, int] = {}
         t0 = time.time()
 
         # Phase 1: 基础数据（串行，数据量小，后续Phase依赖这些数据）
@@ -142,10 +142,7 @@ class ConcurrentDataSyncer:
                 return 0
 
             # 查询所有已有记录 (不仅仅是ts_code, 还需要完整对象用于更新)
-            existing_map: Dict[str, StockBasic] = {
-                r.ts_code: r
-                for r in db.query(StockBasic).all()
-            }
+            existing_map: dict[str, StockBasic] = {r.ts_code: r for r in db.query(StockBasic).all()}
 
             new_count = 0
             updated_count = 0
@@ -163,15 +160,17 @@ class ConcurrentDataSyncer:
 
                 if ts_code not in existing_map:
                     # 新增股票
-                    db.add(StockBasic(
-                        ts_code=ts_code,
-                        symbol=row.get("symbol", ""),
-                        name=new_name,
-                        area=row.get("area", ""),
-                        industry=new_industry,
-                        market=new_market,
-                        list_status=new_list_status,
-                    ))
+                    db.add(
+                        StockBasic(
+                            ts_code=ts_code,
+                            symbol=row.get("symbol", ""),
+                            name=new_name,
+                            area=row.get("area", ""),
+                            industry=new_industry,
+                            market=new_market,
+                            list_status=new_list_status,
+                        )
+                    )
                     new_count += 1
                 else:
                     # 已有股票: 检查关键字段是否有变更, 有则更新
@@ -199,7 +198,9 @@ class ConcurrentDataSyncer:
 
             logger.info(
                 "[stock_basic] 新增 %d / 更新 %d / 已有 %d",
-                new_count, updated_count, len(existing_map) - new_count - updated_count,
+                new_count,
+                updated_count,
+                len(existing_map) - new_count - updated_count,
             )
             return new_count + updated_count
         except Exception as e:
@@ -216,18 +217,13 @@ class ConcurrentDataSyncer:
 
         db = SessionLocal()
         try:
-            df = self.source.get_trading_calendar(
-                self._fmt(start_date), self._fmt(end_date)
-            )
+            df = self.source.get_trading_calendar(self._fmt(start_date), self._fmt(end_date))
             if df is None or df.empty:
                 return 0
 
-            existing = set(
-                r[0]
-                for r in db.query(TradingCalendar.cal_date)
-                .filter(TradingCalendar.exchange == "SSE")
-                .all()
-            )
+            existing = {
+                r[0] for r in db.query(TradingCalendar.cal_date).filter(TradingCalendar.exchange == "SSE").all()
+            }
 
             new_records = []
             for _, row in df.iterrows():
@@ -261,26 +257,24 @@ class ConcurrentDataSyncer:
         from app.models.market import IndexDaily
 
         indices = [
-            "000001.SH", "399001.SZ", "000300.SH",
-            "000905.SH", "000852.SH",
+            "000001.SH",
+            "399001.SZ",
+            "000300.SH",
+            "000905.SH",
+            "000852.SH",
         ]  # 上证/深证/沪深300/中证500/中证1000 — 覆盖主要宽基指数，择时和benchmark依赖
         total = 0
         db = SessionLocal()
         try:
             for index_code in indices:
                 try:
-                    df = self.source.get_index_daily(
-                        index_code, start_date, end_date
-                    )
+                    df = self.source.get_index_daily(index_code, start_date, end_date)
                     if df is None or df.empty:
                         continue
 
-                    existing = set(
-                        r[0]
-                        for r in db.query(IndexDaily.trade_date)
-                        .filter(IndexDaily.index_code == index_code)
-                        .all()
-                    )
+                    existing = {
+                        r[0] for r in db.query(IndexDaily.trade_date).filter(IndexDaily.index_code == index_code).all()
+                    }
 
                     new_records = []
                     for _, row in df.iterrows():
@@ -333,12 +327,10 @@ class ConcurrentDataSyncer:
                     if not codes:
                         continue
 
-                    existing = set(
+                    existing = {
                         r[0]
-                        for r in db.query(IndexComponent.ts_code)
-                        .filter(IndexComponent.index_code == index_code)
-                        .all()
-                    )
+                        for r in db.query(IndexComponent.ts_code).filter(IndexComponent.index_code == index_code).all()
+                    }
 
                     new_records = []
                     td = pd.Timestamp(end_date).date() if len(end_date) == 8 else date.today()
@@ -383,12 +375,7 @@ class ConcurrentDataSyncer:
 
         # 获取已有记录（按股票代码）
         db = SessionLocal()
-        existing_codes = set(
-            r[0]
-            for r in db.execute(
-                text("SELECT DISTINCT ts_code FROM stock_daily")
-            ).fetchall()
-        )
+        existing_codes = {r[0] for r in db.execute(text("SELECT DISTINCT ts_code FROM stock_daily")).fetchall()}
         db.close()
 
         # 优先同步还没有数据的股票（全量拉取）
@@ -397,9 +384,7 @@ class ConcurrentDataSyncer:
         # 30天窗口覆盖最长节假日(春节7天+缓冲)，确保不遗漏交易日
         recent_start = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
 
-        logger.info(
-            "[stock_daily] 全量:%d 增量:%d", len(missing), len(existing_codes)
-        )
+        logger.info("[stock_daily] 全量:%d 增量:%d", len(missing), len(existing_codes))
 
         total = 0
         completed = 0
@@ -414,13 +399,10 @@ class ConcurrentDataSyncer:
                     return 0
 
                 # 批量检查已有日期
-                dates_in_df = [pd.Timestamp(r).date() for r in df["trade_date"]]
-                existing_dates = set(
-                    r[0]
-                    for r in db2.query(StockDaily.trade_date)
-                    .filter(StockDaily.ts_code == ts_code)
-                    .all()
-                )
+                _ = [pd.Timestamp(r).date() for r in df["trade_date"]]
+                existing_dates = {
+                    r[0] for r in db2.query(StockDaily.trade_date).filter(StockDaily.ts_code == ts_code).all()
+                }
 
                 new_records = []
                 for _, row in df.iterrows():
@@ -458,17 +440,13 @@ class ConcurrentDataSyncer:
 
             # 全量同步（缺失的股票）
             for ts_code in missing:
-                future = executor.submit(
-                    fetch_one, ts_code, start_date, end_date
-                )
+                future = executor.submit(fetch_one, ts_code, start_date, end_date)
                 futures[future] = ts_code
                 time.sleep(self.rate_limit)
 
             # 增量同步（已有数据的股票）
             for ts_code in existing_codes.intersection(set(ts_codes)):
-                future = executor.submit(
-                    fetch_one, ts_code, recent_start, end_date
-                )
+                future = executor.submit(fetch_one, ts_code, recent_start, end_date)
                 futures[future] = ts_code
                 time.sleep(self.rate_limit * 0.5)
 
@@ -486,7 +464,10 @@ class ConcurrentDataSyncer:
                     rate = completed / elapsed if elapsed > 0 else 0
                     logger.info(
                         "[stock_daily] 进度:%d/%d 新增:%d 速度:%.1f/s",
-                        completed, len(futures), total, rate,
+                        completed,
+                        len(futures),
+                        total,
+                        rate,
                     )
 
         logger.info("[stock_daily] 完成，新增 %d 行", total)
@@ -504,18 +485,16 @@ class ConcurrentDataSyncer:
 
         # 获取已有日期
         db = SessionLocal()
-        existing_dates = set(
-            r[0]
-            for r in db.execute(
-                text("SELECT DISTINCT trade_date FROM stock_daily_basic")
-            ).fetchall()
-        )
+        existing_dates = {
+            r[0] for r in db.execute(text("SELECT DISTINCT trade_date FROM stock_daily_basic")).fetchall()
+        }
         db.close()
 
         missing_dates = [d for d in trade_dates if d not in existing_dates]
         logger.info(
             "[daily_basic] 需同步 %d 个交易日 (已有 %d)",
-            len(missing_dates), len(existing_dates),
+            len(missing_dates),
+            len(existing_dates),
         )
 
         total = 0
@@ -572,10 +551,8 @@ class ConcurrentDataSyncer:
                 time.sleep(self.rate_limit)
 
             for future in as_completed(futures):
-                try:
+                with contextlib.suppress(Exception):
                     total += future.result()
-                except Exception:
-                    pass
 
         logger.info("[daily_basic] 完成，新增 %d 行", total)
         return total
@@ -591,18 +568,14 @@ class ConcurrentDataSyncer:
 
         # 获取已有财务数据的股票
         db = SessionLocal()
-        existing_codes = set(
-            r[0]
-            for r in db.execute(
-                text("SELECT DISTINCT ts_code FROM stock_financial")
-            ).fetchall()
-        )
+        existing_codes = {r[0] for r in db.execute(text("SELECT DISTINCT ts_code FROM stock_financial")).fetchall()}
         db.close()
 
         missing = [c for c in ts_codes if c not in existing_codes]
         logger.info(
             "[stock_financial] 需同步 %d 只 (已有 %d)",
-            len(missing), len(existing_codes),
+            len(missing),
+            len(existing_codes),
         )
 
         total = 0
@@ -612,9 +585,7 @@ class ConcurrentDataSyncer:
         def fetch_one(ts_code: str) -> int:
             db2 = SessionLocal()
             try:
-                df = self.source.get_financial_indicator(
-                    ts_code, "20200101", "20261231"
-                )
+                df = self.source.get_financial_indicator(ts_code, "20200101", "20261231")
                 if df is None or df.empty:
                     return 0
 
@@ -625,12 +596,9 @@ class ConcurrentDataSyncer:
                     if ed:
                         end_dates.append(ed)
 
-                existing_dates = set(
-                    r[0]
-                    for r in db2.query(StockFinancial.end_date)
-                    .filter(StockFinancial.ts_code == ts_code)
-                    .all()
-                )
+                existing_dates = {
+                    r[0] for r in db2.query(StockFinancial.end_date).filter(StockFinancial.ts_code == ts_code).all()
+                }
 
                 new_records = []
                 for _, row in df.iterrows():
@@ -684,7 +652,10 @@ class ConcurrentDataSyncer:
                     rate = completed / elapsed if elapsed > 0 else 0
                     logger.info(
                         "[stock_financial] 进度:%d/%d 新增:%d 速度:%.1f/s",
-                        completed, len(futures), total, rate,
+                        completed,
+                        len(futures),
+                        total,
+                        rate,
                     )
 
         logger.info("[stock_financial] 完成，新增 %d 行", total)
@@ -712,15 +683,13 @@ class ConcurrentDataSyncer:
                 if df is None or df.empty:
                     return 0
 
-                existing = set(
+                existing = {
                     r[0]
                     for r in db2.execute(
-                        text(
-                            "SELECT ts_code FROM stock_northbound WHERE trade_date = :d"
-                        ),
+                        text("SELECT ts_code FROM stock_northbound WHERE trade_date = :d"),
                         {"d": td},
                     ).fetchall()
-                )
+                }
 
                 new_records = []
                 for _, row in df.iterrows():
@@ -759,10 +728,8 @@ class ConcurrentDataSyncer:
                 time.sleep(self.rate_limit)
 
             for future in as_completed(futures):
-                try:
+                with contextlib.suppress(Exception):
                     total += future.result()
-                except Exception:
-                    pass
 
         logger.info("[northbound] 完成，新增 %d 行", total)
         return total
@@ -783,21 +750,17 @@ class ConcurrentDataSyncer:
         def fetch_one(ts_code: str) -> int:
             db2 = SessionLocal()
             try:
-                df = self.source.get_money_flow(
-                    ts_code, recent_start, end_date
-                )
+                df = self.source.get_money_flow(ts_code, recent_start, end_date)
                 if df is None or df.empty:
                     return 0
 
-                existing = set(
+                existing = {
                     r[0]
                     for r in db2.execute(
-                        text(
-                            "SELECT trade_date FROM stock_money_flow WHERE ts_code = :c"
-                        ),
+                        text("SELECT trade_date FROM stock_money_flow WHERE ts_code = :c"),
                         {"c": ts_code},
                     ).fetchall()
-                )
+                }
 
                 new_records = []
                 for _, row in df.iterrows():
@@ -812,14 +775,22 @@ class ConcurrentDataSyncer:
                             trade_date=td,
                             smart_net_inflow=safe_float(row.get("net_mf_vol")),
                             smart_net_pct=safe_float(row.get("net_mf_amount")),
-                            super_large_net_inflow=safe_float(row.get("buy_elg_vol", 0)) - safe_float(row.get("sell_elg_vol", 0)),
-                            super_large_net_pct=safe_float(row.get("buy_elg_amount", 0)) - safe_float(row.get("sell_elg_amount", 0)),
-                            large_net_inflow=safe_float(row.get("buy_lg_vol", 0)) - safe_float(row.get("sell_lg_vol", 0)),
-                            large_net_pct=safe_float(row.get("buy_lg_amount", 0)) - safe_float(row.get("sell_lg_amount", 0)),
-                            medium_net_inflow=safe_float(row.get("buy_md_vol", 0)) - safe_float(row.get("sell_md_vol", 0)),
-                            medium_net_pct=safe_float(row.get("buy_md_amount", 0)) - safe_float(row.get("sell_md_amount", 0)),
-                            small_net_inflow=safe_float(row.get("buy_sm_vol", 0)) - safe_float(row.get("sell_sm_vol", 0)),
-                            small_net_pct=safe_float(row.get("buy_sm_amount", 0)) - safe_float(row.get("sell_sm_amount", 0)),
+                            super_large_net_inflow=safe_float(row.get("buy_elg_vol", 0))
+                            - safe_float(row.get("sell_elg_vol", 0)),
+                            super_large_net_pct=safe_float(row.get("buy_elg_amount", 0))
+                            - safe_float(row.get("sell_elg_amount", 0)),
+                            large_net_inflow=safe_float(row.get("buy_lg_vol", 0))
+                            - safe_float(row.get("sell_lg_vol", 0)),
+                            large_net_pct=safe_float(row.get("buy_lg_amount", 0))
+                            - safe_float(row.get("sell_lg_amount", 0)),
+                            medium_net_inflow=safe_float(row.get("buy_md_vol", 0))
+                            - safe_float(row.get("sell_md_vol", 0)),
+                            medium_net_pct=safe_float(row.get("buy_md_amount", 0))
+                            - safe_float(row.get("sell_md_amount", 0)),
+                            small_net_inflow=safe_float(row.get("buy_sm_vol", 0))
+                            - safe_float(row.get("sell_sm_vol", 0)),
+                            small_net_pct=safe_float(row.get("buy_sm_amount", 0))
+                            - safe_float(row.get("sell_sm_amount", 0)),
                         )
                     )
 
@@ -841,10 +812,8 @@ class ConcurrentDataSyncer:
                 time.sleep(self.rate_limit)
 
             for future in as_completed(futures):
-                try:
+                with contextlib.suppress(Exception):
                     total += future.result()
-                except Exception:
-                    pass
 
         logger.info("[money_flow] 完成，新增 %d 行", total)
         return total
@@ -868,12 +837,9 @@ class ConcurrentDataSyncer:
 
             db = SessionLocal()
             try:
-                existing = set(
-                    r[0]
-                    for r in db.execute(
-                        text("SELECT DISTINCT trade_date FROM stock_margin")
-                    ).fetchall()
-                )
+                existing = {
+                    r[0] for r in db.execute(text("SELECT DISTINCT trade_date FROM stock_margin")).fetchall()
+                }
 
                 new_records = []
                 for _, row in df.iterrows():
@@ -909,27 +875,24 @@ class ConcurrentDataSyncer:
     # 辅助方法
     # ------------------------------------------------------------------
 
-    def _get_all_ts_codes(self) -> List[str]:
+    def _get_all_ts_codes(self) -> list[str]:
         """从DB获取全A股代码列表"""
         db = SessionLocal()
         try:
-            codes = [
+            return [
                 r[0]
                 for r in db.execute(
-                    text(
-                        "SELECT ts_code FROM stock_basic WHERE list_status='L' ORDER BY ts_code"
-                    )
+                    text("SELECT ts_code FROM stock_basic WHERE list_status='L' ORDER BY ts_code")
                 ).fetchall()
             ]
-            return codes
         finally:
             db.close()
 
-    def _get_trade_dates(self, start_date: str, end_date: str) -> List[str]:
+    def _get_trade_dates(self, start_date: str, end_date: str) -> list[str]:
         """从DB获取交易日历"""
         db = SessionLocal()
         try:
-            dates = [
+            return [
                 r[0].strftime("%Y%m%d") if isinstance(r[0], date) else str(r[0])
                 for r in db.execute(
                     text(
@@ -939,7 +902,6 @@ class ConcurrentDataSyncer:
                     {"s": start_date, "e": end_date},
                 ).fetchall()
             ]
-            return dates
         finally:
             db.close()
 

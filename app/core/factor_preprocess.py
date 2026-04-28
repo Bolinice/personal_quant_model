@@ -3,10 +3,13 @@
 实现完整的因子预处理pipeline: 缺失值处理 → 去极值 → 标准化 → 方向统一 → 中性化
 符合ADD文档6.3节规范 + 机构级增强: MICE插补/逆正态秩变换/自适应去极值/约束回归中性化
 """
-from typing import List, Optional, Dict, Tuple
+
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 from scipy import stats
+
 from app.core.logging import logger
 
 
@@ -39,14 +42,14 @@ class FactorPreprocessor:
     def fill_missing_industry_mean(self, df: pd.DataFrame, value_col: str, industry_col: str) -> pd.Series:
         """用行业均值填充缺失值 (向量化: groupby.transform替代逐行业循环)"""
         # 同行业公司财务特征更相似，用行业均值比全市场均值偏差更小
-        industry_mean = df.groupby(industry_col)[value_col].transform('mean')
+        industry_mean = df.groupby(industry_col)[value_col].transform("mean")
         return df[value_col].fillna(industry_mean)
 
     def fill_missing_cross_section_median(self, series: pd.Series) -> pd.Series:
         """用横截面中位数填充缺失值"""
         return series.fillna(series.median())
 
-    def check_coverage(self, series: pd.Series, min_coverage: float = 0.8) -> Tuple[bool, float]:
+    def check_coverage(self, series: pd.Series, min_coverage: float = 0.8) -> tuple[bool, float]:
         """
         检查因子覆盖率
 
@@ -61,8 +64,9 @@ class FactorPreprocessor:
         coverage = 1 - series.isna().mean()
         return coverage >= min_coverage, coverage
 
-    def fill_missing_mice(self, df: pd.DataFrame, factor_cols: List[str],
-                          max_iter: int = 10, random_state: int = 42) -> pd.DataFrame:
+    def fill_missing_mice(
+        self, df: pd.DataFrame, factor_cols: list[str], max_iter: int = 10, random_state: int = 42
+    ) -> pd.DataFrame:
         """
         MICE多重插补 (Multivariate Imputation by Chained Equations)
         利用因子间相关性进行迭代插补，保留多变量关系
@@ -125,8 +129,7 @@ class FactorPreprocessor:
 
         return result
 
-    def add_missingness_indicators(self, df: pd.DataFrame,
-                                    factor_cols: List[str]) -> pd.DataFrame:
+    def add_missingness_indicators(self, df: pd.DataFrame, factor_cols: list[str]) -> pd.DataFrame:
         """
         缺失指示特征
         某些因子缺失本身是信息(如不披露研发费用)，创建二值指示特征
@@ -139,7 +142,7 @@ class FactorPreprocessor:
         # 将缺失作为独立特征，可被下游模型利用
         result = df.copy()
         for col in factor_cols:
-            result[f'{col}_missing'] = result[col].isna().astype(int)
+            result[f"{col}_missing"] = result[col].isna().astype(int)
         return result
 
     # ==================== 2. 去极值 ====================
@@ -167,7 +170,7 @@ class FactorPreprocessor:
             iqr = q_high - q_low
             if iqr > 0:
                 return series.clip(q_low - 1.5 * iqr, q_high + 1.5 * iqr)
-            logger.warning(f"Factor MAD=0 and IQR=0, skipping winsorization")
+            logger.warning("Factor MAD=0 and IQR=0, skipping winsorization")
             return series
         upper_bound = median + n_mad * mad
         lower_bound = median - n_mad * mad
@@ -194,9 +197,9 @@ class FactorPreprocessor:
         lower_bound = mean - n_sigma * std
         return series.clip(lower_bound, upper_bound)
 
-    def winsorize_adaptive_mad(self, series: pd.Series, base_k: float = 3.0,
-                                vol_series: pd.Series = None,
-                                long_run_vol: float = None) -> pd.Series:
+    def winsorize_adaptive_mad(
+        self, series: pd.Series, base_k: float = 3.0, vol_series: pd.Series = None, long_run_vol: float | None = None
+    ) -> pd.Series:
         """
         自适应MAD去极值
         高波动期k更大(避免过度截断)，低波动期k更小
@@ -220,9 +223,9 @@ class FactorPreprocessor:
 
         return self.winsorize_mad(series, n_mad=adaptive_k)
 
-    def winsorize_isolation_forest(self, df: pd.DataFrame, factor_cols: List[str],
-                                    contamination: float = 0.02,
-                                    random_state: int = 42) -> pd.DataFrame:
+    def winsorize_isolation_forest(
+        self, df: pd.DataFrame, factor_cols: list[str], contamination: float = 0.02, random_state: int = 42
+    ) -> pd.DataFrame:
         """
         Isolation Forest多变量异常检测
         检测因子空间中的异常观测(而非单变量极值)
@@ -300,7 +303,7 @@ class FactorPreprocessor:
         """
         # rank/(N+1)而非rank/N：+1避免最大排名映射到1导致norm.ppf(1)=inf
         # 对厚尾因子(如动量)尤其有效，将极端值压缩到正态尾部
-        ranks = series.rank(method='average')
+        ranks = series.rank(method="average")
         n = len(series.dropna())
         if n == 0:
             return series
@@ -362,7 +365,6 @@ class FactorPreprocessor:
         """
         # 识别无行业映射的股票
         has_industry = df[industry_col].notna()
-        no_industry_mask = ~has_industry
 
         # 构建行业哑变量 (仅对有行业映射的股票)
         industries = pd.get_dummies(df.loc[has_industry, industry_col], drop_first=True)
@@ -418,14 +420,12 @@ class FactorPreprocessor:
         if valid_mask.sum() < 10:
             return df[value_col]
 
-        slope, intercept, _, _, _ = stats.linregress(
-            log_cap[valid_mask], df.loc[valid_mask, value_col]
-        )
-        residuals = df[value_col] - (slope * log_cap + intercept)
-        return residuals
+        slope, intercept, _, _, _ = stats.linregress(log_cap[valid_mask], df.loc[valid_mask, value_col])
+        return df[value_col] - (slope * log_cap + intercept)
 
-    def neutralize_industry_and_cap(self, df: pd.DataFrame, value_col: str,
-                                    industry_col: str, cap_col: str) -> pd.Series:
+    def neutralize_industry_and_cap(
+        self, df: pd.DataFrame, value_col: str, industry_col: str, cap_col: str
+    ) -> pd.Series:
         """
         行业和市值双重中性化
         符合ADD 6.3.5节:
@@ -454,8 +454,7 @@ class FactorPreprocessor:
         except np.linalg.LinAlgError:
             return self.neutralize_industry(df, value_col, industry_col)
 
-    def neutralize_industry_constrained(self, df: pd.DataFrame, value_col: str,
-                                         industry_col: str) -> pd.Series:
+    def neutralize_industry_constrained(self, df: pd.DataFrame, value_col: str, industry_col: str) -> pd.Series:
         """
         约束回归行业中性化 (Barra Assector方法)
         约束行业哑变量系数之和为0，防止截距项吸收行业效应
@@ -473,7 +472,6 @@ class FactorPreprocessor:
         try:
             X = industries.values[valid_mask]
             y_valid = y[valid_mask]
-            n_industries = X.shape[1]
 
             # 约束矩阵: 行业系数之和为0 (截距不参与约束)
             # 使用Lagrange乘子法: [X'X  A'] [beta ] = [X'y]
@@ -506,17 +504,20 @@ class FactorPreprocessor:
 
     # ==================== 6. 完整预处理流程 ====================
 
-    def preprocess(self, series: pd.Series,
-                   fill_method: str = 'median',
-                   winsorize_method: str = 'mad',
-                   winsorize_param: float = 3.0,
-                   standardize_method: str = 'zscore',
-                   direction: int = 1,
-                   df: pd.DataFrame = None,
-                   industry_col: str = None,
-                   cap_col: str = None,
-                   value_col: str = None,
-                   neutralize: bool = False) -> pd.Series:
+    def preprocess(
+        self,
+        series: pd.Series,
+        fill_method: str = "median",
+        winsorize_method: str = "mad",
+        winsorize_param: float = 3.0,
+        standardize_method: str = "zscore",
+        direction: int = 1,
+        df: pd.DataFrame = None,
+        industry_col: str | None = None,
+        cap_col: str | None = None,
+        value_col: str | None = None,
+        neutralize: bool = False,
+    ) -> pd.Series:
         """
         完整的因子预处理流程
         符合ADD 6.3节: 缺失值处理 → 去极值 → 中性化 → 标准化 → 方向统一
@@ -536,23 +537,23 @@ class FactorPreprocessor:
             neutralize: 是否进行中性化
         """
         # 1. 缺失值处理
-        if fill_method == 'mean':
+        if fill_method == "mean":
             series = self.fill_missing_mean(series)
-        elif fill_method == 'median':
+        elif fill_method == "median":
             series = self.fill_missing_median(series)
-        elif fill_method == 'zero':
+        elif fill_method == "zero":
             series = self.fill_missing_zero(series)
-        elif fill_method == 'decay_forward':
+        elif fill_method == "decay_forward":
             series = self.fill_missing_decay_forward(series)
 
         # 2. 去极值
-        if winsorize_method == 'mad':
+        if winsorize_method == "mad":
             series = self.winsorize_mad(series, winsorize_param)
-        elif winsorize_method == 'quantile':
+        elif winsorize_method == "quantile":
             series = self.winsorize_quantile(series, 1 - winsorize_param / 100, winsorize_param / 100)
-        elif winsorize_method == 'sigma':
+        elif winsorize_method == "sigma":
             series = self.winsorize_sigma(series, winsorize_param)
-        elif winsorize_method == 'adaptive_mad':
+        elif winsorize_method == "adaptive_mad":
             series = self.winsorize_adaptive_mad(series, base_k=winsorize_param)
 
         # 3. 中性化 (在标准化之前!)
@@ -567,29 +568,33 @@ class FactorPreprocessor:
                 series = self.neutralize_market_cap(df_neutral, value_col, cap_col)
 
         # 4. 标准化
-        if standardize_method == 'zscore':
+        if standardize_method == "zscore":
             series = self.standardize_zscore(series)
-        elif standardize_method == 'rank':
+        elif standardize_method == "rank":
             series = self.standardize_rank(series)
-        elif standardize_method == 'minmax':
+        elif standardize_method == "minmax":
             series = self.standardize_minmax(series)
-        elif standardize_method == 'rank_normal':
+        elif standardize_method == "rank_normal":
             series = self.standardize_rank_normal(series)
-        elif standardize_method == 'robust_zscore':
+        elif standardize_method == "robust_zscore":
             series = self.standardize_robust_zscore(series)
 
         # 5. 方向统一
-        series = self.align_direction(series, direction)
+        return self.align_direction(series, direction)
 
-        return series
 
-    def preprocess_dataframe(self, df: pd.DataFrame, factor_cols: List[str],
-                            industry_col: str = None, cap_col: str = None,
-                            neutralize: bool = False,
-                            direction_map: Dict[str, int] = None,
-                            config: Dict[str, Dict] = None,
-                            min_coverage: float = 0.6,
-                            add_missing_indicators: bool = True) -> pd.DataFrame:
+    def preprocess_dataframe(
+        self,
+        df: pd.DataFrame,
+        factor_cols: list[str],
+        industry_col: str | None = None,
+        cap_col: str | None = None,
+        neutralize: bool = False,
+        direction_map: dict[str, int] | None = None,
+        config: dict[str, dict] | None = None,
+        min_coverage: float = 0.6,
+        add_missing_indicators: bool = True,
+    ) -> pd.DataFrame:
         """
         批量预处理多个因子 (机构级: 逐因子配置 + 覆盖率过滤 + 缺失指示器)
 
@@ -620,14 +625,14 @@ class FactorPreprocessor:
                     missing_ratio = result[col].isna().mean()
                     # 只对缺失率>5%且<95%的因子添加缺失指示器
                     if 0.05 < missing_ratio < 0.95:
-                        result[f'{col}_missing'] = result[col].isna().astype(int)
+                        result[f"{col}_missing"] = result[col].isna().astype(int)
 
         for col in factor_cols:
             if col not in result.columns:
                 continue
 
             # 跳过缺失指示器列(二值列不应进入预处理流水线)
-            if col.endswith('_missing'):
+            if col.endswith("_missing"):
                 continue
 
             # 覆盖率过滤
@@ -643,26 +648,26 @@ class FactorPreprocessor:
             if config and col in config:
                 cfg = config[col]
                 # 缺失值处理
-                fill_method = cfg.get('fill_method', 'median')
-                if fill_method == 'mean':
+                fill_method = cfg.get("fill_method", "median")
+                if fill_method == "mean":
                     result[col] = self.fill_missing_mean(result[col])
-                elif fill_method == 'median':
+                elif fill_method == "median":
                     result[col] = self.fill_missing_median(result[col])
-                elif fill_method == 'zero':
+                elif fill_method == "zero":
                     result[col] = self.fill_missing_zero(result[col])
-                elif fill_method == 'decay_forward':
+                elif fill_method == "decay_forward":
                     result[col] = self.fill_missing_decay_forward(result[col])
 
                 # 去极值
-                winsorize_method = cfg.get('winsorize_method', 'mad')
-                winsorize_param = cfg.get('winsorize_param', 3.0)
-                if winsorize_method == 'mad':
+                winsorize_method = cfg.get("winsorize_method", "mad")
+                winsorize_param = cfg.get("winsorize_param", 3.0)
+                if winsorize_method == "mad":
                     result[col] = self.winsorize_mad(result[col], winsorize_param)
-                elif winsorize_method == 'quantile':
+                elif winsorize_method == "quantile":
                     result[col] = self.winsorize_quantile(result[col], 1 - winsorize_param / 100, winsorize_param / 100)
-                elif winsorize_method == 'sigma':
+                elif winsorize_method == "sigma":
                     result[col] = self.winsorize_sigma(result[col], winsorize_param)
-                elif winsorize_method == 'adaptive_mad':
+                elif winsorize_method == "adaptive_mad":
                     result[col] = self.winsorize_adaptive_mad(result[col], base_k=winsorize_param)
             else:
                 # 默认: 缺失值(中位数) + 去极值(MAD)
@@ -681,19 +686,19 @@ class FactorPreprocessor:
             # Step 4: 标准化 (在中性化之后)
             if config and col in config:
                 cfg = config[col]
-                standardize_method = cfg.get('standardize_method', 'zscore')
+                standardize_method = cfg.get("standardize_method", "zscore")
             else:
-                standardize_method = 'zscore'
+                standardize_method = "zscore"
 
-            if standardize_method == 'zscore':
+            if standardize_method == "zscore":
                 result[col] = self.standardize_zscore(result[col])
-            elif standardize_method == 'rank':
+            elif standardize_method == "rank":
                 result[col] = self.standardize_rank(result[col])
-            elif standardize_method == 'minmax':
+            elif standardize_method == "minmax":
                 result[col] = self.standardize_minmax(result[col])
-            elif standardize_method == 'rank_normal':
+            elif standardize_method == "rank_normal":
                 result[col] = self.standardize_rank_normal(result[col])
-            elif standardize_method == 'robust_zscore':
+            elif standardize_method == "robust_zscore":
                 result[col] = self.standardize_robust_zscore(result[col])
 
             # Step 5: 方向统一
@@ -703,9 +708,9 @@ class FactorPreprocessor:
 
     # ==================== 7. 因子正交化 ====================
 
-    def orthogonalize_factors(self, df: pd.DataFrame, factor_cols: List[str],
-                               target_col: str = None,
-                               method: str = 'residual') -> pd.DataFrame:
+    def orthogonalize_factors(
+        self, df: pd.DataFrame, factor_cols: list[str], target_col: str | None = None, method: str = "residual"
+    ) -> pd.DataFrame:
         """
         因子正交化 (机构级: 消除因子间共线性)
         典型用途: 对价值因子做size中性化, 得到size-neutral value
@@ -742,8 +747,7 @@ class FactorPreprocessor:
 
         return result
 
-    def cross_sectional_residual(self, df: pd.DataFrame, factor_col: str,
-                                   control_cols: List[str]) -> pd.Series:
+    def cross_sectional_residual(self, df: pd.DataFrame, factor_col: str, control_cols: list[str]) -> pd.Series:
         """
         截面回归取残差
         factor = alpha + beta1*control1 + beta2*control2 + ... + epsilon
@@ -781,10 +785,9 @@ class FactorPreprocessor:
 
     # ==================== 7. 稳定性检查 ====================
 
-    def check_stability(self, factor_values: pd.DataFrame,
-                        date_col: str = 'trade_date',
-                        value_col: str = 'value',
-                        window: int = 60) -> Dict:
+    def check_stability(
+        self, factor_values: pd.DataFrame, date_col: str = "trade_date", value_col: str = "value", window: int = 60
+    ) -> dict:
         """
         因子稳定性检查
         计算滚动IC和滚动覆盖率，检测因子失效
@@ -799,12 +802,10 @@ class FactorPreprocessor:
             稳定性指标
         """
         if factor_values.empty:
-            return {'is_stable': False, 'reason': 'No data'}
+            return {"is_stable": False, "reason": "No data"}
 
         # 按日期计算覆盖率
-        daily_coverage = factor_values.groupby(date_col)[value_col].apply(
-            lambda x: 1 - x.isna().mean()
-        )
+        daily_coverage = factor_values.groupby(date_col)[value_col].apply(lambda x: 1 - x.isna().mean())
 
         # 滚动覆盖率
         rolling_coverage = daily_coverage.rolling(window).mean()
@@ -813,19 +814,21 @@ class FactorPreprocessor:
         coverage_trend = rolling_coverage.iloc[-1] - rolling_coverage.iloc[0] if len(rolling_coverage) > 1 else 0
 
         return {
-            'is_stable': rolling_coverage.iloc[-1] > 0.5 if len(rolling_coverage) > 0 else False,
-            'current_coverage': rolling_coverage.iloc[-1] if len(rolling_coverage) > 0 else 0,
-            'coverage_trend': coverage_trend,
-            'min_coverage': rolling_coverage.min() if len(rolling_coverage) > 0 else 0,
+            "is_stable": rolling_coverage.iloc[-1] > 0.5 if len(rolling_coverage) > 0 else False,
+            "current_coverage": rolling_coverage.iloc[-1] if len(rolling_coverage) > 0 else 0,
+            "coverage_trend": coverage_trend,
+            "min_coverage": rolling_coverage.min() if len(rolling_coverage) > 0 else 0,
         }
 
 
 # 便捷函数
-def preprocess_factor_values(factor_values: pd.Series,
-                            fill_method: str = 'median',
-                            winsorize_method: str = 'mad',
-                            standardize_method: str = 'zscore',
-                            direction: int = 1) -> pd.Series:
+def preprocess_factor_values(
+    factor_values: pd.Series,
+    fill_method: str = "median",
+    winsorize_method: str = "mad",
+    standardize_method: str = "zscore",
+    direction: int = 1,
+) -> pd.Series:
     """预处理因子值的便捷函数"""
     preprocessor = FactorPreprocessor()
     return preprocessor.preprocess(factor_values, fill_method, winsorize_method, 3.0, standardize_method, direction)

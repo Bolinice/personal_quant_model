@@ -1,6 +1,5 @@
 """模型注册服务"""
 
-from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from app.models.model_registry import ModelRegistry
@@ -13,9 +12,9 @@ class ModelRegistryService:
     @staticmethod
     def get_all_models(
         db: Session,
-        status: Optional[str] = None,
-        model_type: Optional[str] = None,
-    ) -> List[ModelRegistry]:
+        status: str | None = None,
+        model_type: str | None = None,
+    ) -> list[ModelRegistry]:
         """获取模型列表"""
         query = db.query(ModelRegistry)
         if status:
@@ -25,7 +24,7 @@ class ModelRegistryService:
         return query.order_by(ModelRegistry.created_at.desc()).all()
 
     @staticmethod
-    def get_model_by_id(db: Session, model_id: str) -> Optional[ModelRegistry]:
+    def get_model_by_id(db: Session, model_id: str) -> ModelRegistry | None:
         """获取模型详情"""
         return db.query(ModelRegistry).filter(ModelRegistry.model_id == model_id).first()
 
@@ -39,7 +38,7 @@ class ModelRegistryService:
         return model
 
     @staticmethod
-    def update_model_status(db: Session, model_id: str, status: str) -> Optional[ModelRegistry]:
+    def update_model_status(db: Session, model_id: str, status: str) -> ModelRegistry | None:
         """更新模型状态 (candidate → champion → retired)"""
         model = db.query(ModelRegistry).filter(ModelRegistry.model_id == model_id).first()
         if model:
@@ -49,6 +48,6 @@ class ModelRegistryService:
         return model
 
     @staticmethod
-    def get_champion_model(db: Session) -> Optional[ModelRegistry]:
+    def get_champion_model(db: Session) -> ModelRegistry | None:
         """获取当前champion模型"""
         return db.query(ModelRegistry).filter(ModelRegistry.status == "champion").first()

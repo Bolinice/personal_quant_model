@@ -10,11 +10,10 @@
 6. 行业约束: 单行业≤20%, 偏离≤5%
 """
 
-import numpy as np
-import pandas as pd
-from typing import Dict, List, Optional, Tuple
-from enum import Enum
 import logging
+from enum import Enum, StrEnum
+
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -37,24 +36,24 @@ TIER_MULTIPLIERS = {
 # 风险折扣系数
 # 为什么极端风险0.00：ST/*ST/退市风险股必须完全排除，A股个股黑天鹅风险不可度量
 RISK_DISCOUNT = {
-    "low": 1.00,      # 低风险
-    "medium": 0.85,   # 中风险 # 为什么0.85：中等风险（如高质押率）15%折扣，温和减仓而非直接排除
-    "high": 0.60,     # 高风险 # 为什么0.60：高风险（如ST摘帽不确定性）40%折扣，大幅减仓
+    "low": 1.00,  # 低风险
+    "medium": 0.85,  # 中风险 # 为什么0.85：中等风险（如高质押率）15%折扣，温和减仓而非直接排除
+    "high": 0.60,  # 高风险 # 为什么0.60：高风险（如ST摘帽不确定性）40%折扣，大幅减仓
     "extreme": 0.00,  # 极高风险(黑名单)
 }
 
 # 流动性折扣系数
 LIQUIDITY_DISCOUNT = {
-    "normal": 1.00,       # 正常
-    "marginal": 0.85,     # 边缘
-    "insufficient": 0.60, # 明显不足
+    "normal": 1.00,  # 正常
+    "marginal": 0.85,  # 边缘
+    "insufficient": 0.60,  # 明显不足
 }
 
 # 调仓缓冲区
 # 为什么需要缓冲区：A股换仓成本高（印花税+滑点），排名微小波动不应触发买卖，缓冲区降低换手率
 REBALANCE_BUFFER = {
-    "hold_top": 75,       # 当前持仓排名≤75继续持有 # 为什么75>60：持仓股排名小幅下滑时不急于卖出，避免反复交易
-    "buy_top": 50,        # 新买入需排名≤50 # 为什么50<60：新买入门槛更高，确保新入股票Alpha信号足够强
+    "hold_top": 75,  # 当前持仓排名≤75继续持有 # 为什么75>60：持仓股排名小幅下滑时不急于卖出，避免反复交易
+    "buy_top": 50,  # 新买入需排名≤50 # 为什么50<60：新买入门槛更高，确保新入股票Alpha信号足够强
     "min_weight_pct": 0.20,  # 最小持仓权重0.20% # 为什么0.20%：低于此权重的持仓对组合贡献可忽略，交易成本反而侵蚀收益
 }
 
@@ -63,26 +62,26 @@ REBALANCE_BUFFER = {
 # 为什么5%偏离限制：控制跟踪误差，增强策略不应在行业配置上过度偏离基准
 INDUSTRY_CONSTRAINTS = {
     "max_single_industry": 0.20,  # 单行业最大20%
-    "max_deviation": 0.05,        # 偏离基准最大5%
+    "max_deviation": 0.05,  # 偏离基准最大5%
 }
 
 # 交易单位
 LOT_SIZE = 100  # A股100股整数倍 # 为什么100：A股交易规则要求最低买入100股且须为100的整数倍（科创板除外）
 
 
-class PortfolioMode(str, Enum):
-    RESEARCH = "research"      # 研究模式: Alpha-Risk优化器
+class PortfolioMode(StrEnum):
+    RESEARCH = "research"  # 研究模式: Alpha-Risk优化器
     PRODUCTION = "production"  # 实盘模式: 分层赋权+风险折扣
 
 
-class RiskLevel(str, Enum):
+class RiskLevel(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
     EXTREME = "extreme"
 
 
-class LiquidityLevel(str, Enum):
+class LiquidityLevel(StrEnum):
     NORMAL = "normal"
     MARGINAL = "marginal"
     INSUFFICIENT = "insufficient"
@@ -91,6 +90,7 @@ class LiquidityLevel(str, Enum):
 # ─────────────────────────────────────────────
 # 组合构建器
 # ─────────────────────────────────────────────
+
 
 class PortfolioBuilder:
     """
@@ -105,10 +105,10 @@ class PortfolioBuilder:
         self,
         top_n: int = TOP_N,
         mode: PortfolioMode = PortfolioMode.PRODUCTION,
-        tier_multipliers: Optional[Dict] = None,
-        risk_discount: Optional[Dict] = None,
-        liquidity_discount: Optional[Dict] = None,
-        industry_constraints: Optional[Dict] = None,
+        tier_multipliers: dict | None = None,
+        risk_discount: dict | None = None,
+        liquidity_discount: dict | None = None,
+        industry_constraints: dict | None = None,
     ):
         self.top_n = top_n
         self.mode = mode
@@ -119,7 +119,7 @@ class PortfolioBuilder:
 
     def _get_tier_multiplier(self, rank: int) -> float:
         """根据排名获取分层赋权倍率"""
-        for tier_name, tier_config in self.tier_multipliers.items():
+        for _tier_name, tier_config in self.tier_multipliers.items():
             lo, hi = tier_config["range"]
             if lo <= rank <= hi:
                 return tier_config["multiplier"]
@@ -158,7 +158,7 @@ class PortfolioBuilder:
     def build_research_portfolio(
         self,
         scores: pd.Series,
-        risk_penalty: Optional[pd.Series] = None,
+        risk_penalty: pd.Series | None = None,
         **kwargs,
     ) -> pd.DataFrame:
         """
@@ -173,10 +173,7 @@ class PortfolioBuilder:
         """
         # 应用风险惩罚
         # 为什么系数0.35：经验值，约1/3的风险惩罚力度，避免过度惩罚导致选股过于保守
-        if risk_penalty is not None:
-            adjusted_scores = scores - 0.35 * risk_penalty
-        else:
-            adjusted_scores = scores.copy()
+        adjusted_scores = scores - 0.35 * risk_penalty if risk_penalty is not None else scores.copy()
 
         # 排序选股
         ranked = adjusted_scores.rank(ascending=False)
@@ -187,24 +184,25 @@ class PortfolioBuilder:
         if n_selected == 0:
             return pd.DataFrame(columns=["ts_code", "weight", "rank", "score"])
 
-        result = pd.DataFrame({
-            "ts_code": scores.index[selected],
-            "weight": 1.0 / n_selected,
-            "rank": ranked[selected].astype(int),
-            "score": scores[selected],
-        })
-        result = result.sort_values("rank")
+        result = pd.DataFrame(
+            {
+                "ts_code": scores.index[selected],
+                "weight": 1.0 / n_selected,
+                "rank": ranked[selected].astype(int),
+                "score": scores[selected],
+            }
+        )
+        return result.sort_values("rank")
 
-        return result
 
     def build_production_portfolio(
         self,
         scores: pd.Series,
-        risk_levels: Optional[pd.Series] = None,
-        liquidity_levels: Optional[pd.Series] = None,
-        industry_series: Optional[pd.Series] = None,
-        current_holdings: Optional[pd.Series] = None,
-        prices: Optional[pd.Series] = None,
+        risk_levels: pd.Series | None = None,
+        liquidity_levels: pd.Series | None = None,
+        industry_series: pd.Series | None = None,
+        current_holdings: pd.Series | None = None,
+        prices: pd.Series | None = None,
         total_capital: float = 1e8,
         **kwargs,
     ) -> pd.DataFrame:
@@ -228,9 +226,7 @@ class PortfolioBuilder:
 
         # Step 3: 调仓缓冲区
         if current_holdings is not None and len(current_holdings) > 0:
-            selected_mask = self._apply_rebalance_buffer(
-                selected_mask, ranked, current_holdings
-            )
+            selected_mask = self._apply_rebalance_buffer(selected_mask, ranked, current_holdings)
 
         # Step 4: 分层赋权 (向量化: 用rank的map替代逐股票循环)
         selected_ranks = ranked[selected_mask]
@@ -246,7 +242,9 @@ class PortfolioBuilder:
         # Step 6: 流动性折扣 (向量化)
         if liquidity_levels is not None:
             active = weights > 0
-            liq_discounts = liquidity_levels.reindex(weights.index[active]).fillna("normal").map(self._get_liquidity_discount)
+            liq_discounts = (
+                liquidity_levels.reindex(weights.index[active]).fillna("normal").map(self._get_liquidity_discount)
+            )
             weights.iloc[active.values.nonzero()[0]] *= liq_discounts.values
 
         # Step 7: 归一化
@@ -256,9 +254,7 @@ class PortfolioBuilder:
 
         # Step 8: 行业约束
         if industry_series is not None:
-            weights = self._apply_industry_constraints(
-                weights, industry_series
-            )
+            weights = self._apply_industry_constraints(weights, industry_series)
 
         # Step 9: 100股整数倍处理 (向量化)
         if prices is not None and total_capital > 0:
@@ -287,12 +283,14 @@ class PortfolioBuilder:
 
         # 构建结果
         result_mask = weights > 0
-        result = pd.DataFrame({
-            "ts_code": scores.index[result_mask],
-            "weight": weights[result_mask].values,
-            "rank": ranked[result_mask].values,
-            "score": scores[result_mask].values,
-        })
+        result = pd.DataFrame(
+            {
+                "ts_code": scores.index[result_mask],
+                "weight": weights[result_mask].values,
+                "rank": ranked[result_mask].values,
+                "score": scores[result_mask].values,
+            }
+        )
 
         # 添加风险和流动性信息
         if risk_levels is not None:
@@ -302,9 +300,8 @@ class PortfolioBuilder:
         if industry_series is not None:
             result["industry"] = result["ts_code"].map(industry_series)
 
-        result = result.sort_values("rank").reset_index(drop=True)
+        return result.sort_values("rank").reset_index(drop=True)
 
-        return result
 
     def _apply_rebalance_buffer(
         self,
@@ -321,7 +318,6 @@ class PortfolioBuilder:
         """
         hold_top = REBALANCE_BUFFER["hold_top"]
         buy_top = REBALANCE_BUFFER["buy_top"]
-        min_weight = REBALANCE_BUFFER["min_weight_pct"] / 100.0
 
         adjusted = selected_mask.copy()
 
@@ -366,7 +362,6 @@ class PortfolioBuilder:
         (向量化实现 + 修复: 使用缩放前权重作为再分配基准)
         """
         max_single = self.industry_constraints["max_single_industry"]
-        max_deviation = self.industry_constraints["max_deviation"]
 
         adjusted = weights.copy()
 
@@ -419,7 +414,7 @@ class PortfolioBuilder:
     def build(
         self,
         scores: pd.Series,
-        mode: Optional[PortfolioMode] = None,
+        mode: PortfolioMode | None = None,
         **kwargs,
     ) -> pd.DataFrame:
         """
@@ -434,13 +429,13 @@ class PortfolioBuilder:
 
         if effective_mode == PortfolioMode.RESEARCH:
             return self.build_research_portfolio(scores, **kwargs)
-        else:
-            return self.build_production_portfolio(scores, **kwargs)
+        return self.build_production_portfolio(scores, **kwargs)
 
 
 # ─────────────────────────────────────────────
 # 便捷函数
 # ─────────────────────────────────────────────
+
 
 def create_portfolio_builder(**kwargs) -> PortfolioBuilder:
     """创建组合构建器"""

@@ -1,12 +1,11 @@
 """
 A股交易工具 (机构级: 交易日历表查询)
 """
+
+from __future__ import annotations
+
 import logging
 from datetime import date, timedelta
-from typing import List, Optional
-
-import numpy as np
-import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,7 @@ class TradingCalendar:
         self.db = db_session
         self._calendar_cache = None
 
-    def _load_calendar(self) -> List[date]:
+    def _load_calendar(self) -> list[date]:
         """加载交易日历(带缓存)"""
         if self._calendar_cache is not None:
             return self._calendar_cache
@@ -36,9 +35,15 @@ class TradingCalendar:
 
         try:
             from app.models.market import TradingCalendar as TradingCalendarModel
-            records = self.db.query(TradingCalendarModel).filter(
-                TradingCalendarModel.is_open == True  # noqa: E712
-            ).order_by(TradingCalendarModel.cal_date).all()
+
+            records = (
+                self.db.query(TradingCalendarModel)
+                .filter(
+                    TradingCalendarModel.is_open == True  # noqa: E712
+                )
+                .order_by(TradingCalendarModel.cal_date)
+                .all()
+            )
             self._calendar_cache = sorted([r.cal_date for r in records])
             return self._calendar_cache
         except Exception as e:
@@ -105,7 +110,7 @@ class TradingCalendar:
                 result -= timedelta(days=1)
         return result
 
-    def get_trading_dates_between(self, start_date: date, end_date: date) -> List[date]:
+    def get_trading_dates_between(self, start_date: date, end_date: date) -> list[date]:
         """
         获取两个日期之间的所有交易日
 
@@ -158,6 +163,7 @@ class TradingCalendar:
 
 # ==================== 交易辅助函数 ====================
 
+
 def get_next_trading_date(dt: date, n: int = 1, db_session=None) -> date:
     """
     获取第n个后续交易日 (便捷函数)
@@ -173,7 +179,7 @@ def get_prev_trading_date(dt: date, n: int = 1, db_session=None) -> date:
     return cal.get_prev_trading_date(dt, n)
 
 
-def get_trading_dates_between(start_date: date, end_date: date, db_session=None) -> List[date]:
+def get_trading_dates_between(start_date: date, end_date: date, db_session=None) -> list[date]:
     """获取两个日期之间的所有交易日"""
     cal = TradingCalendar(db_session)
     return cal.get_trading_dates_between(start_date, end_date)
@@ -191,11 +197,13 @@ def count_trading_days(start_date: date, end_date: date, db_session=None) -> int
     return cal.count_trading_days(start_date, end_date)
 
 
-def get_trading_calendar(exchange: str = 'SSE',
-                          start_date: str = None,
-                          end_date: str = None,
-                          is_open: bool = None,
-                          db_session=None):
+def get_trading_calendar(
+    exchange: str = "SSE",
+    start_date: str | None = None,
+    end_date: str | None = None,
+    is_open: bool | None = None,
+    db_session=None,
+):
     """
     查询交易日历记录 (兼容backtests_service接口)
     返回TradingCalendar模型对象列表

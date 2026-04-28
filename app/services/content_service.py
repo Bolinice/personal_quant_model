@@ -1,17 +1,23 @@
 from sqlalchemy.orm import Session
+
 from app.db.base import with_db
 from app.models.content import ContentBlock
-from app.schemas.content import ContentBlockCreate, ContentBlockUpdate, PageContentOut, ContentSectionOut
+from app.schemas.content import ContentBlockCreate, ContentBlockUpdate, ContentSectionOut, PageContentOut
 
 
 @with_db
 def get_page_content(page: str, lang: str = "zh", db: Session = None) -> PageContentOut:
     """获取指定页面的所有内容块，按 section 分组"""
-    blocks = db.query(ContentBlock).filter(
-        ContentBlock.page == page,
-        ContentBlock.lang == lang,
-        ContentBlock.is_active == True,
-    ).order_by(ContentBlock.sort_order).all()
+    blocks = (
+        db.query(ContentBlock)
+        .filter(
+            ContentBlock.page == page,
+            ContentBlock.lang == lang,
+            ContentBlock.is_active,
+        )
+        .order_by(ContentBlock.sort_order)
+        .all()
+    )
 
     sections = {}
     for block in blocks:
@@ -28,12 +34,16 @@ def get_page_content(page: str, lang: str = "zh", db: Session = None) -> PageCon
 @with_db
 def get_section_content(page: str, section: str, lang: str = "zh", db: Session = None) -> ContentSectionOut | None:
     """获取指定页面指定区块的内容"""
-    block = db.query(ContentBlock).filter(
-        ContentBlock.page == page,
-        ContentBlock.section == section,
-        ContentBlock.lang == lang,
-        ContentBlock.is_active == True,
-    ).first()
+    block = (
+        db.query(ContentBlock)
+        .filter(
+            ContentBlock.page == page,
+            ContentBlock.section == section,
+            ContentBlock.lang == lang,
+            ContentBlock.is_active,
+        )
+        .first()
+    )
 
     if not block:
         return None
@@ -49,10 +59,15 @@ def get_section_content(page: str, section: str, lang: str = "zh", db: Session =
 @with_db
 def get_available_pages(lang: str = "zh", db: Session = None) -> list[str]:
     """获取所有可用页面列表"""
-    pages = db.query(ContentBlock.page).filter(
-        ContentBlock.lang == lang,
-        ContentBlock.is_active == True,
-    ).distinct().all()
+    pages = (
+        db.query(ContentBlock.page)
+        .filter(
+            ContentBlock.lang == lang,
+            ContentBlock.is_active,
+        )
+        .distinct()
+        .all()
+    )
     return [p[0] for p in pages]
 
 

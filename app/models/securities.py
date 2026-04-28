@@ -1,10 +1,12 @@
-from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
 from sqlalchemy.sql import func
+
 from app.db.base import Base
+
 
 class Security(Base):
     __tablename__ = "securities"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     ts_code = Column(String(20), unique=True, index=True)
     symbol = Column(String(10), index=True)
@@ -16,6 +18,6 @@ class Security(Base):
     is_st = Column(Boolean, default=False)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
-    
+
     def __repr__(self):
         return f"<Security(id={self.id}, ts_code='{self.ts_code}', name='{self.name}')>"

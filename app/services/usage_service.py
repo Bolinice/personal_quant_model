@@ -6,11 +6,12 @@
 """
 
 from datetime import date
-from typing import Optional, Dict, List
-from sqlalchemy.orm import Session
+
 from sqlalchemy import and_
-from app.models.usage import UsageRecord
+from sqlalchemy.orm import Session
+
 from app.models.subscriptions import Subscription
+from app.models.usage import UsageRecord
 
 # 用量限制定义（避免从 permissions 循环导入）
 # 0 = 该等级不可使用此功能；None = 不限量；正整数 = 每日上限次数
@@ -24,7 +25,7 @@ PERMISSION_LIMITS = {
 }
 
 
-def check_usage_limit(db: Session, user_id: int, permission_code: str) -> Dict:
+def check_usage_limit(db: Session, user_id: int, permission_code: str) -> dict:
     """检查用户是否超出用量限制
 
     Returns:
@@ -50,13 +51,17 @@ def check_usage_limit(db: Session, user_id: int, permission_code: str) -> Dict:
 
     # 查询当日用量
     today = date.today()
-    record = db.query(UsageRecord).filter(
-        and_(
-            UsageRecord.user_id == user_id,
-            UsageRecord.permission_code == permission_code,
-            UsageRecord.usage_date == today,
+    record = (
+        db.query(UsageRecord)
+        .filter(
+            and_(
+                UsageRecord.user_id == user_id,
+                UsageRecord.permission_code == permission_code,
+                UsageRecord.usage_date == today,
+            )
         )
-    ).first()
+        .first()
+    )
 
     current = record.count if record else 0
     allowed = current < limit
@@ -67,13 +72,17 @@ def check_usage_limit(db: Session, user_id: int, permission_code: str) -> Dict:
 def record_usage(db: Session, user_id: int, permission_code: str) -> UsageRecord:
     """记录一次用量（原子递增）— 非线程安全，高并发场景需加行级锁"""
     today = date.today()
-    record = db.query(UsageRecord).filter(
-        and_(
-            UsageRecord.user_id == user_id,
-            UsageRecord.permission_code == permission_code,
-            UsageRecord.usage_date == today,
+    record = (
+        db.query(UsageRecord)
+        .filter(
+            and_(
+                UsageRecord.user_id == user_id,
+                UsageRecord.permission_code == permission_code,
+                UsageRecord.usage_date == today,
+            )
         )
-    ).first()
+        .first()
+    )
 
     if record:
         record.count += 1
@@ -91,25 +100,27 @@ def record_usage(db: Session, user_id: int, permission_code: str) -> UsageRecord
     return record
 
 
-def get_user_usage(db: Session, user_id: int, usage_date: Optional[date] = None) -> List[Dict]:
+def get_user_usage(db: Session, user_id: int, usage_date: date | None = None) -> list[dict]:
     """查询用户指定日期的用量"""
     if usage_date is None:
         usage_date = date.today()
 
-    records = db.query(UsageRecord).filter(
-        and_(
-            UsageRecord.user_id == user_id,
-            UsageRecord.usage_date == usage_date,
+    records = (
+        db.query(UsageRecord)
+        .filter(
+            and_(
+                UsageRecord.user_id == user_id,
+                UsageRecord.usage_date == usage_date,
+            )
         )
-    ).all()
+        .all()
+    )
 
     return [
         {
             "permission_code": r.permission_code,
             "count": r.count,
-            "limit": PERMISSION_LIMITS.get(r.permission_code, {}).get(
-                _get_user_tier(db, user_id), None
-            ),
+            "limit": PERMISSION_LIMITS.get(r.permission_code, {}).get(_get_user_tier(db, user_id), None),
         }
         for r in records
     ]

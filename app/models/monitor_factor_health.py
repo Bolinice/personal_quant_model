@@ -1,11 +1,13 @@
 """因子健康监控表"""
 
-from sqlalchemy import Column, BigInteger, String, Date, Numeric
+from sqlalchemy import BigInteger, Column, Date, Numeric, String
+
 from app.db.base import Base
 
 
 class MonitorFactorHealth(Base):
     """因子健康监控表 - IC/PSI/覆盖率/缺失率"""
+
     __tablename__ = "monitor_factor_health"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -19,6 +21,4 @@ class MonitorFactorHealth(Base):
     psi = Column(Numeric(10, 6), comment="PSI(群体稳定性指数)")
     health_status = Column(String(20), default="healthy", comment="健康状态: healthy/warning/critical")
 
-    __table_args__ = (
-        {"comment": "因子健康监控表"},
-    )
+    __table_args__ = ({"comment": "因子健康监控表"},)

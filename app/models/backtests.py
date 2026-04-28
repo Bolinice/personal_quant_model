@@ -1,10 +1,12 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, JSON, Text, Index, UniqueConstraint
+from sqlalchemy import JSON, Column, Date, DateTime, Float, Index, Integer, String, Text
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class Backtest(Base):
     """回测任务表"""
+
     __tablename__ = "backtests"
     __table_args__ = (
         Index("ix_bt_model", "model_id"),
@@ -43,10 +45,9 @@ class Backtest(Base):
 
 class BacktestNav(Base):
     """回测净值表"""
+
     __tablename__ = "backtest_navs"
-    __table_args__ = (
-        Index("ix_bn_bt_date", "backtest_id", "trade_date"),
-    )
+    __table_args__ = (Index("ix_bn_bt_date", "backtest_id", "trade_date"),)
 
     id: int = Column(Integer, primary_key=True, index=True)
     backtest_id: int = Column(Integer, index=True, nullable=False)
@@ -62,10 +63,9 @@ class BacktestNav(Base):
 
 class BacktestPosition(Base):
     """回测持仓表"""
+
     __tablename__ = "backtest_positions"
-    __table_args__ = (
-        Index("ix_bp_bt_date", "backtest_id", "trade_date"),
-    )
+    __table_args__ = (Index("ix_bp_bt_date", "backtest_id", "trade_date"),)
 
     id: int = Column(Integer, primary_key=True, index=True)
     backtest_id: int = Column(Integer, index=True, nullable=False)
@@ -80,10 +80,9 @@ class BacktestPosition(Base):
 
 class BacktestTrade(Base):
     """回测成交表"""
+
     __tablename__ = "backtest_trades"
-    __table_args__ = (
-        Index("ix_bt_trade_bt_date", "backtest_id", "trade_date"),
-    )
+    __table_args__ = (Index("ix_bt_trade_bt_date", "backtest_id", "trade_date"),)
 
     id: int = Column(Integer, primary_key=True, index=True)
     backtest_id: int = Column(Integer, index=True, nullable=False)
@@ -103,15 +102,16 @@ class BacktestTrade(Base):
     created_at: DateTime = Column(DateTime, server_default=func.now())
 
     def __repr__(self):
-        return f"<BacktestTrade(backtest_id={self.backtest_id}, trade_date='{self.trade_date}', action='{self.action}')>"
+        return (
+            f"<BacktestTrade(backtest_id={self.backtest_id}, trade_date='{self.trade_date}', action='{self.action}')>"
+        )
 
 
 class BacktestResult(Base):
     """回测指标汇总表"""
+
     __tablename__ = "backtest_results"
-    __table_args__ = (
-        Index("ix_br_bt", "backtest_id"),
-    )
+    __table_args__ = (Index("ix_br_bt", "backtest_id"),)
 
     id: int = Column(Integer, primary_key=True, index=True)
     backtest_id: int = Column(Integer, index=True, nullable=False)

@@ -2,15 +2,20 @@
 缓存服务 - 支持TTL + LRU驱逐 + Redis二级缓存 + 交易日失效策略
 用于因子计算、IC分析等高频重复计算场景
 """
+
+from __future__ import annotations
+
 import hashlib
 import json
 import time
-import logging
-from typing import Callable, Dict, Optional, Any, List
 from collections import OrderedDict
+from collections.abc import Callable
 from datetime import date
 from functools import wraps
+from typing import Any
+
 from app.core.logging import logger
+import contextlib
 
 
 class CacheService:
@@ -23,9 +28,9 @@ class CacheService:
         self._hits = 0
         self._misses = 0
         # trade_date → set of cache keys 反向索引, 加速按日期失效
-        self._trade_date_index: Dict[str, set] = {}
+        self._trade_date_index: dict[str, set] = {}
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """获取缓存"""
         if key in self._cache:
             value, expiry = self._cache[key]
@@ -33,13 +38,11 @@ class CacheService:
                 self._cache.move_to_end(key)
                 self._hits += 1
                 return value
-            else:
-                del self._cache[key]
+            del self._cache[key]
         self._misses += 1
         return None
 
-    def set(self, key: str, value: Any, ttl: int = None,
-            trade_date: Optional[str] = None):
+    def set(self, key: str, value: Any, ttl: int | None = None, trade_date: str | None = None):
         """设置缓存, 可选关联trade_date用于批量失效"""
         if ttl is None:
             ttl = self._default_ttl
@@ -71,14 +74,14 @@ class CacheService:
         """缓存统计"""
         total = self._hits + self._misses
         return {
-            'size': len(self._cache),
-            'max_size': self._max_size,
-            'hits': self._hits,
-            'misses': self._misses,
-            'hit_rate': self._hits / total if total > 0 else 0,
+            "size": len(self._cache),
+            "max_size": self._max_size,
+            "hits": self._hits,
+            "misses": self._misses,
+            "hit_rate": self._hits / total if total > 0 else 0,
         }
 
-    def cache_decorator(self, ttl: int = None):
+    def cache_decorator(self, ttl: int | None = None):
         """缓存装饰器"""
         if ttl is None:
             ttl = self._default_ttl
@@ -98,7 +101,9 @@ class CacheService:
                 result = func(*args, **kwargs)
                 self.set(cache_key, result, ttl)
                 return result
+
             return wrapper
+
         return decorator
 
     def invalidate_by_prefix(self, prefix: str) -> int:
@@ -137,8 +142,7 @@ class CacheService:
 class RedisCacheService:
     """Redis缓存服务 - 分布式二级缓存"""
 
-    def __init__(self, redis_url: str = None, default_ttl: int = 600,
-                 prefix: str = "quant:cache:"):
+    def __init__(self, redis_url: str | None = None, default_ttl: int = 600, prefix: str = "quant:cache:"):
         self._prefix = prefix
         self._default_ttl = default_ttl
         self._redis = None
@@ -147,6 +151,7 @@ class RedisCacheService:
         if redis_url:
             try:
                 import redis
+
                 self._redis = redis.from_url(redis_url)
                 self._redis.ping()
                 self._available = True
@@ -157,7 +162,7 @@ class RedisCacheService:
     def available(self) -> bool:
         return self._available
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         if not self._available:
             return None
         try:
@@ -168,23 +173,19 @@ class RedisCacheService:
             pass
         return None
 
-    def set(self, key: str, value: Any, ttl: int = None):
+    def set(self, key: str, value: Any, ttl: int | None = None):
         if not self._available:
             return
         if ttl is None:
             ttl = self._default_ttl
-        try:
+        with contextlib.suppress(Exception):
             self._redis.setex(self._prefix + key, ttl, json.dumps(value, default=str))
-        except Exception:
-            pass
 
     def delete(self, key: str):
         if not self._available:
             return
-        try:
+        with contextlib.suppress(Exception):
             self._redis.delete(self._prefix + key)
-        except Exception:
-            pass
 
     def invalidate_by_prefix(self, prefix: str) -> int:
         """按前缀批量失效"""
@@ -211,7 +212,7 @@ class TwoLevelCache:
         self.l1 = l1
         self.l2 = l2
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         # L1
         value = self.l1.get(key)
         if value is not None:
@@ -227,7 +228,7 @@ class TwoLevelCache:
 
         return None
 
-    def set(self, key: str, value: Any, ttl: int = None):
+    def set(self, key: str, value: Any, ttl: int | None = None):
         self.l1.set(key, value, ttl)
         if self.l2 and self.l2.available:
             self.l2.set(key, value, ttl)
@@ -257,7 +258,8 @@ cache_service = CacheService(max_size=5000, default_ttl=600)
 factor_cache = CacheService(max_size=10000, default_ttl=1800)
 
 # Redis二级缓存 (延迟初始化)
-_redis_cache: Optional[RedisCacheService] = None
+_redis_cache: RedisCacheService | None = None
+
 
 def get_two_level_cache() -> TwoLevelCache:
     """获取二级缓存实例 (延迟初始化Redis)"""
@@ -265,6 +267,7 @@ def get_two_level_cache() -> TwoLevelCache:
     if _redis_cache is None:
         try:
             from app.core.config import settings
+
             _redis_cache = RedisCacheService(settings.REDIS_URL)
         except Exception:
             _redis_cache = RedisCacheService()  # unavailable

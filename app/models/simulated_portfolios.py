@@ -1,14 +1,14 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, JSON, Text, Index
+from sqlalchemy import Column, Date, DateTime, Float, Index, Integer, String
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class SimulatedPortfolio(Base):
     """模拟组合主表"""
+
     __tablename__ = "simulated_portfolios"
-    __table_args__ = (
-        Index("ix_sp_model", "model_id"),
-    )
+    __table_args__ = (Index("ix_sp_model", "model_id"),)
 
     id: int = Column(Integer, primary_key=True, index=True)
     model_id: int = Column(Integer, index=True, nullable=False)
@@ -27,10 +27,9 @@ class SimulatedPortfolio(Base):
 
 class SimulatedPortfolioPosition(Base):
     """模拟持仓表"""
+
     __tablename__ = "simulated_portfolio_positions"
-    __table_args__ = (
-        Index("ix_spp_portfolio_date", "portfolio_id", "trade_date"),
-    )
+    __table_args__ = (Index("ix_spp_portfolio_date", "portfolio_id", "trade_date"),)
 
     id: int = Column(Integer, primary_key=True, index=True)
     portfolio_id: int = Column(Integer, index=True, nullable=False)
@@ -44,10 +43,9 @@ class SimulatedPortfolioPosition(Base):
 
 class SimulatedPortfolioNav(Base):
     """模拟净值表"""
+
     __tablename__ = "simulated_portfolio_navs"
-    __table_args__ = (
-        Index("ix_spn_portfolio_date", "portfolio_id", "trade_date"),
-    )
+    __table_args__ = (Index("ix_spn_portfolio_date", "portfolio_id", "trade_date"),)
 
     id: int = Column(Integer, primary_key=True, index=True)
     portfolio_id: int = Column(Integer, index=True, nullable=False)

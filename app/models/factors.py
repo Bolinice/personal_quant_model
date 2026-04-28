@@ -1,10 +1,12 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, JSON, Text, Index, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Column, Date, DateTime, Float, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class Factor(Base):
     """因子定义表"""
+
     __tablename__ = "factors"
     __table_args__ = (
         UniqueConstraint("factor_code", name="uq_factor_code"),
@@ -32,6 +34,7 @@ class Factor(Base):
 
 class FactorValue(Base):
     """因子值结果表 - 支持raw/processed/neutralized/zscore多级存储"""
+
     __tablename__ = "factor_values"
     __table_args__ = (
         Index("ix_fv_factor_date_stock", "factor_id", "trade_date", "security_id"),
@@ -54,15 +57,16 @@ class FactorValue(Base):
     created_at: DateTime = Column(DateTime, server_default=func.now())
 
     def __repr__(self):
-        return f"<FactorValue(factor_id={self.factor_id}, trade_date='{self.trade_date}', security_id={self.security_id})>"
+        return (
+            f"<FactorValue(factor_id={self.factor_id}, trade_date='{self.trade_date}', security_id={self.security_id})>"
+        )
 
 
 class FactorAnalysis(Base):
     """因子分析结果表"""
+
     __tablename__ = "factor_analysis"
-    __table_args__ = (
-        Index("ix_fa_factor_date", "factor_id", "analysis_date"),
-    )
+    __table_args__ = (Index("ix_fa_factor_date", "factor_id", "analysis_date"),)
 
     id: int = Column(Integer, primary_key=True, index=True)
     factor_id: int = Column(Integer, index=True, nullable=False)
@@ -99,10 +103,9 @@ class FactorAnalysis(Base):
 
 class FactorResult(Base):
     """因子评分结果表"""
+
     __tablename__ = "factor_results"
-    __table_args__ = (
-        Index("ix_fr_factor_date", "factor_id", "trade_date"),
-    )
+    __table_args__ = (Index("ix_fr_factor_date", "factor_id", "trade_date"),)
 
     id: int = Column(Integer, primary_key=True, index=True)
     factor_id: int = Column(Integer, index=True, nullable=False)

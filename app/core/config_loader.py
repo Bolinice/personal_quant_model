@@ -8,11 +8,12 @@ YAML配置加载器 V2
 - 缓存
 """
 
+import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
+
 import yaml
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -38,30 +39,30 @@ class ConfigLoader:
     """YAML配置加载器"""
 
     _instance: Optional["ConfigLoader"] = None
-    _config: Dict[str, Any] = {}
+    _config: dict[str, Any] = {}
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, config_dir: Optional[str] = None, env: Optional[str] = None):
+    def __init__(self, config_dir: str | None = None, env: str | None = None):
         if self._config:
             return  # 已初始化
         self._config_dir = Path(config_dir) if config_dir else CONFIG_DIR
         self._env = env or os.getenv("APP_ENV", "development")
         self._config = self._load_all()
 
-    def _load_yaml(self, filepath: Path) -> Dict[str, Any]:
+    def _load_yaml(self, filepath: Path) -> dict[str, Any]:
         """加载单个YAML文件"""
         if not filepath.exists():
             logger.warning(f"配置文件不存在: {filepath}")
             return {}
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         return data or {}
 
-    def _deep_merge(self, base: Dict, override: Dict) -> Dict:
+    def _deep_merge(self, base: dict, override: dict) -> dict:
         """深度合并两个字典"""
         result = base.copy()
         for key, value in override.items():
@@ -71,7 +72,7 @@ class ConfigLoader:
                 result[key] = value
         return result
 
-    def _load_all(self) -> Dict[str, Any]:
+    def _load_all(self) -> dict[str, Any]:
         """加载所有配置文件"""
         config = {}
 
@@ -109,11 +110,11 @@ class ConfigLoader:
                 return default
         return value
 
-    def get_section(self, section: str) -> Dict[str, Any]:
+    def get_section(self, section: str) -> dict[str, Any]:
         """获取整个配置段"""
         return self._config.get(section, {})
 
-    def get_all(self) -> Dict[str, Any]:
+    def get_all(self) -> dict[str, Any]:
         """获取全部配置"""
         return self._config.copy()
 

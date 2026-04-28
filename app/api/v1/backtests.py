@@ -1,28 +1,34 @@
 """回测管理 API。"""
 
-from typing import List, Optional
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+
+from app.api.v1.auth import get_current_user
+from app.core.permissions import PermissionCode, require_permission
+from app.core.response import success
 from app.db.base import get_db
 from app.models.backtests import Backtest
-from app.services.backtests_service import (
-    get_backtests, create_backtest, update_backtest,
-    get_backtest_results, run_backtest, cancel_backtest,
-)
-from app.schemas.backtests import BacktestCreate, BacktestUpdate, BacktestOut, BacktestResultOut
-from app.core.response import success, error
-from app.core.permissions import require_permission, PermissionCode
-from app.api.v1.auth import get_current_user
 from app.models.user import User
+from app.schemas.backtests import BacktestCreate, BacktestUpdate
 from app.services import usage_service
+from app.services.backtests_service import (
+    cancel_backtest,
+    create_backtest,
+    get_backtest_results,
+    get_backtests,
+    run_backtest,
+    update_backtest,
+)
 
 router = APIRouter()
 
 
 @router.get("/")
 def read_backtests(
-    model_id: int = None,
-    status: str = None,
+    model_id: int | None = None,
+    status: str | None = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),

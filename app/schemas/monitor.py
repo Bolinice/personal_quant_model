@@ -1,19 +1,20 @@
 """监控Schema"""
 
 from datetime import date, datetime
-from typing import Optional, Dict, Any, List
+from typing import Any
+
 from pydantic import BaseModel
 
 
 class FactorHealthResponse(BaseModel):
     trade_date: date
     factor_name: str
-    coverage_rate: Optional[float] = None
-    missing_rate: Optional[float] = None
-    ic_rolling: Optional[float] = None
-    ic_mean: Optional[float] = None
-    icir: Optional[float] = None
-    psi: Optional[float] = None
+    coverage_rate: float | None = None
+    missing_rate: float | None = None
+    ic_rolling: float | None = None
+    ic_mean: float | None = None
+    icir: float | None = None
+    psi: float | None = None
     health_status: str = "healthy"
 
     class Config:
@@ -23,9 +24,9 @@ class FactorHealthResponse(BaseModel):
 class ModelHealthResponse(BaseModel):
     trade_date: date
     model_id: str
-    prediction_drift: Optional[float] = None
-    feature_importance_drift: Optional[float] = None
-    oos_score: Optional[float] = None
+    prediction_drift: float | None = None
+    feature_importance_drift: float | None = None
+    oos_score: float | None = None
     health_status: str = "healthy"
 
     class Config:
@@ -33,30 +34,30 @@ class ModelHealthResponse(BaseModel):
 
 
 class PortfolioMonitorResponse(BaseModel):
-    trade_date: Optional[date] = None
-    model_id: Optional[int] = None
-    industry_exposure: Optional[Dict[str, float]] = None
-    style_exposure: Optional[Dict[str, float]] = None
-    turnover_rate: Optional[float] = None
-    crowding_score: Optional[float] = None
+    trade_date: date | None = None
+    model_id: int | None = None
+    industry_exposure: dict[str, float] | None = None
+    style_exposure: dict[str, float] | None = None
+    turnover_rate: float | None = None
+    crowding_score: float | None = None
 
 
 class LiveTrackingResponse(BaseModel):
-    model_id: Optional[int] = None
-    execution_deviation: Optional[float] = None
-    cost_deviation: Optional[float] = None
-    drawdown: Optional[float] = None
-    fill_rate: Optional[float] = None
+    model_id: int | None = None
+    execution_deviation: float | None = None
+    cost_deviation: float | None = None
+    drawdown: float | None = None
+    fill_rate: float | None = None
 
 
 class MonitorAlertResponse(BaseModel):
     alert_id: int
-    alert_time: Optional[datetime] = None
-    alert_type: Optional[str] = None
-    severity: Optional[str] = None
-    object_type: Optional[str] = None
-    object_name: Optional[str] = None
-    message: Optional[str] = None
+    alert_time: datetime | None = None
+    alert_type: str | None = None
+    severity: str | None = None
+    object_type: str | None = None
+    object_name: str | None = None
+    message: str | None = None
     resolved_flag: bool = False
 
     class Config:
@@ -64,8 +65,8 @@ class MonitorAlertResponse(BaseModel):
 
 
 class RegimeResponse(BaseModel):
-    trade_date: Optional[str] = None
+    trade_date: str | None = None
     regime: str = "trending"
-    confidence: Optional[float] = None
-    regime_detail: Optional[Dict[str, Any]] = None
-    module_weight_adjustment: Optional[Dict[str, float]] = None
+    confidence: float | None = None
+    regime_detail: dict[str, Any] | None = None
+    module_weight_adjustment: dict[str, float] | None = None

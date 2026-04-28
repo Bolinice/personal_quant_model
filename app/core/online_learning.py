@@ -2,10 +2,10 @@
 在线学习模块 - Walk-Forward滚动训练 + TimeSeriesSplit交叉验证
 核心: 用时序CV替代随机分割，防止未来函数泄漏
 """
-from typing import Dict, List, Optional, Tuple
-from datetime import date, datetime, timedelta
+
 import numpy as np
 import pandas as pd
+
 from app.core.logging import logger
 
 
@@ -15,10 +15,13 @@ class OnlineLearning:
     管理模型的滚动训练、评估和更新
     """
 
-    def __init__(self, model_dir: str = 'models/',
-                 n_splits: int = 5,
-                 min_train_samples: int = 200,
-                 early_stopping_rounds: int = 30):
+    def __init__(
+        self,
+        model_dir: str = "models/",
+        n_splits: int = 5,
+        min_train_samples: int = 200,
+        early_stopping_rounds: int = 30,
+    ):
         self.model_dir = model_dir
         self.n_splits = n_splits
         self.min_train_samples = min_train_samples
@@ -26,16 +29,18 @@ class OnlineLearning:
         self._current_model = None
         self._model_version = 0
 
-    def retrain_walk_forward(self,
-                              data_df: pd.DataFrame,
-                              factor_cols: List[str],
-                              return_col: str = 'forward_return',
-                              date_col: str = 'trade_date',
-                              train_window: int = 504,
-                              test_window: int = 63,
-                              gap: int = 21,
-                              retrain_freq: int = 63,
-                              model_config: Optional[Dict] = None) -> List[Dict]:
+    def retrain_walk_forward(
+        self,
+        data_df: pd.DataFrame,
+        factor_cols: list[str],
+        return_col: str = "forward_return",
+        date_col: str = "trade_date",
+        train_window: int = 504,
+        test_window: int = 63,
+        gap: int = 21,
+        retrain_freq: int = 63,
+        model_config: dict | None = None,
+    ) -> list[dict]:
         """
         Walk-Forward滚动训练
         使用TimeSeriesSplit进行时序交叉验证，替代简单的时间比例分割
@@ -78,15 +83,17 @@ class OnlineLearning:
         # 转换为字典格式返回
         results = []
         for r in wf_results:
-            results.append({
-                'train_start': r.train_start,
-                'train_end': r.train_end,
-                'test_start': r.test_start,
-                'test_end': r.test_end,
-                'test_ic': r.test_ic,
-                'test_icir': r.test_icir,
-                'test_rank_ic': r.test_rank_ic,
-            })
+            results.append(
+                {
+                    "train_start": r.train_start,
+                    "train_end": r.train_end,
+                    "test_start": r.test_start,
+                    "test_end": r.test_end,
+                    "test_ic": r.test_ic,
+                    "test_icir": r.test_icir,
+                    "test_rank_ic": r.test_rank_ic,
+                }
+            )
 
         # 更新当前模型为最后一个窗口的模型
         if wf_results and wf_results[-1].model is not None:
@@ -102,12 +109,14 @@ class OnlineLearning:
 
         return results
 
-    def train_with_timeseries_cv(self,
-                                  factor_df: pd.DataFrame,
-                                  return_series: pd.Series,
-                                  factor_cols: List[str],
-                                  model_config: Optional[Dict] = None,
-                                  monotone_constraints: Optional[Dict[str, int]] = None) -> Optional[Dict]:
+    def train_with_timeseries_cv(
+        self,
+        factor_df: pd.DataFrame,
+        return_series: pd.Series,
+        factor_cols: list[str],
+        model_config: dict | None = None,
+        monotone_constraints: dict[str, int] | None = None,
+    ) -> dict | None:
         """
         使用TimeSeriesSplit交叉验证训练模型
         替代原有的简单时间比例分割
@@ -146,16 +155,14 @@ class OnlineLearning:
         self._model_version += 1
 
         return {
-            'model': trained.model,
-            'scaler': trained.scaler,
-            'cv_metrics': trained.cv_metrics,
-            'feature_importance': trained.feature_importance,
-            'model_version': self._model_version,
+            "model": trained.model,
+            "scaler": trained.scaler,
+            "cv_metrics": trained.cv_metrics,
+            "feature_importance": trained.feature_importance,
+            "model_version": self._model_version,
         }
 
-    def predict(self,
-                factor_df: pd.DataFrame,
-                factor_cols: List[str]) -> Optional[pd.Series]:
+    def predict(self, factor_df: pd.DataFrame, factor_cols: list[str]) -> pd.Series | None:
         """
         使用当前模型预测
 
@@ -171,31 +178,31 @@ class OnlineLearning:
             return None
 
         from app.core.model_trainer import ModelTrainer
+
         trainer = ModelTrainer(model_dir=self.model_dir)
         return trainer.predict(self._current_model, factor_df, factor_cols)
 
-    def get_model_info(self) -> Dict:
+    def get_model_info(self) -> dict:
         """获取当前模型信息"""
         if self._current_model is None:
-            return {'status': 'no_model', 'version': 0}
+            return {"status": "no_model", "version": 0}
 
         return {
-            'status': 'active',
-            'version': self._model_version,
-            'train_date': str(self._current_model.train_date),
-            'model_type': self._current_model.model_type,
-            'n_factors': len(self._current_model.factor_cols),
-            'cv_metrics': self._current_model.cv_metrics,
-            'top_features': dict(sorted(
-                self._current_model.feature_importance.items(),
-                key=lambda x: -x[1],
-            )[:10]),
+            "status": "active",
+            "version": self._model_version,
+            "train_date": str(self._current_model.train_date),
+            "model_type": self._current_model.model_type,
+            "n_factors": len(self._current_model.factor_cols),
+            "cv_metrics": self._current_model.cv_metrics,
+            "top_features": dict(
+                sorted(
+                    self._current_model.feature_importance.items(),
+                    key=lambda x: -x[1],
+                )[:10]
+            ),
         }
 
-    def evaluate_model(self,
-                        factor_df: pd.DataFrame,
-                        return_series: pd.Series,
-                        factor_cols: List[str]) -> Dict:
+    def evaluate_model(self, factor_df: pd.DataFrame, return_series: pd.Series, factor_cols: list[str]) -> dict:
         """
         评估当前模型在给定数据上的表现
 
@@ -227,8 +234,8 @@ class OnlineLearning:
         rmse = np.sqrt(np.mean((pred - actual) ** 2))
 
         return {
-            'ic': round(ic, 4) if not np.isnan(ic) else 0.0,
-            'rank_ic': round(rank_ic, 4) if not np.isnan(rank_ic) else 0.0,
-            'rmse': round(rmse, 6),
-            'n_samples': len(pred),
+            "ic": round(ic, 4) if not np.isnan(ic) else 0.0,
+            "rank_ic": round(rank_ic, 4) if not np.isnan(rank_ic) else 0.0,
+            "rmse": round(rmse, 6),
+            "n_samples": len(pred),
         }

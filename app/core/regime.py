@@ -4,47 +4,47 @@
 检测: trending(趋势市)/mean_reverting(震荡市)/defensive(防御市)/risk_on(进攻市)
 用途: 给各alpha模块动态调权、调整组合风险参数
 """
-from typing import Any, Dict, List, Optional, Tuple
+
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
 from app.core.logging import logger
 
-
 # Regime类型定义
-REGIME_TRENDING = 'trending'         # 趋势市: 价格行为/修正权重更高
-REGIME_MEAN_REVERTING = 'mean_reverting'  # 震荡市: 反转/价值权重更高
-REGIME_DEFENSIVE = 'defensive'       # 防御市: 质量/低波动权重更高
-REGIME_RISK_ON = 'risk_on'           # 进攻市: 资金/事件权重更高
+REGIME_TRENDING = "trending"  # 趋势市: 价格行为/修正权重更高
+REGIME_MEAN_REVERTING = "mean_reverting"  # 震荡市: 反转/价值权重更高
+REGIME_DEFENSIVE = "defensive"  # 防御市: 质量/低波动权重更高
+REGIME_RISK_ON = "risk_on"  # 进攻市: 资金/事件权重更高
 
 # Regime对应的模块权重调整 (V2: 与EnsembleEngine一致, 使用增量而非乘数)
 # 增量调整而非乘数: 乘数在边界处行为不稳定(如权重接近0时乘数效果异常)
 REGIME_WEIGHT_ADJUSTMENTS = {
     REGIME_RISK_ON: {
-        'quality_growth': -0.05,  # 进攻: 质量↓ — 牛市中质量因子alpha衰减, 成长股更受追捧
-        'expectation': 0.00,
-        'residual_momentum': +0.08,  # 动量↑ — 进攻市趋势延续性强, 动量因子IC上升
-        'flow_confirm': +0.05,  # 资金流↑ — 资金涌入是进攻市的核心确认信号
+        "quality_growth": -0.05,  # 进攻: 质量↓ — 牛市中质量因子alpha衰减, 成长股更受追捧
+        "expectation": 0.00,
+        "residual_momentum": +0.08,  # 动量↑ — 进攻市趋势延续性强, 动量因子IC上升
+        "flow_confirm": +0.05,  # 资金流↑ — 资金涌入是进攻市的核心确认信号
     },
     REGIME_TRENDING: {
         # 趨势: 均衡 — 趋势市无极端偏好, 保持基线权重
-        'quality_growth': 0.00,
-        'expectation': 0.00,
-        'residual_momentum': 0.00,
-        'flow_confirm': 0.00,
+        "quality_growth": 0.00,
+        "expectation": 0.00,
+        "residual_momentum": 0.00,
+        "flow_confirm": 0.00,
     },
     REGIME_DEFENSIVE: {
-        'quality_growth': +0.08,  # 防御: 质量↑ — 防御市资金回流确定性高的质量股
-        'expectation': +0.02,
-        'residual_momentum': -0.08,  # 动量↓ — 防御市动量反转频繁, 趋势不可靠
-        'flow_confirm': -0.02,
+        "quality_growth": +0.08,  # 防御: 质量↑ — 防御市资金回流确定性高的质量股
+        "expectation": +0.02,
+        "residual_momentum": -0.08,  # 动量↓ — 防御市动量反转频繁, 趋势不可靠
+        "flow_confirm": -0.02,
     },
     REGIME_MEAN_REVERTING: {
-        'quality_growth': +0.02,
-        'expectation': +0.06,  # 震荡: 修正↑ — 震荡市中分析师修正信号更具区分度
-        'residual_momentum': -0.06,  # 动量↓ — 震荡市动量因子衰减甚至反转
-        'flow_confirm': -0.02,
+        "quality_growth": +0.02,
+        "expectation": +0.06,  # 震荡: 修正↑ — 震荡市中分析师修正信号更具区分度
+        "residual_momentum": -0.06,  # 动量↓ — 震荡市动量因子衰减甚至反转
+        "flow_confirm": -0.02,
     },
 }
 
@@ -57,11 +57,14 @@ class RegimeDetector:
 
     # ==================== 市场状态特征 ====================
 
-    def market_features(self, market_data: pd.DataFrame,
-                         date_col: str = 'trade_date',
-                         price_col: str = 'close',
-                         volume_col: str = 'volume',
-                         amount_col: str = 'amount') -> Dict[str, float]:
+    def market_features(
+        self,
+        market_data: pd.DataFrame,
+        date_col: str = "trade_date",
+        price_col: str = "close",
+        volume_col: str = "volume",
+        amount_col: str = "amount",
+    ) -> dict[str, float]:
         """
         计算市场状态特征 (GPT设计5.6节 + 7.5节)
 
@@ -76,7 +79,7 @@ class RegimeDetector:
             return {}
 
         df = market_data.copy()
-        df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+        df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
         df = df.sort_values(date_col)
 
         features = {}
@@ -87,49 +90,54 @@ class RegimeDetector:
         if len(close) >= 60:
             ma20 = np.mean(close[-20:])
             ma60 = np.mean(close[-60:])
-            features['market_trend_20d'] = (ma20 - close[-1]) / close[-1] if close[-1] > 0 else 0
-            features['market_trend_60d'] = (ma60 - close[-1]) / close[-1] if close[-1] > 0 else 0
+            features["market_trend_20d"] = (ma20 - close[-1]) / close[-1] if close[-1] > 0 else 0
+            features["market_trend_60d"] = (ma60 - close[-1]) / close[-1] if close[-1] > 0 else 0
             # MA20 vs MA60 交叉
-            features['ma_cross'] = (ma20 - ma60) / ma60 if ma60 > 0 else 0
+            features["ma_cross"] = (ma20 - ma60) / ma60 if ma60 > 0 else 0
         elif len(close) >= 20:
             ma20 = np.mean(close[-20:])
-            features['market_trend_20d'] = (ma20 - close[-1]) / close[-1] if close[-1] > 0 else 0
+            features["market_trend_20d"] = (ma20 - close[-1]) / close[-1] if close[-1] > 0 else 0
 
         # 2. 市场波动率
         # 年化波动率: 日std * sqrt(252), A股年均约252个交易日
         returns = df[price_col].pct_change().dropna()
         if len(returns) >= 20:
-            features['market_vol_20d'] = returns.tail(20).std() * np.sqrt(252)
-            features['market_vol_60d'] = returns.tail(60).std() * np.sqrt(252) if len(returns) >= 60 else features['market_vol_20d']
+            features["market_vol_20d"] = returns.tail(20).std() * np.sqrt(252)
+            features["market_vol_60d"] = (
+                returns.tail(60).std() * np.sqrt(252) if len(returns) >= 60 else features["market_vol_20d"]
+            )
             # 波动率变化
             vol_short = returns.tail(10).std()
             vol_long = returns.tail(60).std() if len(returns) >= 60 else returns.tail(20).std()
-            features['vol_ratio'] = vol_short / vol_long if vol_long > 0 else 1.0
+            features["vol_ratio"] = vol_short / vol_long if vol_long > 0 else 1.0
 
         # 3. 市场宽度 (上涨股票占比) - 需要个股数据
         # 宽度>0.6=普涨(多头), <0.4=普跌(空头), 中间=分化 — 区分"指数涨个股跌"的虚假趋势
-        if 'pct_chg' in df.columns and 'ts_code' in df.columns:
+        if "pct_chg" in df.columns and "ts_code" in df.columns:
             # 如果是个股数据, 计算breadth
             latest = df[df[date_col] == df[date_col].max()]
-            if not latest.empty and 'pct_chg' in latest.columns:
-                pct_chg = latest['pct_chg'].dropna()
-                features['breadth'] = (pct_chg > 0).mean() if len(pct_chg) > 0 else 0.5
+            if not latest.empty and "pct_chg" in latest.columns:
+                pct_chg = latest["pct_chg"].dropna()
+                features["breadth"] = (pct_chg > 0).mean() if len(pct_chg) > 0 else 0.5
 
         # 4. 市场收益
         if len(close) >= 2:
-            features['market_return_1d'] = close[-1] / close[-2] - 1
+            features["market_return_1d"] = close[-1] / close[-2] - 1
         if len(close) >= 20:
-            features['market_return_20d'] = close[-1] / close[-20] - 1
+            features["market_return_20d"] = close[-1] / close[-20] - 1
         if len(close) >= 60:
-            features['market_return_60d'] = close[-1] / close[-60] - 1
+            features["market_return_60d"] = close[-1] / close[-60] - 1
 
         return features
 
-    def size_value_spread(self, large_cap_df: pd.DataFrame,
-                           small_cap_df: pd.DataFrame,
-                           date_col: str = 'trade_date',
-                           price_col: str = 'close',
-                           window: int = 20) -> float:
+    def size_value_spread(
+        self,
+        large_cap_df: pd.DataFrame,
+        small_cap_df: pd.DataFrame,
+        date_col: str = "trade_date",
+        price_col: str = "close",
+        window: int = 20,
+    ) -> float:
         """
         大小盘收益差 (GPT设计5.6节)
 
@@ -149,9 +157,9 @@ class RegimeDetector:
 
         return small_ret - large_ret
 
-    def sector_dispersion(self, sector_returns: pd.DataFrame,
-                          date_col: str = 'trade_date',
-                          return_col: str = 'return') -> float:
+    def sector_dispersion(
+        self, sector_returns: pd.DataFrame, date_col: str = "trade_date", return_col: str = "return"
+    ) -> float:
         """
         行业离散度 (GPT设计5.6节)
         行业收益的离散程度，高离散度意味着行业轮动机会多
@@ -173,10 +181,13 @@ class RegimeDetector:
 
     # ==================== Regime检测 ====================
 
-    def detect(self, market_data: pd.DataFrame,
-               large_cap_df: pd.DataFrame = None,
-               small_cap_df: pd.DataFrame = None,
-               sector_returns: pd.DataFrame = None) -> str:
+    def detect(
+        self,
+        market_data: pd.DataFrame,
+        large_cap_df: pd.DataFrame = None,
+        small_cap_df: pd.DataFrame = None,
+        sector_returns: pd.DataFrame = None,
+    ) -> str:
         """
         检测当前市场regime
 
@@ -205,9 +216,9 @@ class RegimeDetector:
         breadth_score = 0.5
 
         # 趋势评分
-        trend_20d = features.get('market_trend_20d', 0)
-        trend_60d = features.get('market_trend_60d', 0)
-        ma_cross = features.get('ma_cross', 0)
+        trend_20d = features.get("market_trend_20d", 0)
+        trend_60d = features.get("market_trend_60d", 0)
+        ma_cross = features.get("ma_cross", 0)
 
         # 强趋势: 20d和60d方向一致且幅度大
         # 阈值3%/5%: A股指数日均波动约1-2%, 3%以上斜率意味着持续性趋势
@@ -219,20 +230,20 @@ class RegimeDetector:
             trend_score = 0.0  # 震荡
 
         # 波动率评分
-        vol_20d = features.get('market_vol_20d', 0.2)
-        vol_ratio = features.get('vol_ratio', 1.0)
+        vol_20d = features.get("market_vol_20d", 0.2)
+        vol_ratio = features.get("vol_ratio", 1.0)
 
         if vol_20d > 0.30 or vol_ratio > 1.5:
             # 年化30%以上或短期/长期波动率比>1.5: 市场恐慌, 需防御
             vol_score = -1.0  # 高波动 → 防御
         elif vol_20d < 0.15 and vol_ratio < 0.7:
             # 年化15%以下且波动率在收缩: 市场平静, 可进攻
-            vol_score = 1.0   # 低波动 → 进攻
+            vol_score = 1.0  # 低波动 → 进攻
         else:
             vol_score = 0.0
 
         # 宽度评分
-        breadth = features.get('breadth', 0.5)
+        breadth = features.get("breadth", 0.5)
         if breadth > 0.6:
             breadth_score = 1.0  # 多头宽度
         elif breadth < 0.4:
@@ -280,8 +291,7 @@ class RegimeDetector:
 
         return regime
 
-    def get_weight_adjustments(self, regime: str,
-                                base_weights: Dict[str, float]) -> Dict[str, float]:
+    def get_weight_adjustments(self, regime: str, base_weights: dict[str, float]) -> dict[str, float]:
         """
         根据regime调整模块权重 (V2: 使用增量调整, 与EnsembleEngine一致)
 
@@ -306,9 +316,9 @@ class RegimeDetector:
 
         return adjusted
 
-    def detect_with_confidence(self, market_data: pd.DataFrame,
-                                large_cap_df: pd.DataFrame = None,
-                                small_cap_df: pd.DataFrame = None) -> Dict[str, Any]:
+    def detect_with_confidence(
+        self, market_data: pd.DataFrame, large_cap_df: pd.DataFrame = None, small_cap_df: pd.DataFrame = None
+    ) -> dict[str, Any]:
         """
         检测regime并返回置信度
 
@@ -319,24 +329,21 @@ class RegimeDetector:
         features = self.market_features(market_data)
 
         # 简单置信度: 基于特征的一致性
-        trend_20d = abs(features.get('market_trend_20d', 0))
-        vol_ratio = features.get('vol_ratio', 1.0)
-        breadth = features.get('breadth', 0.5)
+        trend_20d = abs(features.get("market_trend_20d", 0))
+        vol_ratio = features.get("vol_ratio", 1.0)
+        breadth = features.get("breadth", 0.5)
 
         # 特征越偏离中性，置信度越高
         # 三项特征归一化后取平均: 趋势强度*10(放大至0-1量级) + 波动率偏离 + 宽度偏离
-        confidence = min(
-            (trend_20d * 10 + abs(vol_ratio - 1.0) * 2 + abs(breadth - 0.5) * 2) / 3,
-            1.0
-        )
+        confidence = min((trend_20d * 10 + abs(vol_ratio - 1.0) * 2 + abs(breadth - 0.5) * 2) / 3, 1.0)
         confidence = max(confidence, 0.3)  # 最低30%置信度 — 防止下游完全忽略regime信号
 
-        base_weights = {'quality_growth': 0.35, 'expectation': 0.30, 'residual_momentum': 0.25, 'flow_confirm': 0.10}
+        base_weights = {"quality_growth": 0.35, "expectation": 0.30, "residual_momentum": 0.25, "flow_confirm": 0.10}
         adjusted_weights = self.get_weight_adjustments(regime, base_weights)
 
         return {
-            'regime': regime,
-            'confidence': round(confidence, 3),
-            'features': features,
-            'weight_adjustments': adjusted_weights,
+            "regime": regime,
+            "confidence": round(confidence, 3),
+            "features": features,
+            "weight_adjustments": adjusted_weights,
         }

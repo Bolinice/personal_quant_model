@@ -3,13 +3,15 @@
 - RiskAssessment: 用户风险测评记录
 """
 
-from sqlalchemy import Column, Integer, String, JSON, DateTime, Date
+from sqlalchemy import JSON, Column, DateTime, Integer, String
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class RiskAssessment(Base):
     """风险测评表"""
+
     __tablename__ = "risk_assessments"
 
     id = Column(Integer, primary_key=True, index=True)

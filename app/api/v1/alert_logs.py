@@ -1,21 +1,36 @@
 """告警日志 API。"""
 
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
+from app.core.response import success
 from app.db.base import get_db
+from app.schemas.alert_logs import AlertLogCreate, AlertLogUpdate
 from app.services.alert_logs_service import (
-    get_alert_logs, create_alert_log, get_alert_log_by_id, update_alert_log, delete_alert_log,
-    monitor_risk_exposure, monitor_performance, trigger_alerts,
+    create_alert_log,
+    delete_alert_log,
+    get_alert_log_by_id,
+    get_alert_logs,
+    monitor_performance,
+    monitor_risk_exposure,
+    trigger_alerts,
+    update_alert_log,
 )
-from app.schemas.alert_logs import AlertLogCreate, AlertLogUpdate, AlertLogOut
-from app.core.response import success, error
 
 router = APIRouter()
 
 
 @router.get("/")
-def read_alert_logs(skip: int = 0, limit: int = 100, alert_type: str = None, severity: str = None, status: str = None, db: Session = Depends(get_db)):
+def read_alert_logs(
+    skip: int = 0,
+    limit: int = 100,
+    alert_type: str | None = None,
+    severity: str | None = None,
+    status: str | None = None,
+    db: Session = Depends(get_db),
+):
     """获取告警日志列表"""
     logs = get_alert_logs(skip=skip, limit=limit, alert_type=alert_type, severity=severity, status=status, db=db)
     return success(logs)

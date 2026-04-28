@@ -1,6 +1,5 @@
 """因子元数据服务"""
 
-from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from app.models.factor_metadata import FactorMetadata
@@ -13,9 +12,9 @@ class FactorMetadataService:
     @staticmethod
     def get_all_factors(
         db: Session,
-        factor_group: Optional[str] = None,
-        status: Optional[str] = None,
-    ) -> List[FactorMetadata]:
+        factor_group: str | None = None,
+        status: str | None = None,
+    ) -> list[FactorMetadata]:
         """获取因子列表"""
         query = db.query(FactorMetadata)
         if factor_group:
@@ -25,7 +24,7 @@ class FactorMetadataService:
         return query.all()
 
     @staticmethod
-    def get_factor_by_name(db: Session, factor_name: str) -> Optional[FactorMetadata]:
+    def get_factor_by_name(db: Session, factor_name: str) -> FactorMetadata | None:
         """获取因子详情"""
         return db.query(FactorMetadata).filter(FactorMetadata.factor_name == factor_name).first()
 
@@ -39,7 +38,7 @@ class FactorMetadataService:
         return factor
 
     @staticmethod
-    def update_factor_status(db: Session, factor_name: str, status: str) -> Optional[FactorMetadata]:
+    def update_factor_status(db: Session, factor_name: str, status: str) -> FactorMetadata | None:
         """更新因子状态"""
         factor = db.query(FactorMetadata).filter(FactorMetadata.factor_name == factor_name).first()
         if factor:

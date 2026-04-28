@@ -1,13 +1,16 @@
 """因子健康检查任务"""
 
+from __future__ import annotations
+
 from datetime import date
+
 from app.core.celery_config import celery_app
-from app.core.logging import logger
 from app.core.factor_monitor import FactorMonitor
+from app.core.logging import logger
 
 
 @celery_app.task(name="check_factor_health")
-def check_factor_health(trade_date: str = None):
+def check_factor_health(trade_date: str | None = None):
     """
     因子健康检查
 
@@ -22,7 +25,7 @@ def check_factor_health(trade_date: str = None):
     logger.info(f"开始因子健康检查: {trade_date}")
 
     try:
-        monitor = FactorMonitor()
+        _monitor = FactorMonitor()
 
         # TODO: 实现因子健康检查逻辑
         # 1. 获取各因子近期IC

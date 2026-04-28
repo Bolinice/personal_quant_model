@@ -1,12 +1,14 @@
 """模型注册表"""
 
-from sqlalchemy import Column, String, Date, Text, DateTime
+from sqlalchemy import Column, Date, DateTime, String, Text
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class ModelRegistry(Base):
     """模型注册表 - 模型版本管理与实验治理"""
+
     __tablename__ = "model_registry"
 
     model_id = Column(String(100), primary_key=True, comment="模型ID")
@@ -24,6 +26,4 @@ class ModelRegistry(Base):
     created_at = Column(DateTime, server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新时间")
 
-    __table_args__ = (
-        {"comment": "模型注册表"},
-    )
+    __table_args__ = ({"comment": "模型注册表"},)

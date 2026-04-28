@@ -2,21 +2,22 @@
 认证API
 支持JWT登录、refresh token、API Key认证
 """
+
 from datetime import datetime, timedelta
-from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
-from jose import jwt, JWTError
-from app.db.base import get_db
-from app.services.auth_service import AuthService
-from app.models.user import User
-from app.core.config import settings
-from app.core.response import success, error
-from app.core.logging import logger
 
+from app.core.config import settings
+from app.core.logging import logger
+from app.core.response import success
+from app.db.base import get_db
+from app.models.user import User
+from app.services.auth_service import AuthService
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -38,7 +39,7 @@ class ChangePasswordRequest(BaseModel):
 
 
 class APIKeyCreateRequest(BaseModel):
-    name: Optional[str] = None
+    name: str | None = None
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
@@ -69,9 +70,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 def login(request: LoginRequest, db: Session = Depends(get_db)):
     """用户登录 (JSON格式，支持邮箱登录)"""
     # 支持邮箱或用户名登录
-    user = db.query(User).filter(
-        (User.email == request.email) | (User.username == request.email)
-    ).first()
+    user = db.query(User).filter((User.email == request.email) | (User.username == request.email)).first()
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -92,12 +91,14 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     access_token = AuthService.create_access_token(token_data)
     refresh_token = AuthService.create_refresh_token(token_data)
 
-    return success({
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-        "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-    })
+    return success(
+        {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        }
+    )
 
 
 @router.post("/refresh")
@@ -111,31 +112,35 @@ def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
         )
 
     new_access, new_refresh = result
-    return success({
-        "access_token": new_access,
-        "refresh_token": new_refresh,
-        "token_type": "bearer",
-    })
+    return success(
+        {
+            "access_token": new_access,
+            "refresh_token": new_refresh,
+            "token_type": "bearer",
+        }
+    )
 
 
 @router.get("/me")
 def get_current_user_info(current_user: User = Depends(get_current_user)):
     """获取当前用户信息"""
-    return success({
-        "id": current_user.id,
-        "username": current_user.username,
-        "email": current_user.email,
-        "role": current_user.role,
-        "is_active": current_user.is_active,
-        "is_superuser": current_user.is_superuser,
-        "created_at": str(current_user.created_at) if current_user.created_at else None,
-    })
+    return success(
+        {
+            "id": current_user.id,
+            "username": current_user.username,
+            "email": current_user.email,
+            "role": current_user.role,
+            "is_active": current_user.is_active,
+            "is_superuser": current_user.is_superuser,
+            "created_at": str(current_user.created_at) if current_user.created_at else None,
+        }
+    )
 
 
 @router.post("/change-password")
-def change_password(request: ChangePasswordRequest,
-                    current_user: User = Depends(get_current_user),
-                    db: Session = Depends(get_db)):
+def change_password(
+    request: ChangePasswordRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
     """修改密码"""
     if not AuthService.verify_password(request.old_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="旧密码错误")
@@ -150,9 +155,9 @@ def change_password(request: ChangePasswordRequest,
 
 
 @router.post("/api-keys")
-def create_api_key(request: APIKeyCreateRequest,
-                   current_user: User = Depends(get_current_user),
-                   db: Session = Depends(get_db)):
+def create_api_key(
+    request: APIKeyCreateRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
     """创建API Key"""
     result = AuthService.create_api_key(db, current_user.id, request.name)
     return success(result, message="API Key创建成功，请妥善保管secret")
@@ -198,6 +203,7 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
 
     # 自动创建试用订阅（7天试用期）
     from app.models.subscriptions import Subscription
+
     sub = Subscription(
         user_id=user.id,
         plan_type="trial",
@@ -213,16 +219,19 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     access_token = AuthService.create_access_token(token_data)
     refresh_token = AuthService.create_refresh_token(token_data)
 
-    return success(data={
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "username": user.username,
+    return success(
+        data={
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "username": user.username,
+            },
         },
-    }, message="注册成功")
+        message="注册成功",
+    )
 
 
 @router.post("/forgot-password")

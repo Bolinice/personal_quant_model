@@ -2,15 +2,21 @@
 风控检查异步任务
 实现ADD 6.1节步骤9-11: 日终风控检查 → 预警 → 记录
 """
-from datetime import datetime, date
+
+from __future__ import annotations
+
+from datetime import date, datetime
+
 from app.core.celery_config import celery_app
 from app.core.logging import logger
 from app.db.base import SessionLocal
+import contextlib
 
 
 def _create_task_log(db, task_type, task_name, run_id, params=None):
     """创建任务日志"""
     from app.models.task_logs import TaskLog
+
     log = TaskLog(
         task_type=task_type,
         task_name=task_name,
@@ -38,7 +44,7 @@ def _update_task_log(db, log, status, result=None, error=None):
 
 
 @celery_app.task(bind=True, max_retries=3, name="app.tasks.risk_check.run_daily_risk_check")
-def run_daily_risk_check(self, trade_date: str = None):
+def run_daily_risk_check(self, trade_date: str | None = None):
     """
     日终风控检查任务
     流程: 获取活跃模型组合 → 计算风险指标 → 检查风控约束 → 生成预警 → 记录
@@ -47,18 +53,18 @@ def run_daily_risk_check(self, trade_date: str = None):
     db = SessionLocal()
 
     try:
-        from app.models.models import Model, ModelScore
-        from app.models.portfolios import Portfolio, PortfolioPosition
-        from app.models.market import StockDaily
-        from app.core.risk_model import RiskModel
-        import pandas as pd
         import numpy as np
+        import pandas as pd
+
+        from app.core.risk_model import RiskModel
+        from app.models.market import StockDaily
+        from app.models.models import Model
+        from app.models.portfolios import Portfolio, PortfolioPosition
 
         logger.info(f"Daily risk check started, run_id={run_id}")
 
         # 创建任务日志
-        task_log = _create_task_log(db, "risk_check", "日终风控检查", run_id,
-                                     params={"trade_date": trade_date})
+        task_log = _create_task_log(db, "risk_check", "日终风控检查", run_id, params={"trade_date": trade_date})
 
         # 确定计算日期
         if trade_date:
@@ -69,12 +75,12 @@ def run_daily_risk_check(self, trade_date: str = None):
         risk_model = RiskModel()
 
         # 风控参数
-        MAX_DRAWDOWN_LIMIT = 0.10       # 最大回撤限制 10%
-        VAR_LIMIT = 0.02                # 日VaR限制 2%
-        CVAR_LIMIT = 0.03               # 日CVaR限制 3%
-        CONCENTRATION_LIMIT = 0.05      # 单股集中度限制 5%
-        INDUSTRY_CONCENTRATION = 0.30   # 行业集中度限制 30%
-        TURNOVER_LIMIT = 0.30           # 换手率限制 30%
+        MAX_DRAWDOWN_LIMIT = 0.10  # 最大回撤限制 10%
+        VAR_LIMIT = 0.02  # 日VaR限制 2%
+        CVAR_LIMIT = 0.03  # 日CVaR限制 3%
+        CONCENTRATION_LIMIT = 0.05  # 单股集中度限制 5%
+        _INDUSTRY_CONCENTRATION = 0.30  # 行业集中度限制 30%
+        _TURNOVER_LIMIT = 0.30  # 换手率限制 30%
 
         # 获取活跃模型
         active_models = db.query(Model).filter(Model.status == "active").all()
@@ -88,17 +94,20 @@ def run_daily_risk_check(self, trade_date: str = None):
         for model in active_models:
             try:
                 # 获取最新组合
-                portfolio = db.query(Portfolio).filter(
-                    Portfolio.model_id == model.id,
-                ).order_by(Portfolio.trade_date.desc()).first()
+                portfolio = (
+                    db.query(Portfolio)
+                    .filter(
+                        Portfolio.model_id == model.id,
+                    )
+                    .order_by(Portfolio.trade_date.desc())
+                    .first()
+                )
 
                 if not portfolio:
                     continue
 
                 # 获取持仓
-                positions = db.query(PortfolioPosition).filter(
-                    PortfolioPosition.portfolio_id == portfolio.id
-                ).all()
+                positions = db.query(PortfolioPosition).filter(PortfolioPosition.portfolio_id == portfolio.id).all()
 
                 if not positions:
                     continue
@@ -110,15 +119,17 @@ def run_daily_risk_check(self, trade_date: str = None):
                 # === 1. 集中度检查 ===
                 max_weight = weights.max() if len(weights) > 0 else 0
                 if max_weight > CONCENTRATION_LIMIT:
-                    alerts.append({
-                        "model_id": model.id,
-                        "model_code": model.model_code,
-                        "alert_type": "concentration",
-                        "severity": "high",
-                        "message": f"单股集中度 {max_weight:.2%} 超过限制 {CONCENTRATION_LIMIT:.2%}",
-                        "value": float(max_weight),
-                        "limit": CONCENTRATION_LIMIT,
-                    })
+                    alerts.append(
+                        {
+                            "model_id": model.id,
+                            "model_code": model.model_code,
+                            "alert_type": "concentration",
+                            "severity": "high",
+                            "message": f"单股集中度 {max_weight:.2%} 超过限制 {CONCENTRATION_LIMIT:.2%}",
+                            "value": float(max_weight),
+                            "limit": CONCENTRATION_LIMIT,
+                        }
+                    )
 
                 # === 2. VaR/CVaR检查 ===
                 # 获取近60日收益率数据
@@ -129,16 +140,21 @@ def run_daily_risk_check(self, trade_date: str = None):
                 # 获取组合中股票的历史收益率
                 stock_returns = {}
                 for sec_id in sec_ids:
-                    daily_data = db.query(StockDaily).filter(
-                        StockDaily.ts_code == sec_id,
-                        StockDaily.trade_date >= start_date,
-                        StockDaily.trade_date <= end_date,
-                    ).order_by(StockDaily.trade_date).all()
+                    daily_data = (
+                        db.query(StockDaily)
+                        .filter(
+                            StockDaily.ts_code == sec_id,
+                            StockDaily.trade_date >= start_date,
+                            StockDaily.trade_date <= end_date,
+                        )
+                        .order_by(StockDaily.trade_date)
+                        .all()
+                    )
 
                     if daily_data:
                         returns = pd.Series(
-                            [getattr(d, 'pct_chg', 0) / 100 for d in daily_data],
-                            index=[d.trade_date for d in daily_data]
+                            [getattr(d, "pct_chg", 0) / 100 for d in daily_data],
+                            index=[d.trade_date for d in daily_data],
                         )
                         stock_returns[sec_id] = returns
 
@@ -148,9 +164,9 @@ def run_daily_risk_check(self, trade_date: str = None):
                     returns_df = returns_df.fillna(0)
 
                     # 组合收益率
-                    aligned_weights = np.array([
-                        weights[i] for i, sid in enumerate(sec_ids) if sid in returns_df.columns
-                    ])
+                    aligned_weights = np.array(
+                        [weights[i] for i, sid in enumerate(sec_ids) if sid in returns_df.columns]
+                    )
                     aligned_returns = returns_df[[sid for sid in sec_ids if sid in returns_df.columns]]
 
                     if len(aligned_weights) > 0 and len(aligned_returns) > 20:
@@ -160,29 +176,33 @@ def run_daily_risk_check(self, trade_date: str = None):
                         # 计算VaR
                         var_95 = risk_model.historical_var(port_ret_series, confidence=0.95)
                         cvar_95 = risk_model.conditional_var(port_ret_series, confidence=0.95)
-                        student_t_var = risk_model.student_t_var(port_ret_series, confidence=0.95)
+                        _student_t_var = risk_model.student_t_var(port_ret_series, confidence=0.95)
 
                         if var_95 > VAR_LIMIT:
-                            alerts.append({
-                                "model_id": model.id,
-                                "model_code": model.model_code,
-                                "alert_type": "var_breach",
-                                "severity": "high",
-                                "message": f"日VaR {var_95:.2%} 超过限制 {VAR_LIMIT:.2%}",
-                                "value": float(var_95),
-                                "limit": VAR_LIMIT,
-                            })
+                            alerts.append(
+                                {
+                                    "model_id": model.id,
+                                    "model_code": model.model_code,
+                                    "alert_type": "var_breach",
+                                    "severity": "high",
+                                    "message": f"日VaR {var_95:.2%} 超过限制 {VAR_LIMIT:.2%}",
+                                    "value": float(var_95),
+                                    "limit": VAR_LIMIT,
+                                }
+                            )
 
                         if cvar_95 > CVAR_LIMIT:
-                            alerts.append({
-                                "model_id": model.id,
-                                "model_code": model.model_code,
-                                "alert_type": "cvar_breach",
-                                "severity": "critical",
-                                "message": f"日CVaR {cvar_95:.2%} 超过限制 {CVAR_LIMIT:.2%}",
-                                "value": float(cvar_95),
-                                "limit": CVAR_LIMIT,
-                            })
+                            alerts.append(
+                                {
+                                    "model_id": model.id,
+                                    "model_code": model.model_code,
+                                    "alert_type": "cvar_breach",
+                                    "severity": "critical",
+                                    "message": f"日CVaR {cvar_95:.2%} 超过限制 {CVAR_LIMIT:.2%}",
+                                    "value": float(cvar_95),
+                                    "limit": CVAR_LIMIT,
+                                }
+                            )
 
                         # === 3. 回撤检查 ===
                         cum_nav = (1 + port_ret_series).cumprod()
@@ -190,15 +210,17 @@ def run_daily_risk_check(self, trade_date: str = None):
                         drawdown = ((cum_nav - cummax) / cummax).min()
 
                         if drawdown < -MAX_DRAWDOWN_LIMIT:
-                            alerts.append({
-                                "model_id": model.id,
-                                "model_code": model.model_code,
-                                "alert_type": "drawdown_breach",
-                                "severity": "critical",
-                                "message": f"最大回撤 {drawdown:.2%} 超过限制 -{MAX_DRAWDOWN_LIMIT:.2%}",
-                                "value": float(drawdown),
-                                "limit": -MAX_DRAWDOWN_LIMIT,
-                            })
+                            alerts.append(
+                                {
+                                    "model_id": model.id,
+                                    "model_code": model.model_code,
+                                    "alert_type": "drawdown_breach",
+                                    "severity": "critical",
+                                    "message": f"最大回撤 {drawdown:.2%} 超过限制 -{MAX_DRAWDOWN_LIMIT:.2%}",
+                                    "value": float(drawdown),
+                                    "limit": -MAX_DRAWDOWN_LIMIT,
+                                }
+                            )
 
                         # === 4. 协方差矩阵正定性检查 ===
                         if len(aligned_returns.columns) >= 2 and len(aligned_returns) > len(aligned_returns.columns):
@@ -207,29 +229,35 @@ def run_daily_risk_check(self, trade_date: str = None):
                                 eigvals = np.linalg.eigvals(cov.values)
                                 min_eigval = eigvals.min()
                                 if min_eigval < 1e-8:
-                                    alerts.append({
-                                        "model_id": model.id,
-                                        "model_code": model.model_code,
-                                        "alert_type": "cov_not_positive_definite",
-                                        "severity": "medium",
-                                        "message": f"协方差矩阵最小特征值 {min_eigval:.2e} 接近0",
-                                        "value": float(min_eigval),
-                                    })
+                                    alerts.append(
+                                        {
+                                            "model_id": model.id,
+                                            "model_code": model.model_code,
+                                            "alert_type": "cov_not_positive_definite",
+                                            "severity": "medium",
+                                            "message": f"协方差矩阵最小特征值 {min_eigval:.2e} 接近0",
+                                            "value": float(min_eigval),
+                                        }
+                                    )
                             except Exception:
                                 pass
 
                 total_checked += 1
-                logger.info(f"Model {model.model_code}: risk check completed, alerts={len([a for a in alerts if a.get('model_id') == model.id])}")
+                logger.info(
+                    f"Model {model.model_code}: risk check completed, alerts={len([a for a in alerts if a.get('model_id') == model.id])}"
+                )
 
             except Exception as e:
                 logger.error(f"Risk check for model {model.id} failed: {e}")
-                alerts.append({
-                    "model_id": model.id,
-                    "model_code": model.model_code,
-                    "alert_type": "check_error",
-                    "severity": "high",
-                    "message": f"风控检查异常: {str(e)[:200]}",
-                })
+                alerts.append(
+                    {
+                        "model_id": model.id,
+                        "model_code": model.model_code,
+                        "alert_type": "check_error",
+                        "severity": "high",
+                        "message": f"风控检查异常: {str(e)[:200]}",
+                    }
+                )
                 continue
 
         # 汇总结果
@@ -257,10 +285,8 @@ def run_daily_risk_check(self, trade_date: str = None):
 
     except Exception as exc:
         logger.error(f"Risk check failed: {exc}")
-        try:
+        with contextlib.suppress(Exception):
             _update_task_log(db, task_log, "failed", error=exc)
-        except Exception:
-            pass
         raise self.retry(exc=exc, countdown=300)
     finally:
         db.close()

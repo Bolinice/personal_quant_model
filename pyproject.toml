@@ -1,6 +1,12 @@
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.uv]
+extra-build-dependencies = { pyarrow = ["setuptools"] }
 
 [project]
 name = "quant-platform"
@@ -30,19 +36,19 @@ dependencies = [
     "redis==5.0.1",
     "pandas==2.1.4",
     "numpy==1.26.2",
-    "scipy==1.11.4",
+    "scipy>=1.11.4",
     "scikit-learn>=1.3.2",
     "matplotlib==3.7.2",
     "seaborn==0.12.2",
     "jinja2==3.1.2",
     "python-dotenv==1.0.0",
-    "pyarrow==14.0.1",
+    "pyarrow>=14.0.1",
     "polars==0.19.12",
     "requests==2.31.0",
     "pytz==2023.3.post1",
     "python-dateutil==2.8.2",
     "click==8.1.7",
-    "psycopg2-binary==2.9.9",
+    "psycopg2-binary>=2.9.9",
     "pydantic-settings==2.1.0",
     "aiofiles==23.2.1",
     "fastapi-users==12.1.0",
@@ -55,6 +61,7 @@ dependencies = [
     "lightgbm>=4.0.0",
     "hmmlearn>=0.3.0",
     "cvxpy>=1.4.0",
+    "httpx>=0.28.1",
 ]
 
 [project.optional-dependencies]
@@ -62,11 +69,13 @@ dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "pytest-asyncio>=0.21.0",
-    "black>=23.0.0",
-    "isort>=5.12.0",
-    "flake8>=6.0.0",
-    "mypy>=1.5.0",
+    "ruff>=0.11.0",
+    "pyright>=1.1.393",
+    "mypy>=1.14.0",
     "pre-commit>=3.3.0",
+    "hypothesis>=6.100.0",
+    "pytest-xdist>=3.5.0",
+    "pytest-timeout>=2.2.0",
 ]
 ml = [
     "scikit-learn>=1.3.0",
@@ -80,32 +89,66 @@ Homepage = "https://github.com/your-username/quant-platform"
 Repository = "https://github.com/your-username/quant-platform.git"
 Documentation = "https://github.com/your-username/quant-platform#readme"
 
-[tool.black]
-line-length = 88
-target-version = ['py311']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-)/
-'''
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+src = ["app"]
 
-[tool.isort]
-profile = "black"
-line_length = 88
-multi_line_output = 3
-include_trailing_comma = true
-force_grid_wrap = 0
-use_parentheses = true
-ensure_newline_before_comments = true
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "N",      # pep8-naming
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "SIM",    # flake8-simplify
+    "TCH",    # flake8-type-checking
+    "RUF",    # ruff-specific rules
+    "PERF",   # perflint
+    "C4",     # flake8-comprehensions
+    "DTZ",    # flake8-datetimez
+    "PIE",    # flake8-pie
+    "PT",     # flake8-pytest-style
+    "RET",    # flake8-return
+    "FURB",   # refurb
+    "LOG",    # flake8-logging
+]
+ignore = [
+    "E501",    # line length handled by formatter
+    "TRY003",  # avoid long messages in exception -- too strict
+    "B008",    # function call in default argument -- common in FastAPI Depends()
+    "RUF001",  # ambiguous unicode character in string (Chinese)
+    "RUF002",  # ambiguous unicode character in docstring (Chinese)
+    "RUF003",  # ambiguous unicode character in comment (Chinese)
+    "N806",    # non-lowercase variable in function (constants like MAX_DRAWDOWN)
+    "N803",    # argument name should be lowercase (quant conventions like df, X)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"app/models/*" = ["N805"]
+"app/schemas/*" = ["N805"]
+"tests/*" = ["PT004"]
+"alembic/*" = ["E501", "F401"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownVariableType = false
+include = ["app"]
+exclude = ["alembic", "scripts", ".venv"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -147,7 +190,12 @@ testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = ["-v"]
+addopts = ["-v", "--tb=short", "--strict-markers", "--timeout=30"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks integration tests requiring database",
+    "backtest: marks backtest tests",
+]
 
 [tool.pytest-asyncio]
 asyncio_mode = "auto"

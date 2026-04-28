@@ -1,12 +1,21 @@
 """股票池管理 API。"""
 
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
+from app.core.response import success
 from app.db.base import get_db
-from app.services.stock_pool_service import get_stock_pools, get_stock_pool_by_code, create_stock_pool, update_stock_pool, get_stock_pool_snapshot, create_stock_pool_snapshot
-from app.schemas.stock_pools import StockPoolCreate, StockPoolUpdate, StockPoolOut, StockPoolSnapshotCreate, StockPoolSnapshotOut
-from app.core.response import success, error
+from app.schemas.stock_pools import StockPoolCreate, StockPoolSnapshotCreate, StockPoolUpdate
+from app.services.stock_pool_service import (
+    create_stock_pool,
+    create_stock_pool_snapshot,
+    get_stock_pool_by_code,
+    get_stock_pool_snapshot,
+    get_stock_pools,
+    update_stock_pool,
+)
 
 router = APIRouter()
 
@@ -44,7 +53,9 @@ def update_stock_pool_endpoint(pool_id: int, pool_update: StockPoolUpdate, db: S
 
 
 @router.get("/{pool_id}/snapshots")
-def read_stock_pool_snapshots(pool_id: int, trade_date: str = None, eligible_only: bool = False, db: Session = Depends(get_db)):
+def read_stock_pool_snapshots(
+    pool_id: int, trade_date: str | None = None, eligible_only: bool = False, db: Session = Depends(get_db)
+):
     """获取股票池快照"""
     if trade_date:
         snapshot = get_stock_pool_snapshot(pool_id, trade_date, db=db)
@@ -57,5 +68,7 @@ def read_stock_pool_snapshots(pool_id: int, trade_date: str = None, eligible_onl
 @router.post("/{pool_id}/snapshots")
 def create_stock_pool_snapshot_endpoint(pool_id: int, snapshot: StockPoolSnapshotCreate, db: Session = Depends(get_db)):
     """创建股票池快照"""
-    result = create_stock_pool_snapshot(pool_id, snapshot.trade_date, snapshot.securities, snapshot.eligible_count, db=db)
+    result = create_stock_pool_snapshot(
+        pool_id, snapshot.trade_date, snapshot.securities, snapshot.eligible_count, db=db
+    )
     return success(result)

@@ -1,9 +1,9 @@
 """数据快照服务"""
 
-from datetime import date
-from typing import List, Optional
-from sqlalchemy.orm import Session
 import uuid
+from datetime import date
+
+from sqlalchemy.orm import Session
 
 from app.models.data_snapshot_registry import DataSnapshotRegistry
 from app.schemas.snapshots import DataSnapshotCreate
@@ -15,9 +15,9 @@ class SnapshotService:
     @staticmethod
     def get_all_snapshots(
         db: Session,
-        snapshot_date: Optional[date] = None,
+        snapshot_date: date | None = None,
         limit: int = 30,
-    ) -> List[DataSnapshotRegistry]:
+    ) -> list[DataSnapshotRegistry]:
         """获取快照列表"""
         query = db.query(DataSnapshotRegistry)
         if snapshot_date:
@@ -25,11 +25,9 @@ class SnapshotService:
         return query.order_by(DataSnapshotRegistry.snapshot_date.desc()).limit(limit).all()
 
     @staticmethod
-    def get_snapshot_by_id(db: Session, snapshot_id: str) -> Optional[DataSnapshotRegistry]:
+    def get_snapshot_by_id(db: Session, snapshot_id: str) -> DataSnapshotRegistry | None:
         """获取快照详情"""
-        return db.query(DataSnapshotRegistry).filter(
-            DataSnapshotRegistry.snapshot_id == snapshot_id
-        ).first()
+        return db.query(DataSnapshotRegistry).filter(DataSnapshotRegistry.snapshot_id == snapshot_id).first()
 
     @staticmethod
     def create_snapshot(db: Session, data: DataSnapshotCreate) -> DataSnapshotRegistry:

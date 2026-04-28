@@ -1,19 +1,23 @@
+from __future__ import annotations
+
 """
 数据源基类
 定义统一的数据源接口，支持增量同步、错误重试、限流控制、数据质量校验、主备切换
 """
 from abc import ABC, abstractmethod
-from typing import List, Optional, Dict, Any, Tuple
-from datetime import date, datetime, timedelta
 from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta
+
 import numpy as np
 import pandas as pd
+
 from app.core.logging import logger
 
 
 @dataclass
 class SyncResult:
     """同步结果"""
+
     success: bool = True
     records_fetched: int = 0
     records_saved: int = 0
@@ -21,12 +25,13 @@ class SyncResult:
     records_failed: int = 0
     error_message: str = None
     duration_seconds: float = 0.0
-    details: Dict = field(default_factory=dict)
+    details: dict = field(default_factory=dict)
 
 
 @dataclass
 class DataQualityReport:
     """数据质量报告"""
+
     data_type: str
     total_records: int = 0
     missing_rate: float = 0.0  # 缺失率
@@ -34,35 +39,36 @@ class DataQualityReport:
     date_continuity: float = 1.0  # 日期连续性 (1.0=完全连续)
     duplicate_rate: float = 0.0  # 重复率
     is_acceptable: bool = True
-    issues: List[str] = field(default_factory=list)
+    issues: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
-        return (f"DataQuality[{self.data_type}]: records={self.total_records}, "
-                f"missing={self.missing_rate:.2%}, outlier={self.outlier_rate:.2%}, "
-                f"continuity={self.date_continuity:.2%}, dup={self.duplicate_rate:.2%}, "
-                f"acceptable={self.is_acceptable}")
+        return (
+            f"DataQuality[{self.data_type}]: records={self.total_records}, "
+            f"missing={self.missing_rate:.2%}, outlier={self.outlier_rate:.2%}, "
+            f"continuity={self.date_continuity:.2%}, dup={self.duplicate_rate:.2%}, "
+            f"acceptable={self.is_acceptable}"
+        )
 
 
 class DataSourceManager:
     """数据源管理器 - 注册、主备切换、数据新鲜度检查"""
 
     def __init__(self):
-        self._sources: Dict[str, BaseDataSource] = {}
-        self._primary: Optional[str] = None
-        self._fallback: Optional[str] = None
+        self._sources: dict[str, BaseDataSource] = {}
+        self._primary: str | None = None
+        self._fallback: str | None = None
 
-    def register(self, name: str, source: BaseDataSource,
-                 is_primary: bool = False, is_fallback: bool = False):
+    def register(self, name: str, source: BaseDataSource, is_primary: bool = False, is_fallback: bool = False):
         self._sources[name] = source
         if is_primary:
             self._primary = name
         if is_fallback:
             self._fallback = name
 
-    def get(self, name: str) -> Optional[BaseDataSource]:
+    def get(self, name: str) -> BaseDataSource | None:
         return self._sources.get(name)
 
-    def get_primary(self) -> Optional[BaseDataSource]:
+    def get_primary(self) -> BaseDataSource | None:
         """获取主数据源，不可用时自动切换到备源"""
         if self._primary and self._primary in self._sources:
             source = self._sources[self._primary]
@@ -78,7 +84,7 @@ class DataSourceManager:
             return self._sources[self._fallback]
 
         # 最后尝试任意可用源
-        for name, source in self._sources.items():
+        for _name, source in self._sources.items():
             try:
                 if source.connect():
                     return source
@@ -86,7 +92,7 @@ class DataSourceManager:
                 continue
         return None
 
-    def check_data_freshness(self, data_type: str, max_age_days: int = 1) -> Dict[str, bool]:
+    def check_data_freshness(self, data_type: str, max_age_days: int = 1) -> dict[str, bool]:
         """检查各数据源的数据新鲜度"""
         freshness = {}
         for name, source in self._sources.items():
@@ -101,7 +107,7 @@ class DataSourceManager:
                 freshness[name] = False
         return freshness
 
-    def connect_all(self) -> Dict[str, bool]:
+    def connect_all(self) -> dict[str, bool]:
         """尝试连接所有数据源，返回状态"""
         status = {}
         for name, source in self._sources.items():
@@ -116,7 +122,7 @@ class DataSourceManager:
 data_source_manager = DataSourceManager()
 
 
-def get_data_source(name: str) -> Optional[BaseDataSource]:
+def get_data_source(name: str) -> BaseDataSource | None:
     """获取指定名称的数据源"""
     return data_source_manager.get(name)
 
@@ -138,46 +144,47 @@ class BaseDataSource(ABC):
     @abstractmethod
     def connect(self) -> bool:
         """测试数据源连接是否可用"""
-        pass
 
     @abstractmethod
     def get_stock_basic(self, **kwargs) -> pd.DataFrame:
         """获取股票基本信息"""
-        pass
 
     @abstractmethod
-    def get_stock_daily(self, ts_code: str = None, start_date: str = None,
-                        end_date: str = None, **kwargs) -> pd.DataFrame:
+    def get_stock_daily(
+        self, ts_code: str | None = None, start_date: str | None = None, end_date: str | None = None, **kwargs
+    ) -> pd.DataFrame:
         """获取日线行情"""
-        pass
 
     @abstractmethod
-    def get_index_daily(self, ts_code: str = None, start_date: str = None,
-                        end_date: str = None, **kwargs) -> pd.DataFrame:
+    def get_index_daily(
+        self, ts_code: str | None = None, start_date: str | None = None, end_date: str | None = None, **kwargs
+    ) -> pd.DataFrame:
         """获取指数日线行情"""
-        pass
 
     @abstractmethod
-    def get_financial_data(self, ts_code: str = None, start_date: str = None,
-                           end_date: str = None, **kwargs) -> pd.DataFrame:
+    def get_financial_data(
+        self, ts_code: str | None = None, start_date: str | None = None, end_date: str | None = None, **kwargs
+    ) -> pd.DataFrame:
         """获取财务数据"""
-        pass
 
     @abstractmethod
-    def get_trading_calendar(self, exchange: str = 'SSE',
-                             start_date: str = None,
-                             end_date: str = None) -> pd.DataFrame:
+    def get_trading_calendar(
+        self, exchange: str = "SSE", start_date: str | None = None, end_date: str | None = None
+    ) -> pd.DataFrame:
         """获取交易日历"""
-        pass
 
-    def get_last_sync_date(self, data_type: str) -> Optional[date]:
+    def get_last_sync_date(self, data_type: str) -> date | None:
         """获取某类数据的最后同步日期 (用于新鲜度检查, 子类可覆写)"""
         return None
 
-    def validate(self, df: pd.DataFrame, data_type: str,
-                 required_columns: List[str] = None,
-                 max_missing_rate: float = 0.1,
-                 max_outlier_rate: float = 0.05) -> DataQualityReport:
+    def validate(
+        self,
+        df: pd.DataFrame,
+        data_type: str,
+        required_columns: list[str] | None = None,
+        max_missing_rate: float = 0.1,
+        max_outlier_rate: float = 0.05,
+    ) -> DataQualityReport:
         """
         数据质量校验: 缺失率、异常值率、日期连续性、重复率
         """
@@ -214,18 +221,16 @@ class BaseDataSource(ABC):
         total_numeric = sum(len(df[col].dropna()) for col in numeric_cols)
         report.outlier_rate = outlier_count / total_numeric if total_numeric > 0 else 0
 
-        if 'trade_date' in df.columns:
-            dates = pd.to_datetime(df['trade_date']).sort_values().dropna()
+        if "trade_date" in df.columns:
+            dates = pd.to_datetime(df["trade_date"]).sort_values().dropna()
             if len(dates) > 1:
-                expected_bdays = np.busday_count(
-                    dates.iloc[0].date(), dates.iloc[-1].date()
-                ) + 1
+                expected_bdays = np.busday_count(dates.iloc[0].date(), dates.iloc[-1].date()) + 1
                 actual_days = len(dates)
                 report.date_continuity = actual_days / expected_bdays if expected_bdays > 0 else 1.0
 
-        if 'trade_date' in df.columns and 'ts_code' in df.columns:
+        if "trade_date" in df.columns and "ts_code" in df.columns:
             total_rows = len(df)
-            unique_rows = df.drop_duplicates(subset=['trade_date', 'ts_code']).shape[0]
+            unique_rows = df.drop_duplicates(subset=["trade_date", "ts_code"]).shape[0]
             report.duplicate_rate = (total_rows - unique_rows) / total_rows if total_rows > 0 else 0
 
         if report.missing_rate > max_missing_rate:
@@ -240,28 +245,27 @@ class BaseDataSource(ABC):
 
         return report
 
-    def get_index_components(self, index_code: str, trade_date: str = None) -> pd.DataFrame:
+    def get_index_components(self, index_code: str, trade_date: str | None = None) -> pd.DataFrame:
         """获取指数成分股"""
         return pd.DataFrame()
 
-    def get_stock_status(self, ts_code: str = None, trade_date: str = None) -> pd.DataFrame:
+    def get_stock_status(self, ts_code: str | None = None, trade_date: str | None = None) -> pd.DataFrame:
         """获取股票状态（ST、停牌等）"""
         return pd.DataFrame()
 
-    def get_adj_factor(self, ts_code: str = None, start_date: str = None,
-                       end_date: str = None) -> pd.DataFrame:
+    def get_adj_factor(
+        self, ts_code: str | None = None, start_date: str | None = None, end_date: str | None = None
+    ) -> pd.DataFrame:
         """获取复权因子"""
         return pd.DataFrame()
 
-    def get_industry_classification(self, ts_code: str = None,
-                                     standard: str = 'sw') -> pd.DataFrame:
+    def get_industry_classification(self, ts_code: str | None = None, standard: str = "sw") -> pd.DataFrame:
         """获取行业分类"""
         return pd.DataFrame()
 
     # ==================== 增量同步 ====================
 
-    def incremental_sync(self, data_type: str, last_sync_date: date,
-                         end_date: date = None) -> SyncResult:
+    def incremental_sync(self, data_type: str, last_sync_date: date, end_date: date | None = None) -> SyncResult:
         """
         增量同步数据
         只同步last_sync_date之后的数据
@@ -276,31 +280,30 @@ class BaseDataSource(ABC):
 
         start = last_sync_date + timedelta(days=1)
         if start > end_date:
-            return SyncResult(success=True, records_fetched=0, details={'message': 'Already up to date'})
+            return SyncResult(success=True, records_fetched=0, details={"message": "Already up to date"})
 
         return self._sync_range(data_type, start, end_date)
 
-    def _sync_range(self, data_type: str, start_date: date,
-                    end_date: date) -> SyncResult:
+    def _sync_range(self, data_type: str, start_date: date, end_date: date) -> SyncResult:
         """同步指定日期范围的数据"""
         import time
+
         start_time = time.time()
 
         try:
             method_map = {
-                'stock_daily': self.get_stock_daily,
-                'index_daily': self.get_index_daily,
-                'financial': self.get_financial_data,
-                'stock_basic': self.get_stock_basic,
-                'trading_calendar': self.get_trading_calendar,
+                "stock_daily": self.get_stock_daily,
+                "index_daily": self.get_index_daily,
+                "financial": self.get_financial_data,
+                "stock_basic": self.get_stock_basic,
+                "trading_calendar": self.get_trading_calendar,
             }
 
             method = method_map.get(data_type)
             if not method:
                 return SyncResult(success=False, error_message=f"Unknown data type: {data_type}")
 
-            df = method(start_date=start_date.strftime('%Y%m%d'),
-                        end_date=end_date.strftime('%Y%m%d'))
+            df = method(start_date=start_date.strftime("%Y%m%d"), end_date=end_date.strftime("%Y%m%d"))
 
             duration = time.time() - start_time
             return SyncResult(
@@ -323,6 +326,7 @@ class BaseDataSource(ABC):
 
         if self._call_count >= self.rate_limit:
             import time
+
             sleep_time = 60 - (now - self._last_reset).seconds
             logger.warning(f"Rate limit reached, sleeping {sleep_time}s")
             time.sleep(sleep_time)
@@ -336,13 +340,14 @@ class BaseDataSource(ABC):
     def _retry_call(self, func, *args, **kwargs):
         """带重试的API调用"""
         import time
+
         for attempt in range(self.max_retries):
             try:
                 self._rate_limit_check()
                 return func(*args, **kwargs)
             except Exception as e:
                 if attempt < self.max_retries - 1:
-                    wait = 2 ** attempt  # 指数退避
+                    wait = 2**attempt  # 指数退避
                     logger.warning(f"Retry {attempt + 1}/{self.max_retries} after {wait}s: {e}")
                     time.sleep(wait)
                 else:

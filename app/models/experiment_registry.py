@@ -1,12 +1,14 @@
 """实验注册表"""
 
-from sqlalchemy import Column, String, Text, DateTime
+from sqlalchemy import Column, DateTime, String, Text
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class ExperimentRegistry(Base):
     """实验注册表 - AB实验与灰度发布"""
+
     __tablename__ = "experiment_registry"
 
     experiment_id = Column(String(100), primary_key=True, comment="实验ID")
@@ -19,6 +21,4 @@ class ExperimentRegistry(Base):
     created_at = Column(DateTime, server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新时间")
 
-    __table_args__ = (
-        {"comment": "实验注册表"},
-    )
+    __table_args__ = ({"comment": "实验注册表"},)

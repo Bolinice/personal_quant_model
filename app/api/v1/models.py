@@ -1,13 +1,22 @@
 """模型管理 API。"""
 
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
+from app.core.response import success
 from app.db.base import get_db
-from app.services.models_service import get_models, get_model_by_code, create_model, update_model, get_model_factor_weights, create_model_factor_weights, update_model_factor_weights, get_model_scores, create_model_scores, calculate_model_scores
 from app.models.models import Model, ModelPerformance
-from app.schemas.models import ModelCreate, ModelUpdate, ModelOut, ModelFactorWeightCreate, ModelFactorWeightOut, ModelScoreCreate, ModelScoreOut, ModelPerformanceOut
-from app.core.response import success, error
+from app.schemas.models import ModelCreate, ModelFactorWeightCreate, ModelUpdate
+from app.services.models_service import (
+    calculate_model_scores,
+    create_model,
+    create_model_factor_weights,
+    get_model_factor_weights,
+    get_model_scores,
+    get_models,
+    update_model,
+    update_model_factor_weights,
+)
 
 router = APIRouter()
 
@@ -52,14 +61,18 @@ def read_model_factor_weights(model_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{model_id}/factor-weights")
-def create_model_factor_weights_endpoint(model_id: int, weights: List[ModelFactorWeightCreate], db: Session = Depends(get_db)):
+def create_model_factor_weights_endpoint(
+    model_id: int, weights: list[ModelFactorWeightCreate], db: Session = Depends(get_db)
+):
     """创建模型因子权重"""
     result = create_model_factor_weights(model_id, weights, db=db)
     return success(result)
 
 
 @router.put("/{model_id}/factor-weights")
-def update_model_factor_weights_endpoint(model_id: int, weights: List[ModelFactorWeightCreate], db: Session = Depends(get_db)):
+def update_model_factor_weights_endpoint(
+    model_id: int, weights: list[ModelFactorWeightCreate], db: Session = Depends(get_db)
+):
     """更新模型因子权重"""
     result = update_model_factor_weights(model_id, weights, db=db)
     return success(result)
@@ -82,7 +95,12 @@ def calculate_model_scores_endpoint(model_id: int, trade_date: str, db: Session 
 @router.get("/{model_id}/performance")
 def read_model_performance(model_id: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """获取模型绩效"""
-    perf = db.query(ModelPerformance).filter(
-        ModelPerformance.model_id == model_id
-    ).order_by(ModelPerformance.trade_date.desc()).offset(skip).limit(limit).all()
+    perf = (
+        db.query(ModelPerformance)
+        .filter(ModelPerformance.model_id == model_id)
+        .order_by(ModelPerformance.trade_date.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
     return success(perf)

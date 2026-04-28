@@ -1,18 +1,24 @@
+from __future__ import annotations
+
+import numpy as np
 from sqlalchemy.orm import Session
 
-from typing import List
 from app.db.base import with_db
-from app.models.simulated_portfolios import SimulatedPortfolio, SimulatedPortfolioPosition, SimulatedPortfolioNav
-from app.schemas.simulated_portfolios import SimulatedPortfolioCreate, SimulatedPortfolioPositionCreate, SimulatedPortfolioNavCreate
-import pandas as pd
-import numpy as np
+from app.models.simulated_portfolios import SimulatedPortfolio, SimulatedPortfolioNav, SimulatedPortfolioPosition
+from app.schemas.simulated_portfolios import (
+    SimulatedPortfolioCreate,
+    SimulatedPortfolioNavCreate,
+    SimulatedPortfolioPositionCreate,
+)
+
 
 @with_db
-def get_simulated_portfolios(model_id: int = None, skip: int = 0, limit: int = 100, db: Session = None):
+def get_simulated_portfolios(model_id: int | None = None, skip: int = 0, limit: int = 100, db: Session | None = None):
     query = db.query(SimulatedPortfolio)
     if model_id:
         query = query.filter(SimulatedPortfolio.model_id == model_id)
     return query.offset(skip).limit(limit).all()
+
 
 @with_db
 def create_simulated_portfolio(portfolio: SimulatedPortfolioCreate, db: Session = None):
@@ -22,22 +28,26 @@ def create_simulated_portfolio(portfolio: SimulatedPortfolioCreate, db: Session 
     db.refresh(db_portfolio)
     return db_portfolio
 
+
 @with_db
-def get_simulated_portfolio_positions(portfolio_id: int, trade_date: str = None, db: Session = None):
+def get_simulated_portfolio_positions(portfolio_id: int, trade_date: str | None = None, db: Session | None = None):
     query = db.query(SimulatedPortfolioPosition).filter(SimulatedPortfolioPosition.portfolio_id == portfolio_id)
     if trade_date:
         query = query.filter(SimulatedPortfolioPosition.trade_date == trade_date)
     return query.all()
 
+
 @with_db
-def create_simulated_portfolio_positions(portfolio_id: int, positions: List[SimulatedPortfolioPositionCreate], db: Session = None):
+def create_simulated_portfolio_positions(
+    portfolio_id: int, positions: list[SimulatedPortfolioPositionCreate], db: Session = None
+):
     db_positions = []
     for position in positions:
         db_position = SimulatedPortfolioPosition(
             portfolio_id=portfolio_id,
             trade_date=position.trade_date,
             security_id=position.security_id,
-            weight=position.weight
+            weight=position.weight,
         )
         db.add(db_position)
         db_positions.append(db_position)
@@ -46,14 +56,18 @@ def create_simulated_portfolio_positions(portfolio_id: int, positions: List[Simu
         db.refresh(db_position)
     return db_positions
 
+
 @with_db
-def get_simulated_portfolio_navs(portfolio_id: int, start_date: str = None, end_date: str = None, db: Session = None):
+def get_simulated_portfolio_navs(
+    portfolio_id: int, start_date: str | None = None, end_date: str | None = None, db: Session | None = None
+):
     query = db.query(SimulatedPortfolioNav).filter(SimulatedPortfolioNav.portfolio_id == portfolio_id)
     if start_date:
         query = query.filter(SimulatedPortfolioNav.trade_date >= start_date)
     if end_date:
         query = query.filter(SimulatedPortfolioNav.trade_date <= end_date)
     return query.all()
+
 
 @with_db
 def create_simulated_portfolio_nav(portfolio_id: int, nav: SimulatedPortfolioNavCreate, db: Session = None):
@@ -62,6 +76,7 @@ def create_simulated_portfolio_nav(portfolio_id: int, nav: SimulatedPortfolioNav
     db.commit()
     db.refresh(db_nav)
     return db_nav
+
 
 @with_db
 def update_simulated_portfolio(portfolio_id: int, portfolio_update: dict, db: Session = None):
@@ -73,6 +88,7 @@ def update_simulated_portfolio(portfolio_id: int, portfolio_update: dict, db: Se
     db.commit()
     db.refresh(db_portfolio)
     return db_portfolio
+
 
 @with_db
 def calculate_simulated_portfolio_nav(portfolio_id: int, trade_date: str, db: Session = None):
@@ -92,10 +108,6 @@ def calculate_simulated_portfolio_nav(portfolio_id: int, trade_date: str, db: Se
     nav = portfolio.initial_capital * (1 + np.random.normal(0, 0.01))  # 模拟净值变化
 
     # 创建净值记录
-    nav_record = SimulatedPortfolioNavCreate(
-        portfolio_id=portfolio_id,
-        trade_date=trade_date,
-        nav=nav
-    )
+    nav_record = SimulatedPortfolioNavCreate(portfolio_id=portfolio_id, trade_date=trade_date, nav=nav)
 
     return create_simulated_portfolio_nav(portfolio_id, nav_record, db=db)

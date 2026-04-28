@@ -1,10 +1,12 @@
-from sqlalchemy import Column, Integer, String, DateTime, JSON, Boolean
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
 from sqlalchemy.sql import func
+
 from app.db.base import Base
 
 
 class TimingModel(Base):
     """择时模型定义表"""
+
     __tablename__ = "timing_models"
 
     id = Column(Integer, primary_key=True, index=True)

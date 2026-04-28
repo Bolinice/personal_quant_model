@@ -3,11 +3,12 @@
 实现ADD 10节: Barra风格因子风险模型、协方差估计、风险分解、VaR/CVaR
 机构级增强: DCC-GARCH时变协方差、PCA混合风险模型、Mean-CVaR组合优化、Copula尾部模型
 """
-from typing import Any, Dict, List, Optional, Tuple, Union
+
+from typing import Any
 
 import numpy as np
 import pandas as pd
-from scipy import linalg, stats as sp_stats
+from scipy import stats as sp_stats
 
 from app.core.logging import logger
 
@@ -18,16 +19,16 @@ class RiskModel:
     # Barra USE4风格因子定义 (ADD 10.1节)
     # 行业因子由单独的行业分类处理，此处仅列风格因子
     BARRA_FACTORS = [
-        'beta',                   # 系统性风险暴露：个股对市场的敏感度
-        'book_to_price',          # 价值因子：BP越高越偏价值风格
-        'earnings_yield',         # 盈利因子：EP_TTM，高EP即低PE，价值维度补充
-        'growth',                 # 成长因子：营收同比增速
-        'leverage',               # 杠杆因子：资产负债率，高杠杆放大尾部风险
-        'liquidity',              # 流动性因子：20日换手率，低流动性股票有流动性溢价
-        'momentum',               # 动量因子：跳月12月动量，跳月避免短期反转污染
-        'non_linear_size',        # 规模非线性因子：size的立方项，捕捉大小盘风格切换的非对称效应
-        'residual_volatility',    # 残差波动率因子：剥离市场后的特质波动，高波动股票长期收益偏低
-        'size',                   # 规模因子：log(总市值)，对数变换使市值分布近似正态
+        "beta",  # 系统性风险暴露：个股对市场的敏感度
+        "book_to_price",  # 价值因子：BP越高越偏价值风格
+        "earnings_yield",  # 盈利因子：EP_TTM，高EP即低PE，价值维度补充
+        "growth",  # 成长因子：营收同比增速
+        "leverage",  # 杠杆因子：资产负债率，高杠杆放大尾部风险
+        "liquidity",  # 流动性因子：20日换手率，低流动性股票有流动性溢价
+        "momentum",  # 动量因子：跳月12月动量，跳月避免短期反转污染
+        "non_linear_size",  # 规模非线性因子：size的立方项，捕捉大小盘风格切换的非对称效应
+        "residual_volatility",  # 残差波动率因子：剥离市场后的特质波动，高波动股票长期收益偏低
+        "size",  # 规模因子：log(总市值)，对数变换使市值分布近似正态
     ]
 
     def __init__(self) -> None:
@@ -42,8 +43,7 @@ class RiskModel:
         """
         return returns.cov()
 
-    def ledoit_wolf_shrinkage(self, returns: pd.DataFrame,
-                              shrinkage_target: str = 'identity') -> pd.DataFrame:
+    def ledoit_wolf_shrinkage(self, returns: pd.DataFrame, shrinkage_target: str = "identity") -> pd.DataFrame:
         """
         Ledoit-Wolf压缩估计 (ADD 10.2.1节)
         Σ_shrunk = α * F + (1-α) * S
@@ -56,20 +56,17 @@ class RiskModel:
         n: int = S.shape[0]
         T: int = len(returns)
 
-        if shrinkage_target == 'identity':
+        if shrinkage_target == "identity":
             # 目标: 缩放后的单位矩阵
             F = np.trace(S) / n * np.eye(n)
-        elif shrinkage_target == 'diagonal':
+        elif shrinkage_target == "diagonal":
             # 目标: 对角矩阵 — 假设资产间无条件相关，仅保留方差
             F = np.diag(np.diag(S))
-        elif shrinkage_target == 'single_factor':
+        elif shrinkage_target == "single_factor":
             # 目标: 单因子模型 — 用市场因子解释共同运动，残差作为特质方差
             market_returns = returns.mean(axis=1)
             var_market = market_returns.var()
-            if var_market > 0:
-                betas = returns.apply(lambda x: x.cov(market_returns)) / var_market
-            else:
-                betas = np.ones(n)
+            betas = returns.apply(lambda x: x.cov(market_returns)) / var_market if var_market > 0 else np.ones(n)
             F = np.outer(betas, betas) * var_market + np.diag(np.diag(S) - betas**2 * var_market)
             F = self._ensure_positive_definite(F)  # 单因子模型可能产生负的特质方差，需强制正定
         else:
@@ -86,18 +83,14 @@ class RiskModel:
 
         return pd.DataFrame(shrunk, index=returns.columns, columns=returns.columns)
 
-    def _calc_optimal_shrinkage(self, X: np.ndarray, S: np.ndarray,
-                                F: np.ndarray, T: int) -> float:
+    def _calc_optimal_shrinkage(self, X: np.ndarray, S: np.ndarray, F: np.ndarray, T: int) -> float:
         """计算最优压缩系数"""
         n = S.shape[0]
 
         # Large N fallback: vectorized (T, N, N) tensor consumes too much memory
         # when N > 100 (e.g., N=500 => 125M elements). Use loop-based approach.
         # N>100时向量化路径内存爆炸，切换逐时间步循环
-        if n > 100:
-            var_S = self._calc_var_S_loop(X, S, T, n)
-        else:
-            var_S = self._calc_var_S_vectorized(X, S, T, n)
+        var_S = self._calc_var_S_loop(X, S, T, n) if n > 100 else self._calc_var_S_vectorized(X, S, T, n)
 
         # 计算目标与样本的差异
         diff_sq = np.sum((F - S) ** 2)
@@ -106,21 +99,17 @@ class RiskModel:
             return 0.0
 
         # alpha越接近1，越依赖结构化目标F；样本量不足时alpha自动升高
-        alpha = min(var_S / diff_sq, 1.0)
-        return alpha
+        return min(var_S / diff_sq, 1.0)
 
-    def _calc_var_S_vectorized(self, X: np.ndarray, S: np.ndarray,
-                               T: int, n: int) -> float:
+    def _calc_var_S_vectorized(self, X: np.ndarray, S: np.ndarray, T: int, n: int) -> float:
         """向量化计算 var_S: 适用于 N <= 100"""
         X_centered = X - X.mean(axis=0)  # (T, N)
         # outer products: (T, N, 1) * (T, 1, N) -> (T, N, N)
         outer_prods = X_centered[:, :, np.newaxis] * X_centered[:, np.newaxis, :]  # (T, N, N)
         diffs = outer_prods - S[np.newaxis, :, :]  # (T, N, N)
-        var_S = np.sum(diffs ** 2) / (T ** 2)
-        return var_S
+        return np.sum(diffs**2) / (T**2)
 
-    def _calc_var_S_loop(self, X: np.ndarray, S: np.ndarray,
-                         T: int, n: int) -> float:
+    def _calc_var_S_loop(self, X: np.ndarray, S: np.ndarray, T: int, n: int) -> float:
         """
         循环计算 var_S: 适用于 N > 100, 避免创建 (T, N, N) 大张量
         var_S = (1/T^2) * sum_t || x_t x_t' - S ||_F^2
@@ -133,9 +122,8 @@ class RiskModel:
             x_t = X_centered[t]  # (N,)
             # outer product - S, then Frobenius norm squared
             diff = np.outer(x_t, x_t) - S
-            total += np.sum(diff ** 2)
-        var_S = total / (T ** 2)
-        return var_S
+            total += np.sum(diff**2)
+        return total / (T**2)
 
     def _ensure_positive_definite(self, matrix: np.ndarray) -> np.ndarray:
         """确保矩阵正定"""
@@ -147,8 +135,7 @@ class RiskModel:
         except np.linalg.LinAlgError:
             return matrix
 
-    def ewma_covariance(self, returns: pd.DataFrame,
-                        halflife: int = 60) -> pd.DataFrame:
+    def ewma_covariance(self, returns: pd.DataFrame, halflife: int = 60) -> pd.DataFrame:
         """
         指数加权移动平均协方差 (EWMA)
         近期数据权重更大
@@ -166,10 +153,14 @@ class RiskModel:
         cov_matrix = self._ensure_positive_definite(cov_matrix)
         return pd.DataFrame(cov_matrix, index=returns.columns, columns=returns.columns)
 
-    def dcc_garch_covariance(self, returns: pd.DataFrame,
-                              alpha: Optional[float] = None, beta: Optional[float] = None,
-                              halflife: int = 60,
-                              use_mle: bool = True) -> pd.DataFrame:
+    def dcc_garch_covariance(
+        self,
+        returns: pd.DataFrame,
+        alpha: float | None = None,
+        beta: float | None = None,
+        halflife: int = 60,
+        use_mle: bool = True,
+    ) -> pd.DataFrame:
         """
         DCC-GARCH时变协方差 (机构级: MLE估计参数)
         捕捉危机期间相关性上升的现象，比静态EWMA更准确
@@ -193,7 +184,8 @@ class RiskModel:
         if use_mle:
             # 机构级: 用arch包做MLE估计
             try:
-                from arch.univariate import ConstantMean, GARCH, Normal
+                from arch.univariate import GARCH, ConstantMean, Normal
+
                 for j in range(N):
                     r = returns.iloc[:, j].dropna()
                     if len(r) < 30:
@@ -203,7 +195,7 @@ class RiskModel:
                     am.volatility = GARCH(p=1, o=0, q=1)
                     am.distribution = Normal()
                     try:
-                        res = am.fit(disp='off', show_warning=False)
+                        res = am.fit(disp="off", show_warning=False)
                         cond_vol = res.conditional_volatility / 100  # 还原缩放
                         # 对齐长度
                         if len(cond_vol) == T:
@@ -211,11 +203,13 @@ class RiskModel:
                         elif len(cond_vol) > T:
                             conditional_vols[:, j] = cond_vol[-T:]
                         else:
-                            conditional_vols[:len(cond_vol), j] = cond_vol
-                            conditional_vols[len(cond_vol):, j] = cond_vol[-1]
+                            conditional_vols[: len(cond_vol), j] = cond_vol
+                            conditional_vols[len(cond_vol) :, j] = cond_vol[-1]
                     except Exception:
                         # MLE失败, 回退到EWMA
-                        conditional_vols[:, j] = r.rolling(20, min_periods=10).std().values[-T:] if len(r) >= 20 else r.std()
+                        conditional_vols[:, j] = (
+                            r.rolling(20, min_periods=10).std().values[-T:] if len(r) >= 20 else r.std()
+                        )
             except ImportError:
                 logger.warning("arch package not available, using hardcoded GARCH params")
                 conditional_vols = self._garch_hardcoded(returns, T, N)
@@ -239,7 +233,7 @@ class RiskModel:
         Q_bar = S.copy()
 
         for t in range(1, T):
-            eps = std_residuals[t-1].reshape(-1, 1)
+            eps = std_residuals[t - 1].reshape(-1, 1)
             Q = (1 - alpha - beta) * Q_bar + alpha * (eps @ eps.T) + beta * Q
             eigvals, eigvecs = np.linalg.eigh(Q)
             eigvals = np.maximum(eigvals, 1e-10)
@@ -255,9 +249,9 @@ class RiskModel:
         D = np.diag(current_vols)
         cov = D @ R @ D
 
-        logger.info("DCC-GARCH covariance estimated", extra={
-            "T": T, "N": N, "alpha": alpha, "beta": beta, "use_mle": use_mle
-        })
+        logger.info(
+            "DCC-GARCH covariance estimated", extra={"T": T, "N": N, "alpha": alpha, "beta": beta, "use_mle": use_mle}
+        )
 
         return pd.DataFrame(cov, index=returns.columns, columns=returns.columns)
 
@@ -267,7 +261,7 @@ class RiskModel:
         # omega*var[0]使长期方差回归到样本方差水平
         omega_garch = 0.01
         alpha_garch = 0.05  # 残差平方对条件方差的冲击
-        beta_garch = 0.90   # 条件方差的自回归系数
+        beta_garch = 0.90  # 条件方差的自回归系数
 
         conditional_vols = np.zeros((T, N))
         for j in range(N):
@@ -275,12 +269,12 @@ class RiskModel:
             var = np.zeros(T)
             var[0] = r.var() if len(r) > 1 else 0.01
             for t in range(1, T):
-                var[t] = omega_garch * var[0] + alpha_garch * r[t-1]**2 + beta_garch * var[t-1]
+                var[t] = omega_garch * var[0] + alpha_garch * r[t - 1] ** 2 + beta_garch * var[t - 1]
                 var[t] = max(var[t], 1e-10)
             conditional_vols[:, j] = np.sqrt(var)
         return conditional_vols
 
-    def _dcc_grid_search(self, std_residuals: np.ndarray, T: int) -> Tuple[float, float]:
+    def _dcc_grid_search(self, std_residuals: np.ndarray, T: int) -> tuple[float, float]:
         """
         DCC参数网格搜索
         最大化DCC对数似然: L = -0.5 * Σ [log(det(R_t)) + eps_t' * R_t^{-1} * eps_t]
@@ -290,7 +284,6 @@ class RiskModel:
         best_ll = -np.inf
 
         S = np.corrcoef(std_residuals.T)
-        N = std_residuals.shape[1]
 
         # 网格: alpha in [0.01, 0.05], beta in [0.90, 0.98]
         # alpha+beta<1是DCC平稳性条件，超出则时变相关矩阵发散
@@ -304,7 +297,7 @@ class RiskModel:
                 valid = True
 
                 for t in range(1, T):
-                    eps = std_residuals[t-1].reshape(-1, 1)
+                    eps = std_residuals[t - 1].reshape(-1, 1)
                     Q = (1 - a - b) * S + a * (eps @ eps.T) + b * Q
 
                     # 确保正定
@@ -345,9 +338,9 @@ class RiskModel:
 
         return best_alpha, best_beta
 
-    def pca_hybrid_covariance(self, returns: pd.DataFrame,
-                               n_pca_factors: int = 10,
-                               shrinkage: float = 0.5) -> pd.DataFrame:
+    def pca_hybrid_covariance(
+        self, returns: pd.DataFrame, n_pca_factors: int = 10, shrinkage: float = 0.5
+    ) -> pd.DataFrame:
         """
         PCA混合风险模型
         结构化部分(PCA因子) + 特质部分(对角残差)
@@ -404,59 +397,59 @@ class RiskModel:
         exposures = pd.DataFrame(index=stock_data.index)
 
         # Size: log(总市值) — Barra标准，对数变换压缩市值量级差异(大盘股可达小盘股万倍)
-        cap_col = 'total_market_cap' if 'total_market_cap' in stock_data.columns else 'market_cap'
+        cap_col = "total_market_cap" if "total_market_cap" in stock_data.columns else "market_cap"
         if cap_col in stock_data.columns:
-            exposures['size'] = np.log(stock_data[cap_col].clip(lower=1))
+            exposures["size"] = np.log(stock_data[cap_col].clip(lower=1))
 
         # Non-linear Size: (size - mean_size)^3 — Barra USE4标准(立方, 非平方)
         # 立方项捕捉大小盘风格切换的非对称性：大→小的切换比小→大更剧烈
-        if 'size' in exposures.columns:
-            mean_size = exposures['size'].mean()
-            exposures['non_linear_size'] = (exposures['size'] - mean_size) ** 3
+        if "size" in exposures.columns:
+            mean_size = exposures["size"].mean()
+            exposures["non_linear_size"] = (exposures["size"] - mean_size) ** 3
 
         # Beta: 相对市场的Beta (优先从250日回归计算)
-        if 'beta' in stock_data.columns:
-            exposures['beta'] = stock_data['beta']
+        if "beta" in stock_data.columns:
+            exposures["beta"] = stock_data["beta"]
 
         # Book-to-Price: BP
-        if 'bp' in stock_data.columns:
-            exposures['book_to_price'] = stock_data['bp']
+        if "bp" in stock_data.columns:
+            exposures["book_to_price"] = stock_data["bp"]
 
         # Earnings Yield: EP
-        if 'ep_ttm' in stock_data.columns:
-            exposures['earnings_yield'] = stock_data['ep_ttm']
+        if "ep_ttm" in stock_data.columns:
+            exposures["earnings_yield"] = stock_data["ep_ttm"]
 
         # Growth: 营收增速
-        if 'yoy_revenue' in stock_data.columns:
-            exposures['growth'] = stock_data['yoy_revenue']
+        if "yoy_revenue" in stock_data.columns:
+            exposures["growth"] = stock_data["yoy_revenue"]
 
         # Leverage: 资产负债率
-        if 'asset_liability_ratio' in stock_data.columns:
-            exposures['leverage'] = stock_data['asset_liability_ratio']
+        if "asset_liability_ratio" in stock_data.columns:
+            exposures["leverage"] = stock_data["asset_liability_ratio"]
 
         # Liquidity: 换手率
-        if 'turnover_20d' in stock_data.columns:
-            exposures['liquidity'] = stock_data['turnover_20d']
+        if "turnover_20d" in stock_data.columns:
+            exposures["liquidity"] = stock_data["turnover_20d"]
 
         # Momentum: 跳月12月动量
         # 跳过最近1个月避免短期反转效应污染中期动量信号(A股1个月反转显著)
-        if 'ret_12m_skip1' in stock_data.columns:
-            exposures['momentum'] = stock_data['ret_12m_skip1']
-        elif 'ret_12m' in stock_data.columns:
-            exposures['momentum'] = stock_data['ret_12m']
+        if "ret_12m_skip1" in stock_data.columns:
+            exposures["momentum"] = stock_data["ret_12m_skip1"]
+        elif "ret_12m" in stock_data.columns:
+            exposures["momentum"] = stock_data["ret_12m"]
 
         # Residual Volatility: 优先用剥离市场后的特质波动率
         # 特质波动率高(低波动异象)的股票长期收益偏低，与beta因子含义不同
-        if 'idio_vol' in stock_data.columns:
-            exposures['residual_volatility'] = stock_data['idio_vol']
-        elif 'vol_60d' in stock_data.columns:
-            exposures['residual_volatility'] = stock_data['vol_60d']
+        if "idio_vol" in stock_data.columns:
+            exposures["residual_volatility"] = stock_data["idio_vol"]
+        elif "vol_60d" in stock_data.columns:
+            exposures["residual_volatility"] = stock_data["vol_60d"]
 
         return exposures
 
-    def barra_factor_return(self, returns: pd.DataFrame,
-                            exposures: pd.DataFrame,
-                            market_cap: Optional[pd.Series] = None) -> pd.Series:
+    def barra_factor_return(
+        self, returns: pd.DataFrame, exposures: pd.DataFrame, market_cap: pd.Series | None = None
+    ) -> pd.Series:
         """
         计算因子收益 (机构级: WLS截面回归)
         Barra标准: 权重 = sqrt(市值), 大市值股票因子收益估计更精确
@@ -490,27 +483,32 @@ class RiskModel:
             XtWX = XW @ W @ X
             XtWr = XW @ W @ r
             f = np.linalg.solve(XtWX, XtWr)
-            logger.info("Barra factor return computed via WLS", extra={
-                "n_stocks": len(common), "n_factors": len(exposures.columns),
-                "method": "WLS", "has_market_cap": market_cap is not None
-            })
+            logger.info(
+                "Barra factor return computed via WLS",
+                extra={
+                    "n_stocks": len(common),
+                    "n_factors": len(exposures.columns),
+                    "method": "WLS",
+                    "has_market_cap": market_cap is not None,
+                },
+            )
             return pd.Series(f, index=exposures.columns)
         except np.linalg.LinAlgError:
             # 回退到OLS
             try:
                 f = np.linalg.lstsq(X, r, rcond=None)[0]
-                logger.info("Barra factor return computed via OLS fallback", extra={
-                    "n_stocks": len(common), "n_factors": len(exposures.columns),
-                    "method": "OLS_fallback"
-                })
+                logger.info(
+                    "Barra factor return computed via OLS fallback",
+                    extra={"n_stocks": len(common), "n_factors": len(exposures.columns), "method": "OLS_fallback"},
+                )
                 return pd.Series(f, index=exposures.columns)
             except np.linalg.LinAlgError:
                 logger.warning("Barra factor return: both WLS and OLS failed, returning empty Series")
                 return pd.Series()
 
-    def estimate_factor_covariance(self, factor_returns_df: pd.DataFrame,
-                                    halflife: int = 168,
-                                    eigenvalue_clip_pct: float = 0.05) -> pd.DataFrame:
+    def estimate_factor_covariance(
+        self, factor_returns_df: pd.DataFrame, halflife: int = 168, eigenvalue_clip_pct: float = 0.05
+    ) -> pd.DataFrame:
         """
         估计因子协方差矩阵 (机构级: EWMA + 特征值裁剪)
         Barra标准: halflife=168交易日(约8个月)，比特质方差半衰期更长
@@ -551,13 +549,11 @@ class RiskModel:
         except np.linalg.LinAlgError:
             pass
 
-        return pd.DataFrame(cov, index=factor_returns_df.columns,
-                           columns=factor_returns_df.columns)
+        return pd.DataFrame(cov, index=factor_returns_df.columns, columns=factor_returns_df.columns)
 
-    def estimate_idiosyncratic_variance(self, stock_returns: pd.DataFrame,
-                                          factor_returns: pd.DataFrame,
-                                          exposures: pd.DataFrame,
-                                          halflife: int = 84) -> pd.Series:
+    def estimate_idiosyncratic_variance(
+        self, stock_returns: pd.DataFrame, factor_returns: pd.DataFrame, exposures: pd.DataFrame, halflife: int = 84
+    ) -> pd.Series:
         """
         估计特质方差 (机构级: 从残差估计, 分行业EWMA)
         Barra标准: halflife=84交易日(约4个月)，短于因子协方差半衰期
@@ -581,15 +577,14 @@ class RiskModel:
 
         # EWMA方差
         decay = 1 - np.exp(-np.log(2) / halflife)
-        residual_df = pd.DataFrame(residuals.T, index=stock_returns.index,
-                                    columns=exposures.index)
+        residual_df = pd.DataFrame(residuals.T, index=stock_returns.index, columns=exposures.index)
         idio_var = residual_df.ewm(alpha=decay).var().iloc[-1]
 
         return idio_var.clip(lower=1e-10)
 
-    def barra_decompose_risk(self, exposures: pd.DataFrame,
-                             factor_cov: pd.DataFrame,
-                             idio_var: pd.Series) -> Dict[str, Any]:
+    def barra_decompose_risk(
+        self, exposures: pd.DataFrame, factor_cov: pd.DataFrame, idio_var: pd.Series
+    ) -> dict[str, Any]:
         """
         风险分解 (ADD 10.3节)
         总风险 = 因子风险 + 特质风险
@@ -607,17 +602,15 @@ class RiskModel:
         total_risk = factor_risk + idio_risk
 
         return {
-            'factor_risk': factor_risk,
-            'idiosyncratic_risk': idio_risk,
-            'total_risk': total_risk,
-            'factor_risk_pct': factor_risk / total_risk if np.any(total_risk > 0) else None,
+            "factor_risk": factor_risk,
+            "idiosyncratic_risk": idio_risk,
+            "total_risk": total_risk,
+            "factor_risk_pct": factor_risk / total_risk if np.any(total_risk > 0) else None,
         }
 
     # ==================== 3. VaR和CVaR (ADD 10.4节) ====================
 
-    def historical_var(self, returns: pd.Series,
-                       confidence: float = 0.95,
-                       window: int = 252) -> float:
+    def historical_var(self, returns: pd.Series, confidence: float = 0.95, window: int = 252) -> float:
         """
         历史模拟法VaR (ADD 10.4节)
         """
@@ -626,20 +619,19 @@ class RiskModel:
         recent_returns = returns.iloc[-window:]
         return -np.percentile(recent_returns, (1 - confidence) * 100)
 
-    def parametric_var(self, returns: pd.Series,
-                       confidence: float = 0.95) -> float:
+    def parametric_var(self, returns: pd.Series, confidence: float = 0.95) -> float:
         """
         参数法VaR (ADD 10.4节)
         VaR = -μ - z_α * σ
         """
         from scipy.stats import norm
+
         mu = returns.mean()
         sigma = returns.std()
         z = norm.ppf(confidence)
         return -(mu - z * sigma)
 
-    def conditional_var(self, returns: pd.Series,
-                        confidence: float = 0.95) -> float:
+    def conditional_var(self, returns: pd.Series, confidence: float = 0.95) -> float:
         """
         CVaR/ES (ADD 10.4节)
         E[-R | R < -VaR]
@@ -650,14 +642,12 @@ class RiskModel:
             return var
         return -tail_returns.mean()
 
-    def monte_carlo_var(self, returns: pd.Series,
-                        confidence: float = 0.95,
-                        n_simulations: int = 10000,
-                        horizon: int = 1) -> float:
+    def monte_carlo_var(
+        self, returns: pd.Series, confidence: float = 0.95, n_simulations: int = 10000, horizon: int = 1
+    ) -> float:
         """
         蒙特卡洛VaR
         """
-        from scipy.stats import norm
         mu = returns.mean()
         sigma = returns.std()
 
@@ -666,9 +656,7 @@ class RiskModel:
 
         return -np.percentile(simulated_returns, (1 - confidence) * 100)
 
-    def student_t_var(self, returns: pd.Series,
-                      confidence: float = 0.95,
-                      df: Optional[float] = None) -> float:
+    def student_t_var(self, returns: pd.Series, confidence: float = 0.95, df: float | None = None) -> float:
         """
         Student-t分布VaR
         比正态分布更好地捕捉厚尾特征
@@ -695,8 +683,9 @@ class RiskModel:
         scale = sigma * np.sqrt((df - 2) / df)
         return -(mu + t_quantile * scale)
 
-    def copula_tail_dependence(self, returns_a: pd.Series, returns_b: pd.Series,
-                                threshold: float = 0.05) -> Dict[str, float]:
+    def copula_tail_dependence(
+        self, returns_a: pd.Series, returns_b: pd.Series, threshold: float = 0.05
+    ) -> dict[str, float]:
         """
         Copula尾部依赖估计
         衡量两个资产在极端情况下的共同运动程度
@@ -715,7 +704,6 @@ class RiskModel:
         # 下尾依赖: P(Y < F_Y^{-1}(u) | X < F_X^{-1}(u))
         a_rank = a.rank(pct=True)
         b_rank = b.rank(pct=True)
-        n = len(a)
 
         # 下尾(左尾)
         both_lower = ((a_rank <= threshold) & (b_rank <= threshold)).sum()
@@ -728,16 +716,19 @@ class RiskModel:
         upper_tail_dep = both_upper / a_upper if a_upper > 0 else 0
 
         return {
-            'lower_tail_dependence': round(lower_tail_dep, 4),
-            'upper_tail_dependence': round(upper_tail_dep, 4),
-            'asymmetry': round(lower_tail_dep - upper_tail_dep, 4),  # A股通常下尾>上尾：暴跌时同跌强于暴涨时同涨
+            "lower_tail_dependence": round(lower_tail_dep, 4),
+            "upper_tail_dependence": round(upper_tail_dep, 4),
+            "asymmetry": round(lower_tail_dep - upper_tail_dep, 4),  # A股通常下尾>上尾：暴跌时同跌强于暴涨时同涨
         }
 
-    def liquidity_adjusted_var(self, returns: pd.Series,
-                                position_size: float,
-                                daily_volume: float,
-                                spread: float = 0.001,  # A股典型买卖价差约10bp
-                                confidence: float = 0.95) -> Dict[str, float]:
+    def liquidity_adjusted_var(
+        self,
+        returns: pd.Series,
+        position_size: float,
+        daily_volume: float,
+        spread: float = 0.001,  # A股典型买卖价差约10bp
+        confidence: float = 0.95,
+    ) -> dict[str, float]:
         """
         流动性调整VaR (LVaR)
         标准VaR + 流动性成本
@@ -763,27 +754,24 @@ class RiskModel:
         lvar = var + spread_cost + impact_cost
 
         return {
-            'var': round(var, 6),
-            'spread_cost': round(spread_cost, 6),
-            'impact_cost': round(impact_cost, 6),
-            'lvar': round(lvar, 6),
-            'participation_rate': round(participation_rate, 4),
+            "var": round(var, 6),
+            "spread_cost": round(spread_cost, 6),
+            "impact_cost": round(impact_cost, 6),
+            "lvar": round(lvar, 6),
+            "participation_rate": round(participation_rate, 4),
         }
 
     # ==================== 4. 组合风险计算 ====================
 
-    def portfolio_var(self, weights: np.ndarray,
-                      cov_matrix: np.ndarray) -> float:
+    def portfolio_var(self, weights: np.ndarray, cov_matrix: np.ndarray) -> float:
         """组合方差: w'Σw"""
         return weights @ cov_matrix @ weights
 
-    def portfolio_volatility(self, weights: np.ndarray,
-                             cov_matrix: np.ndarray) -> float:
+    def portfolio_volatility(self, weights: np.ndarray, cov_matrix: np.ndarray) -> float:
         """组合波动率"""
         return np.sqrt(self.portfolio_var(weights, cov_matrix))
 
-    def marginal_risk_contribution(self, weights: np.ndarray,
-                                   cov_matrix: np.ndarray) -> np.ndarray:
+    def marginal_risk_contribution(self, weights: np.ndarray, cov_matrix: np.ndarray) -> np.ndarray:
         """
         边际风险贡献 (MRC)
         MRC_i = (Σw)_i / σ_p
@@ -793,8 +781,7 @@ class RiskModel:
             return np.zeros(len(weights))
         return (cov_matrix @ weights) / portfolio_vol
 
-    def risk_contribution(self, weights: np.ndarray,
-                          cov_matrix: np.ndarray) -> np.ndarray:
+    def risk_contribution(self, weights: np.ndarray, cov_matrix: np.ndarray) -> np.ndarray:
         """
         风险贡献 (RC)
         RC_i = w_i * MRC_i
@@ -802,8 +789,7 @@ class RiskModel:
         mrc = self.marginal_risk_contribution(weights, cov_matrix)
         return weights * mrc
 
-    def risk_contribution_pct(self, weights: np.ndarray,
-                              cov_matrix: np.ndarray) -> np.ndarray:
+    def risk_contribution_pct(self, weights: np.ndarray, cov_matrix: np.ndarray) -> np.ndarray:
         """风险贡献百分比"""
         rc = self.risk_contribution(weights, cov_matrix)
         total = rc.sum()
@@ -813,10 +799,9 @@ class RiskModel:
 
     # ==================== 5. VaR回测 (突破率检验) ====================
 
-    def backtest_var(self, returns: pd.Series,
-                     confidence: float = 0.95,
-                     window: int = 252,
-                     method: str = 'historical') -> Dict[str, Any]:
+    def backtest_var(
+        self, returns: pd.Series, confidence: float = 0.95, window: int = 252, method: str = "historical"
+    ) -> dict[str, Any]:
         """
         VaR回测: 滚动VaR+突破率统计+Kupiec POF检验+Christoffersen独立性检验
 
@@ -830,15 +815,15 @@ class RiskModel:
             突破率统计、Kupiec检验、Christoffersen检验结果
         """
         T: int = len(returns)
-        if T < window + 10:
-            return {'error': 'Insufficient data for VaR backtest'}
+        if window + 10 > T:
+            return {"error": "Insufficient data for VaR backtest"}
 
         var_series = pd.Series(np.nan, index=returns.index)
         violations = pd.Series(0, index=returns.index)
 
         for t in range(window, T):
-            hist = returns.iloc[t - window:t]
-            if method == 'historical':
+            hist = returns.iloc[t - window : t]
+            if method == "historical":
                 var_t: float = -np.percentile(hist, (1 - confidence) * 100)
             else:
                 var_t = -(hist.mean() - sp_stats.norm.ppf(confidence) * hist.std())
@@ -856,41 +841,44 @@ class RiskModel:
         expected_rate: float = 1 - confidence
 
         # Kupiec POF检验 (比例失效检验)
-        kupiec: Dict[str, Any] = self._kupiec_pof_test(n_violations, n_total, expected_rate)
+        kupiec: dict[str, Any] = self._kupiec_pof_test(n_violations, n_total, expected_rate)
 
         # Christoffersen独立性检验
-        christoffersen: Dict[str, Any] = self._christoffersen_independence_test(violations[valid])
+        christoffersen: dict[str, Any] = self._christoffersen_independence_test(violations[valid])
 
-        logger.info("VaR backtest completed", extra={
-            "n_violations": int(n_violations),
-            "n_total": int(n_total),
-            "empirical_rate": round(empirical_rate, 4),
-            "expected_rate": round(expected_rate, 4),
-            "method": method,
-            "confidence": confidence,
-            "var_adequate": kupiec['p_value'] > 0.05 and christoffersen['p_value'] > 0.05,
-        })
+        logger.info(
+            "VaR backtest completed",
+            extra={
+                "n_violations": int(n_violations),
+                "n_total": int(n_total),
+                "empirical_rate": round(empirical_rate, 4),
+                "expected_rate": round(expected_rate, 4),
+                "method": method,
+                "confidence": confidence,
+                "var_adequate": kupiec["p_value"] > 0.05 and christoffersen["p_value"] > 0.05,
+            },
+        )
 
         return {
-            'n_violations': int(n_violations),
-            'n_observations': int(n_total),
-            'expected_violations': round(expected_rate * n_total, 1),
-            'empirical_rate': round(empirical_rate, 4),
-            'expected_rate': round(expected_rate, 4),
-            'kupiec_pof': kupiec,
-            'christoffersen_independence': christoffersen,
-            'var_adequate': kupiec['p_value'] > 0.05 and christoffersen['p_value'] > 0.05,  # 两检验均不拒绝才认为VaR模型充分
+            "n_violations": int(n_violations),
+            "n_observations": int(n_total),
+            "expected_violations": round(expected_rate * n_total, 1),
+            "empirical_rate": round(empirical_rate, 4),
+            "expected_rate": round(expected_rate, 4),
+            "kupiec_pof": kupiec,
+            "christoffersen_independence": christoffersen,
+            "var_adequate": kupiec["p_value"] > 0.05
+            and christoffersen["p_value"] > 0.05,  # 两检验均不拒绝才认为VaR模型充分
         }
 
-    def _kupiec_pof_test(self, n_violations: int, n_total: int,
-                          expected_rate: float) -> Dict[str, Any]:
+    def _kupiec_pof_test(self, n_violations: int, n_total: int, expected_rate: float) -> dict[str, Any]:
         """
         Kupiec比例失效检验 (POF)
         H0: 突破率 = 1 - confidence
         LR_POF = -2 * ln(p0^n0 * p1^n1) + 2 * ln(p_hat^n0 * (1-p_hat)^n1)
         """
         if n_total == 0 or n_violations == 0 or n_violations == n_total:
-            return {'lr_stat': np.nan, 'p_value': np.nan, 'reject': None}
+            return {"lr_stat": np.nan, "p_value": np.nan, "reject": None}
 
         p0: float = expected_rate
         p_hat: float = n_violations / n_total
@@ -902,23 +890,29 @@ class RiskModel:
         lr: float = -2 * (log_h0 - log_h1)
 
         from scipy.stats import chi2
+
         p_value: float = 1 - chi2.cdf(lr, df=1)
 
-        logger.info("Kupiec POF test completed", extra={
-            "n_violations": n_violations, "n_total": n_total,
-            "expected_rate": round(expected_rate, 4),
-            "empirical_rate": round(p_hat, 4),
-            "lr_stat": round(lr, 4), "p_value": round(p_value, 4),
-            "reject": p_value < 0.05,
-        })
+        logger.info(
+            "Kupiec POF test completed",
+            extra={
+                "n_violations": n_violations,
+                "n_total": n_total,
+                "expected_rate": round(expected_rate, 4),
+                "empirical_rate": round(p_hat, 4),
+                "lr_stat": round(lr, 4),
+                "p_value": round(p_value, 4),
+                "reject": p_value < 0.05,
+            },
+        )
 
         return {
-            'lr_stat': round(lr, 4),
-            'p_value': round(p_value, 4),
-            'reject': p_value < 0.05,
+            "lr_stat": round(lr, 4),
+            "p_value": round(p_value, 4),
+            "reject": p_value < 0.05,
         }
 
-    def _christoffersen_independence_test(self, violations: pd.Series) -> Dict[str, Any]:
+    def _christoffersen_independence_test(self, violations: pd.Series) -> dict[str, Any]:
         """
         Christoffersen独立性检验
         检验突破是否独立 (非聚集)
@@ -927,7 +921,7 @@ class RiskModel:
         v = violations.values
         n: int = len(v)
         if n < 10:
-            return {'lr_stat': np.nan, 'p_value': np.nan, 'reject': None}
+            return {"lr_stat": np.nan, "p_value": np.nan, "reject": None}
 
         # 计算转移计数
         n00: int = 0
@@ -935,11 +929,11 @@ class RiskModel:
         n10: int = 0
         n11: int = 0
         for t in range(1, n):
-            if v[t-1] == 0 and v[t] == 0:
+            if v[t - 1] == 0 and v[t] == 0:
                 n00 += 1
-            elif v[t-1] == 0 and v[t] == 1:
+            elif v[t - 1] == 0 and v[t] == 1:
                 n01 += 1
-            elif v[t-1] == 1 and v[t] == 0:
+            elif v[t - 1] == 1 and v[t] == 0:
                 n10 += 1
             else:
                 n11 += 1
@@ -974,28 +968,35 @@ class RiskModel:
         lr = max(lr, 0)  # 数值保护：有限样本下似然比统计量理论上非负，浮点误差可能导致微小负值
 
         from scipy.stats import chi2
+
         p_value: float = 1 - chi2.cdf(lr, df=1)
 
-        logger.info("Christoffersen independence test completed", extra={
-            "n_observations": n, "n_violations": int(n_v),
-            "transition_01": round(p01, 4), "transition_11": round(p11, 4),
-            "lr_stat": round(lr, 4), "p_value": round(p_value, 4),
-            "reject": p_value < 0.05,
-        })
+        logger.info(
+            "Christoffersen independence test completed",
+            extra={
+                "n_observations": n,
+                "n_violations": int(n_v),
+                "transition_01": round(p01, 4),
+                "transition_11": round(p11, 4),
+                "lr_stat": round(lr, 4),
+                "p_value": round(p_value, 4),
+                "reject": p_value < 0.05,
+            },
+        )
 
         return {
-            'lr_stat': round(lr, 4),
-            'p_value': round(p_value, 4),
-            'reject': p_value < 0.05,
-            'transition_01': round(p01, 4),
-            'transition_11': round(p11, 4),
+            "lr_stat": round(lr, 4),
+            "p_value": round(p_value, 4),
+            "reject": p_value < 0.05,
+            "transition_01": round(p01, 4),
+            "transition_11": round(p11, 4),
         }
 
 
 # ==================== Newey-West 调整 ====================
 
-def newey_west_se(series: pd.Series, max_lags: Optional[int] = None,
-                  auto_lag_select: str = 'bartlett') -> float:
+
+def newey_west_se(series: pd.Series, max_lags: int | None = None, auto_lag_select: str = "bartlett") -> float:
     """
     Newey-West标准误 (机构级: 修正序列自相关导致的t统计量高估)
     IC序列通常有显著自相关，朴素t统计量会高估显著性
@@ -1020,10 +1021,7 @@ def newey_west_se(series: pd.Series, max_lags: Optional[int] = None,
     # 自动选择滞后期
     # Bartlett核取n^(1/3)是经典选择，平衡偏差与方差
     if max_lags is None:
-        if auto_lag_select == 'bartlett':
-            max_lags = int(T ** (1 / 3))
-        else:
-            max_lags = int(4 * (T / 100) ** (2 / 9))
+        max_lags = int(T ** (1 / 3)) if auto_lag_select == "bartlett" else int(4 * (T / 100) ** (2 / 9))
         max_lags = max(1, max_lags)
 
     # Newey-West核权重 (Bartlett核)：线性衰减权重，lag越大权重越小
@@ -1037,7 +1035,7 @@ def newey_west_se(series: pd.Series, max_lags: Optional[int] = None,
     return np.sqrt(max(nw_var, 0) / T)
 
 
-def newey_west_tstat(series: pd.Series, max_lags: Optional[int] = None) -> float:
+def newey_west_tstat(series: pd.Series, max_lags: int | None = None) -> float:
     """
     Newey-West调整t统计量
 

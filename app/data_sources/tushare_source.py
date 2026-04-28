@@ -18,7 +18,7 @@ from typing import Any, Callable
 
 import pandas as pd
 
-from app.core.circuit_breaker import CircuitBreaker
+from app.data_sources.base import CircuitBreaker
 
 logger = logging.getLogger(__name__)
 

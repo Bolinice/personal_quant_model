@@ -37,10 +37,10 @@ from app.core.factor_calculator import FactorCalculator
 from app.core.factor_monitor import FactorMonitor
 from app.core.factor_preprocess import FactorPreprocessor
 from app.core.labels import LabelBuilder
-from app.core.market_timer import MarketTimer
-from app.core.model_scorer import ModelScorer
+from app.core.timing_engine import TimingEngine
+from app.core.model_scorer import MultiFactorScorer
 from app.core.model_trainer import ModelTrainer
-from app.core.pit_guard import PITGuard
+from app.core.pit_guard import PITGuardMixin
 from app.core.portfolio_builder import PortfolioBuilder
 from app.core.portfolio_optimizer import PortfolioOptimizer
 from app.core.regime import RegimeDetector
@@ -132,18 +132,18 @@ class DailyPipeline:
         self.snapshot_dir.mkdir(parents=True, exist_ok=True)
 
         # 初始化各模块
-        self.pit_guard = PITGuard()
+        self.pit_guard = PITGuardMixin()
         self.universe_builder = UniverseBuilder()
         self.factor_calculator = FactorCalculator()
         self.factor_preprocessor = FactorPreprocessor()
         self.ensemble_engine = EnsembleEngine()
         self.regime_detector = RegimeDetector()
-        self.model_scorer = ModelScorer()
+        self.model_scorer = MultiFactorScorer(session)
         self.model_trainer = ModelTrainer()
         self.portfolio_builder = PortfolioBuilder()
         self.portfolio_optimizer = PortfolioOptimizer()
         self.risk_model = RiskModel()
-        self.market_timer = MarketTimer()
+        self.market_timer = TimingEngine()
         self.risk_budget_engine = RiskBudgetEngine()
         self.backtest_engine = ABShareBacktestEngine()
         self.factor_monitor = FactorMonitor()

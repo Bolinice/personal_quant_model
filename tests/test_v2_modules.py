@@ -216,14 +216,14 @@ class TestRegimeDetector:
             'close': close.values,
         })
 
-        regime = detector.detect(market_data)
+        regime, confidence = detector.detect(market_data)
         assert regime in ['trending', 'mean_reverting', 'defensive', 'risk_on']
 
     def test_detect_with_empty_data(self):
         from app.core.regime import RegimeDetector
         detector = RegimeDetector()
 
-        regime = detector.detect(pd.DataFrame())
+        regime, confidence = detector.detect(pd.DataFrame())
         assert regime == 'mean_reverting'  # 默认震荡市
 
     def test_market_features(self):
@@ -358,42 +358,45 @@ class TestDailyPipeline:
 
     def test_pipeline_init(self):
         from app.core.daily_pipeline import DailyPipeline
-        pipeline = DailyPipeline()
+        pipeline = DailyPipeline(session=None)
         assert pipeline.universe_builder is not None
         assert pipeline.ensemble_engine is not None
         assert pipeline.regime_detector is not None
         assert pipeline.portfolio_builder is not None
 
     def test_step1_data_collection(self):
-        from app.core.daily_pipeline import DailyPipeline
-        pipeline = DailyPipeline()
-        result = pipeline.step1_data_collection(date(2024, 1, 15))
-        assert result['status'] == 'ok'
+        from app.core.daily_pipeline import DailyPipeline, PipelineContext
+        pipeline = DailyPipeline(session=None)
+        ctx = PipelineContext(trade_date=date(2024, 1, 15))
+        pipeline._step1_data_collection(ctx)
+        # 无数据库会话时跳过，不报错
 
     def test_step2_snapshot(self):
-        from app.core.daily_pipeline import DailyPipeline
-        pipeline = DailyPipeline()
-        result = pipeline.step2_snapshot(date(2024, 1, 15))
-        assert result['status'] == 'ok'
-        assert 'snapshot_id' in result
+        from app.core.daily_pipeline import DailyPipeline, PipelineContext
+        pipeline = DailyPipeline(session=None)
+        ctx = PipelineContext(trade_date=date(2024, 1, 15))
+        pipeline._step2_snapshot(ctx)
+        assert ctx.snapshot_id is not None
 
-    def test_step8_regime_detection_no_data(self):
-        from app.core.daily_pipeline import DailyPipeline
-        pipeline = DailyPipeline()
-        result = pipeline.step8_regime_detection()
-        assert 'regime' in result
+    def test_step6_regime_detection_no_data(self):
+        from app.core.daily_pipeline import DailyPipeline, PipelineContext
+        pipeline = DailyPipeline(session=None)
+        ctx = PipelineContext(trade_date=date(2024, 1, 15))
+        pipeline._step6_regime(ctx)
+        # 无指数数据时使用默认市场状态
 
     def test_step11_factor_health_check(self):
-        from app.core.daily_pipeline import DailyPipeline
-        pipeline = DailyPipeline()
-        result = pipeline.step11_factor_health_check(date(2024, 1, 15))
-        assert result['status'] == 'ok'
+        from app.core.daily_pipeline import DailyPipeline, PipelineContext
+        pipeline = DailyPipeline(session=None)
+        ctx = PipelineContext(trade_date=date(2024, 1, 15))
+        pipeline._step11_factor_health(ctx)
+        # 无因子数据时跳过，不报错
 
     def test_step12_archive(self):
-        from app.core.daily_pipeline import DailyPipeline
-        pipeline = DailyPipeline()
-        result = pipeline.step12_archive(date(2024, 1, 15), {})
-        assert result['status'] == 'ok'
+        from app.core.daily_pipeline import DailyPipeline, PipelineContext
+        pipeline = DailyPipeline(session=None)
+        ctx = PipelineContext(trade_date=date(2024, 1, 15))
+        pipeline._step12_archive(ctx)
 
 
 # ==================== Compliance测试 ====================

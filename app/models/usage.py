@@ -6,7 +6,7 @@
 from sqlalchemy import Column, Date, DateTime, Index, Integer, String, UniqueConstraint
 from sqlalchemy.sql import func
 
-from app.db.base import Base
+from app.db.base_class import Base
 
 
 class UsageRecord(Base):

@@ -14,6 +14,85 @@ import pandas as pd
 from app.core.logging import logger
 
 
+# ==================== 熔断器 ====================
+
+
+class CircuitBreakerOpen(Exception):
+    """熔断器开启异常"""
+
+    pass
+
+
+class CircuitBreaker:
+    """熔断器 — 连续失败超过阈值后自动断开，恢复超时后进入半开状态
+
+    状态机:
+    - CLOSED: 正常调用，失败计数
+    - OPEN: 拒绝调用，等待恢复超时
+    - HALF_OPEN: 允许一次试探调用，成功则关闭，失败则重新开启
+
+    Args:
+        failure_threshold: 连续失败次数阈值
+        recovery_timeout: 熔断后等待恢复的秒数
+    """
+
+    def __init__(self, failure_threshold: int = 5, recovery_timeout: float = 300.0):
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout = recovery_timeout
+        self._failure_count = 0
+        self._last_failure_time: float | None = None
+        self._state = "CLOSED"  # CLOSED / OPEN / HALF_OPEN
+
+    @property
+    def state(self) -> str:
+        return self._state
+
+    def call(self, func, *args, **kwargs):
+        """通过熔断器调用函数"""
+        if self._state == "OPEN":
+            if self._should_attempt_recovery():
+                self._state = "HALF_OPEN"
+            else:
+                raise CircuitBreakerOpen(
+                    f"Circuit breaker is OPEN — {self._failure_count} consecutive failures, "
+                    f"retry after {self.recovery_timeout}s"
+                )
+
+        try:
+            result = func(*args, **kwargs)
+            self._on_success()
+            return result
+        except Exception as e:
+            self._on_failure()
+            raise
+
+    def _should_attempt_recovery(self) -> bool:
+        """检查是否已过恢复超时，可以尝试半开"""
+        if self._last_failure_time is None:
+            return True
+        import time
+
+        return (time.time() - self._last_failure_time) >= self.recovery_timeout
+
+    def _on_success(self):
+        """调用成功：重置计数，关闭熔断器"""
+        self._failure_count = 0
+        self._state = "CLOSED"
+
+    def _on_failure(self):
+        """调用失败：增加计数，达到阈值则开启熔断器"""
+        import time
+
+        self._failure_count += 1
+        self._last_failure_time = time.time()
+        if self._failure_count >= self.failure_threshold:
+            self._state = "OPEN"
+            logger.warning(
+                "Circuit breaker OPENED after %d consecutive failures",
+                self._failure_count,
+            )
+
+
 @dataclass
 class SyncResult:
     """同步结果"""
@@ -376,82 +455,3 @@ class BaseDataSource(ABC):
                     time.sleep(wait)
                 else:
                     raise
-
-
-# ==================== 熔断器 ====================
-
-
-class CircuitBreakerOpen(Exception):
-    """熔断器开启异常"""
-
-    pass
-
-
-class CircuitBreaker:
-    """熔断器 — 连续失败超过阈值后自动断开，恢复超时后进入半开状态
-
-    状态机:
-    - CLOSED: 正常调用，失败计数
-    - OPEN: 拒绝调用，等待恢复超时
-    - HALF_OPEN: 允许一次试探调用，成功则关闭，失败则重新开启
-
-    Args:
-        failure_threshold: 连续失败次数阈值
-        recovery_timeout: 熔断后等待恢复的秒数
-    """
-
-    def __init__(self, failure_threshold: int = 5, recovery_timeout: float = 300.0):
-        self.failure_threshold = failure_threshold
-        self.recovery_timeout = recovery_timeout
-        self._failure_count = 0
-        self._last_failure_time: float | None = None
-        self._state = "CLOSED"  # CLOSED / OPEN / HALF_OPEN
-
-    @property
-    def state(self) -> str:
-        return self._state
-
-    def call(self, func, *args, **kwargs):
-        """通过熔断器调用函数"""
-        if self._state == "OPEN":
-            if self._should_attempt_recovery():
-                self._state = "HALF_OPEN"
-            else:
-                raise CircuitBreakerOpen(
-                    f"Circuit breaker is OPEN — {self._failure_count} consecutive failures, "
-                    f"retry after {self.recovery_timeout}s"
-                )
-
-        try:
-            result = func(*args, **kwargs)
-            self._on_success()
-            return result
-        except Exception as e:
-            self._on_failure()
-            raise
-
-    def _should_attempt_recovery(self) -> bool:
-        """检查是否已过恢复超时，可以尝试半开"""
-        if self._last_failure_time is None:
-            return True
-        import time
-
-        return (time.time() - self._last_failure_time) >= self.recovery_timeout
-
-    def _on_success(self):
-        """调用成功：重置计数，关闭熔断器"""
-        self._failure_count = 0
-        self._state = "CLOSED"
-
-    def _on_failure(self):
-        """调用失败：增加计数，达到阈值则开启熔断器"""
-        import time
-
-        self._failure_count += 1
-        self._last_failure_time = time.time()
-        if self._failure_count >= self.failure_threshold:
-            self._state = "OPEN"
-            logger.warning(
-                "Circuit breaker OPENED after %d consecutive failures",
-                self._failure_count,
-            )

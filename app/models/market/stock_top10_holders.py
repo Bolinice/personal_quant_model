@@ -2,7 +2,7 @@
 
 from sqlalchemy import Column, Float, Index, Integer, String, UniqueConstraint
 
-from app.db.base import Base
+from app.db.base_class import Base
 
 
 class StockTop10Holders(Base):

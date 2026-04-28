@@ -1,0 +1,14 @@
+{
+  "trade_date": "2024-01-15",
+  "snapshot_id": null,
+  "universe_count": 0,
+  "factor_count": 0,
+  "regime_state": null,
+  "regime_confidence": 0.0,
+  "timing_signal": null,
+  "position_ratio": 1.0,
+  "portfolio_stocks": [],
+  "factor_health": null,
+  "ensemble_weights": null,
+  "risk_budget": null
+}

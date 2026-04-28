@@ -3,7 +3,7 @@
 from sqlalchemy import BigInteger, Column, Date, DateTime, Numeric, String, Text
 from sqlalchemy.sql import func
 
-from app.db.base import Base
+from app.db.base_class import Base
 
 
 class EventCenter(Base):

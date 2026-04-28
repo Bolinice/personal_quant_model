@@ -15,9 +15,9 @@ import pandas as pd
 
 from app.core.logging import logger
 from app.data_sources import (
-    AKShareDataSource,
+    AKShareSource,
     CrawlerDataSource,
-    TushareDataSource,
+    TushareSource,
     data_source_manager,
     get_data_source,
 )
@@ -46,10 +46,10 @@ class DataSyncService:
 
         # 注册数据源
         if tushare_token:
-            tushare = TushareDataSource(token=tushare_token)
+            tushare = TushareSource(token=tushare_token)
             data_source_manager.register("tushare", tushare, is_primary=(primary_source == "tushare"))
 
-        akshare = AKShareDataSource()
+        akshare = AKShareSource()
         data_source_manager.register("akshare", akshare, is_primary=(primary_source == "akshare"))
 
         crawler = CrawlerDataSource()

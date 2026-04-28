@@ -41,7 +41,8 @@ class TestEnsembleEngine:
         """combine() 必须返回 (Series, dict) — 便捷方法"""
         factor_df = _make_factor_df()
         ic_dict = _make_ic_dict()
-        scores, weights = self.engine.combine(factor_df, ic_dict=ic_dict)
+        factor_names = [f"factor_{i}" for i in range(3)]
+        scores, weights = self.engine.combine(factor_df, factor_names=factor_names, ic_dict=ic_dict)
         assert isinstance(scores, pd.Series)
         assert isinstance(weights, dict)
         assert len(scores) == 50

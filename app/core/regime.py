@@ -211,8 +211,12 @@ class RegimeDetector:
 
         # 强趋势: 20d和60d方向一致且幅度大
         # 阈值3%/5%: A股指数日均波动约1-2%, 3%以上斜率意味着持续性趋势
-        if abs(trend_20d) > 0.03 and abs(trend_60d) > 0.05:
-            trend_score = np.sign(trend_20d) * min(abs(trend_20d) * 10, 1.0)
+        # market_trend_20d = (MA20 - close)/close: 上升趋势时close>MA → 趋势值<0
+        # 所以需要取反: 正趋势 = close高于MA = 趋势值<0 → 取反后>0
+        trend_20d_adj = -trend_20d  # 取反: close高于MA表示上升趋势
+        trend_60d_adj = -trend_60d
+        if abs(trend_20d_adj) > 0.03 and abs(trend_60d_adj) > 0.05:
+            trend_score = np.sign(trend_20d_adj) * min(abs(trend_20d_adj) * 10, 1.0)
         elif abs(ma_cross) > 0.02:
             trend_score = np.sign(ma_cross) * min(abs(ma_cross) * 5, 0.5)
         else:

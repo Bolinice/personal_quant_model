@@ -8,17 +8,17 @@ from app.data_sources.base import BaseDataSource, DataSourceManager, data_source
 from app.data_sources.cleaner import CleanReport, DataCleaner
 from app.data_sources.crawler_source import CrawlerDataSource
 from app.data_sources.normalizer import DataNormalizer
-from app.data_sources.tushare_source import TushareDataSource
+from app.data_sources.tushare_source import TushareSource
 
 __all__ = [
-    "AKShareDataSource",
+    "AKShareSource",
     "BaseDataSource",
     "CleanReport",
     "CrawlerDataSource",
     "DataCleaner",
     "DataNormalizer",
     "DataSourceManager",
-    "TushareDataSource",
+    "TushareSource",
     "data_source_manager",
     "get_data_source",
 ]

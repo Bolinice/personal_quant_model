@@ -1,0 +1,44 @@
+{
+  "factor_values": {
+    "updated_at": "2026-04-28T13:54:28.847340",
+    "rows": 1000,
+    "columns": [
+      "trade_date",
+      "ts_code",
+      "roe_ttm",
+      "gross_margin",
+      "revenue_growth_yoy",
+      "eps_revision_fy0",
+      "residual_return_20d",
+      "volatility_20d"
+    ],
+    "sha256": "cbcdc707486fbaa4"
+  },
+  "labels": {
+    "updated_at": "2026-04-28T13:54:28.851068",
+    "rows": 1000,
+    "columns": [
+      "trade_date",
+      "ts_code",
+      "fwd_return_5d",
+      "excess_return_5d",
+      "industry_neutral_return"
+    ],
+    "sha256": "2acf0143ce5a32b6"
+  },
+  "ensemble": {
+    "updated_at": "2026-04-28T13:54:28.855642",
+    "rows": 1000,
+    "columns": [
+      "trade_date",
+      "ts_code",
+      "quality_growth_score",
+      "expectation_score",
+      "residual_momentum_score",
+      "flow_confirm_score",
+      "risk_penalty_score",
+      "final_score"
+    ],
+    "sha256": "f9fe19fb6208e74a"
+  }
+}

@@ -11,6 +11,7 @@ from app.middleware.middleware import (
     LoggingMiddleware,
     MetricsMiddleware,
     RedisRateLimitMiddleware,
+    SecurityHeadersMiddleware,
     SlowQueryMiddleware,
 )
 
@@ -68,6 +69,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(RedisRateLimitMiddleware, requests_per_minute=60)
 app.add_middleware(MetricsMiddleware)

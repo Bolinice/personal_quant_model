@@ -62,6 +62,7 @@ dependencies = [
     "hmmlearn>=0.3.0",
     "cvxpy>=1.4.0",
     "httpx>=0.28.1",
+    "structlog>=24.1.0",
 ]
 
 [project.optional-dependencies]

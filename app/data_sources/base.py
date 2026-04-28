@@ -51,15 +51,17 @@ class DataQualityReport:
 
 
 class DataSourceManager:
-    """数据源管理器 - 注册、主备切换、数据新鲜度检查"""
+    """数据源管理器 - 注册、主备切换、数据新鲜度检查、熔断保护"""
 
     def __init__(self):
         self._sources: dict[str, BaseDataSource] = {}
         self._primary: str | None = None
         self._fallback: str | None = None
+        self._circuit_breakers: dict[str, CircuitBreaker] = {}
 
     def register(self, name: str, source: BaseDataSource, is_primary: bool = False, is_fallback: bool = False):
         self._sources[name] = source
+        self._circuit_breakers[name] = CircuitBreaker(failure_threshold=5, recovery_timeout=300)
         if is_primary:
             self._primary = name
         if is_fallback:
@@ -68,15 +70,37 @@ class DataSourceManager:
     def get(self, name: str) -> BaseDataSource | None:
         return self._sources.get(name)
 
+    def call_with_circuit_breaker(self, source_name: str, func, *args, **kwargs):
+        """通过熔断器调用数据源方法，失败时自动切换备源"""
+        cb = self._circuit_breakers.get(source_name)
+        if cb is None:
+            return func(*args, **kwargs)
+
+        try:
+            return cb.call(func, *args, **kwargs)
+        except CircuitBreakerOpen:
+            # 主源熔断，尝试备源
+            if self._fallback and self._fallback != source_name:
+                logger.warning("Source %s circuit breaker open, falling back to %s", source_name, self._fallback)
+                fallback_cb = self._circuit_breakers.get(self._fallback)
+                fallback_source = self._sources.get(self._fallback)
+                if fallback_source and fallback_cb:
+                    return fallback_cb.call(func, *args, **kwargs)
+            raise
+
     def get_primary(self) -> BaseDataSource | None:
-        """获取主数据源，不可用时自动切换到备源"""
+        """获取主数据源，不可用或熔断开启时自动切换到备源"""
         if self._primary and self._primary in self._sources:
-            source = self._sources[self._primary]
-            try:
-                if source.connect():
-                    return source
-            except Exception:
-                pass
+            cb = self._circuit_breakers.get(self._primary)
+            if cb and cb.state == "OPEN":
+                logger.warning("Primary source %s circuit breaker is OPEN, skipping", self._primary)
+            else:
+                source = self._sources[self._primary]
+                try:
+                    if source.connect():
+                        return source
+                except Exception:
+                    pass
 
         # 主源不可用，切换到备源
         if self._fallback and self._fallback in self._sources:
@@ -352,3 +376,82 @@ class BaseDataSource(ABC):
                     time.sleep(wait)
                 else:
                     raise
+
+
+# ==================== 熔断器 ====================
+
+
+class CircuitBreakerOpen(Exception):
+    """熔断器开启异常"""
+
+    pass
+
+
+class CircuitBreaker:
+    """熔断器 — 连续失败超过阈值后自动断开，恢复超时后进入半开状态
+
+    状态机:
+    - CLOSED: 正常调用，失败计数
+    - OPEN: 拒绝调用，等待恢复超时
+    - HALF_OPEN: 允许一次试探调用，成功则关闭，失败则重新开启
+
+    Args:
+        failure_threshold: 连续失败次数阈值
+        recovery_timeout: 熔断后等待恢复的秒数
+    """
+
+    def __init__(self, failure_threshold: int = 5, recovery_timeout: float = 300.0):
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout = recovery_timeout
+        self._failure_count = 0
+        self._last_failure_time: float | None = None
+        self._state = "CLOSED"  # CLOSED / OPEN / HALF_OPEN
+
+    @property
+    def state(self) -> str:
+        return self._state
+
+    def call(self, func, *args, **kwargs):
+        """通过熔断器调用函数"""
+        if self._state == "OPEN":
+            if self._should_attempt_recovery():
+                self._state = "HALF_OPEN"
+            else:
+                raise CircuitBreakerOpen(
+                    f"Circuit breaker is OPEN — {self._failure_count} consecutive failures, "
+                    f"retry after {self.recovery_timeout}s"
+                )
+
+        try:
+            result = func(*args, **kwargs)
+            self._on_success()
+            return result
+        except Exception as e:
+            self._on_failure()
+            raise
+
+    def _should_attempt_recovery(self) -> bool:
+        """检查是否已过恢复超时，可以尝试半开"""
+        if self._last_failure_time is None:
+            return True
+        import time
+
+        return (time.time() - self._last_failure_time) >= self.recovery_timeout
+
+    def _on_success(self):
+        """调用成功：重置计数，关闭熔断器"""
+        self._failure_count = 0
+        self._state = "CLOSED"
+
+    def _on_failure(self):
+        """调用失败：增加计数，达到阈值则开启熔断器"""
+        import time
+
+        self._failure_count += 1
+        self._last_failure_time = time.time()
+        if self._failure_count >= self.failure_threshold:
+            self._state = "OPEN"
+            logger.warning(
+                "Circuit breaker OPENED after %d consecutive failures",
+                self._failure_count,
+            )

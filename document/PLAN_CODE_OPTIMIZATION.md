@@ -662,4 +662,5 @@ CPU 密集型回测用 `asyncio.to_thread()` 避免阻塞事件循环。
 |------|------|----------|
 | V2.0 | 2026-04-28 | 新增第8-9节：开发者技能提升计划（工具链升级、量化专项实践、架构工程质量、常见陷阱防范、测试策略升级），重构实施优先级 |
 | V2.1 | 2026-04-28 | P0全部完成，P1部分完成：Ruff迁移（43852→219错误）、pyright配置、PIT Guard、Look-ahead测试、CI Pipeline、uv迁移、结构化错误体系、回测完整性检查、Hypothesis属性测试（发现2个已知bug：winsorize_mad重复值处理、standardize_zscore极端值排序） |
+| V2.2 | 2026-04-28 | P2全部完成：安全头中间件、熔断器(CircuitBreaker+测试)、核心层纯化(app/core/pure/)、structlog结构化日志、数据库索引优化(7个新索引)、API响应timestamp+分页、sanitize_dataframe()NaN/Inf处理、Golden Master测试基础设施 |
 | V1.0 | 2026-04-26 | 初始版本 |

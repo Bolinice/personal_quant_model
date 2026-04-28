@@ -1,5 +1,6 @@
 """
 中间件模块
+- SecurityHeadersMiddleware: 安全响应头
 - LoggingMiddleware: 请求日志记录
 - MetricsMiddleware: Prometheus 指标收集
 - RateLimitMiddleware: 内存滑动窗口限流（开发/降级用）
@@ -19,6 +20,27 @@ from app.core.compliance import add_disclaimer
 from app.monitoring.metrics import REQUEST_COUNT, REQUEST_DURATION
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================
+# 安全响应头中间件
+# ============================================================
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """安全响应头中间件
+
+    为所有响应添加安全相关 HTTP 头，防止常见 Web 攻击。
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Content-Security-Policy"] = "default-src 'self'"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
 
 
 # ============================================================

@@ -1,5 +1,11 @@
 """
-日志模块 - 支持结构化JSON日志 + 性能计时装饰器
+日志模块 - 支持 structlog 结构化日志 + 性能计时装饰器
+
+structlog 优势:
+- 内置上下文变量（request_id 自动绑定）
+- 原生 JSON 输出 + 处理器管道
+- 兼容标准 logging，无需一次性重写
+- OpenTelemetry 集成友好
 """
 
 import functools
@@ -9,13 +15,78 @@ import sys
 import time
 from pathlib import Path
 
+import structlog
+
 # 创建日志目录
 log_dir = Path("logs")
 log_dir.mkdir(exist_ok=True)
 
 
+# ==================== structlog 配置 ====================
+
+
+def _configure_structlog(log_level: str = "INFO", log_format: str = "text") -> None:
+    """配置 structlog 处理器管道
+
+    Args:
+        log_level: 日志级别
+        log_format: "json" 或 "text"
+    """
+    shared_processors: list = [
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+    ]
+
+    if log_format == "json":
+        # JSON 输出: 生产环境
+        renderer = structlog.processors.JSONRenderer(serializer=json.dumps, ensure_ascii=False)
+    else:
+        # 控制台输出: 开发环境
+        renderer = structlog.dev.ConsoleRenderer()
+
+    structlog.configure(
+        processors=[
+            *shared_processors,
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
+    )
+
+    # 配置标准 logging handler，使 structlog 与标准 logging 互通
+    formatter = structlog.stdlib.ProcessorFormatter(
+        processors=[
+            *shared_processors,
+            renderer,
+        ],
+    )
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
+    root_logger.handlers.clear()
+
+    # 文件 handler
+    file_handler = logging.FileHandler(log_dir / "app.log", encoding="utf-8")
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
+
+    # 控制台 handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+
+
+# ==================== 兼容层 ====================
+
+
 class JsonFormatter(logging.Formatter):
-    """结构化JSON日志格式器"""
+    """结构化JSON日志格式器（兼容层，structlog 已替代）"""
 
     def format(self, record: logging.LogRecord) -> str:
         log_entry = {
@@ -44,7 +115,7 @@ class JsonFormatter(logging.Formatter):
 
 
 class TextFormatter(logging.Formatter):
-    """标准文本日志格式器"""
+    """标准文本日志格式器（兼容层）"""
 
     def format(self, record: logging.LogRecord) -> str:
         base = super().format(record)
@@ -59,35 +130,16 @@ class TextFormatter(logging.Formatter):
 
 
 def setup_logging(log_level: str = "INFO", log_format: str = "text") -> logging.Logger:
-    """初始化日志系统"""
-    log_cfg = logging.getLogger("quant_platform")
-    log_cfg.setLevel(getattr(logging, log_level.upper(), logging.INFO))
-
-    # 清除已有handlers
-    log_cfg.handlers.clear()
-
-    if log_format == "json":
-        formatter = JsonFormatter(datefmt="%Y-%m-%dT%H:%M:%S")
-    else:
-        formatter = TextFormatter(
-            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-        )
-
-    # 文件handler
-    file_handler = logging.FileHandler(log_dir / "app.log", encoding="utf-8")
-    file_handler.setFormatter(formatter)
-    log_cfg.addHandler(file_handler)
-
-    # 控制台handler
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    log_cfg.addHandler(console_handler)
-
-    return log_cfg
+    """初始化日志系统（structlog + 标准logging 互通）"""
+    _configure_structlog(log_level, log_format)
+    return logging.getLogger("quant_platform")
 
 
 # 默认初始化
 logger = setup_logging()
+
+# structlog logger（推荐新代码使用）
+slogger = structlog.get_logger()
 
 
 def log_execution_time(func=None, *, level: str = "info"):

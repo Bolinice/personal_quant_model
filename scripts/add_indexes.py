@@ -54,6 +54,48 @@ INDEXES = [
         "columns": "index_code, ts_code",
         "sql": "CREATE INDEX IF NOT EXISTS ix_ic_code_stock ON index_components (index_code, ts_code)",
     },
+    # stock_daily: 按日期+股票查询（覆盖 WHERE trade_date = ? AND ts_code = ? 查询）
+    {
+        "name": "ix_sd_date_code",
+        "table": "stock_daily",
+        "columns": "trade_date, ts_code",
+        "sql": "CREATE INDEX IF NOT EXISTS ix_sd_date_code ON stock_daily (trade_date, ts_code)",
+    },
+    # factor_values: 按股票+日期+因子名查询
+    {
+        "name": "ix_fv_code_date_factor",
+        "table": "factor_values",
+        "columns": "ts_code, trade_date, factor_name",
+        "sql": "CREATE INDEX IF NOT EXISTS ix_fv_code_date_factor ON factor_values (ts_code, trade_date, factor_name)",
+    },
+    # factor_values: 按日期+因子名查询（横截面IC计算）
+    {
+        "name": "ix_fv_date_factor",
+        "table": "factor_values",
+        "columns": "trade_date, factor_name",
+        "sql": "CREATE INDEX IF NOT EXISTS ix_fv_date_factor ON factor_values (trade_date, factor_name)",
+    },
+    # backtest_results: 按策略+日期范围查询
+    {
+        "name": "ix_br_strategy_dates",
+        "table": "backtest_results",
+        "columns": "strategy_id, start_date, end_date",
+        "sql": "CREATE INDEX IF NOT EXISTS ix_br_strategy_dates ON backtest_results (strategy_id, start_date, end_date)",
+    },
+    # factor_ic: 按因子名+日期查询
+    {
+        "name": "ix_fic_factor_date",
+        "table": "factor_ic",
+        "columns": "factor_name, trade_date",
+        "sql": "CREATE INDEX IF NOT EXISTS ix_fic_factor_date ON factor_ic (factor_name, trade_date)",
+    },
+    # portfolio_positions: 按组合+日期查询持仓
+    {
+        "name": "ix_pp_portfolio_date",
+        "table": "portfolio_positions",
+        "columns": "portfolio_id, trade_date",
+        "sql": "CREATE INDEX IF NOT EXISTS ix_pp_portfolio_date ON portfolio_positions (portfolio_id, trade_date)",
+    },
 ]
 
 

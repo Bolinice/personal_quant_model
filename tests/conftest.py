@@ -10,6 +10,19 @@ from app.main import app
 from app.models.user import User
 from app.services.auth_service import AuthService
 
+
+# ==================== Golden Master CLI Option ====================
+
+
+def pytest_addoption(parser):
+    parser.addoption("--update-golden", action="store_true", default=False, help="Update golden master files")
+
+
+@pytest.fixture
+def update_golden(request):
+    """判断是否更新 golden master"""
+    return request.config.getoption("update_golden")
+
 # Use shared in-memory SQLite for tests (StaticPool keeps same DB across connections)
 _test_engine = create_engine(
     "sqlite://",

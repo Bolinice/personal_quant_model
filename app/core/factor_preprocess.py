@@ -2,6 +2,9 @@
 因子预处理模块
 实现完整的因子预处理pipeline: 缺失值处理 → 去极值 → 标准化 → 方向统一 → 中性化
 符合ADD文档6.3节规范 + 机构级增强: MICE插补/逆正态秩变换/自适应去极值/约束回归中性化
+
+全局工具:
+- sanitize_dataframe(): 替换所有 Inf/-Inf 为 NaN，防止静默数据损坏
 """
 
 from __future__ import annotations
@@ -11,6 +14,44 @@ import pandas as pd
 from scipy import stats
 
 from app.core.logging import logger
+
+
+# ==================== 全局数据清洗 ====================
+
+
+def sanitize_dataframe(df: pd.DataFrame, columns: list[str] | None = None) -> pd.DataFrame:
+    """替换所有 Inf/-Inf 为 NaN，防止静默数据损坏
+
+    量化系统中 Inf 常见来源:
+    - 除以零: 收益率计算 close/prev_close 当 prev_close=0
+    - 对数溢出: log(0) 或 log(负数)
+    - 浮点溢出: 极大值乘法
+
+    Inf 在 pandas 运算中会静默传播，导致后续计算全部失效而不报错。
+    本函数将 Inf 替换为 NaN，使后续 fill_missing / dropna 能正确处理。
+
+    Args:
+        df: 输入 DataFrame
+        columns: 仅处理指定列，None 则处理所有数值列
+
+    Returns:
+        清洗后的 DataFrame（原地修改并返回）
+    """
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    target_cols = numeric_cols if columns is None else numeric_cols.intersection(columns)
+
+    inf_count = 0
+    for col in target_cols:
+        mask = ~np.isfinite(df[col])
+        col_inf = mask.sum()
+        if col_inf > 0:
+            df.loc[mask, col] = np.nan
+            inf_count += col_inf
+
+    if inf_count > 0:
+        logger.warning("sanitize_dataframe: replaced %d Inf/-Inf values with NaN", inf_count)
+
+    return df
 
 
 class FactorPreprocessor:

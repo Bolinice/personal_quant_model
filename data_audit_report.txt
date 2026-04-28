@@ -31,7 +31,7 @@ risk_flag_daily                           0    EMPTY
 
 日期格式:
   stock_daily.trade_date: date
-  stock_daily_basic.trade_date: character varying
+  stock_daily_basic.trade_date: date
   stock_basic.list_date: date
   stock_financial.end_date: date
   stock_financial.ann_date: date

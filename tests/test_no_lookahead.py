@@ -192,22 +192,11 @@ class TestPITGuardSQLAlchemy:
         """ann_date 为 String 类型时，应使用字符串比较"""
         from unittest.mock import MagicMock
 
-        model_class = MagicMock()
-        model_class.__name__ = "StockFinancial"
-        model_class.__table__ = MagicMock()
-        ann_date_col = MagicMock()
-        model_class.ann_date = ann_date_col
-
-        # 模拟 String 类型的 ann_date
-        col_mock = MagicMock()
-        col_mock.name = "ann_date"
-        from sqlalchemy import String as SAString
-        col_mock.type = SAString()
-        model_class.__table__.columns = [col_mock]
+        from app.models.market.stock_financial import StockFinancial
 
         query = MagicMock()
         session = MagicMock()
-        result = pit_filter_query(query, model_class, "20250115", session)
+        result = pit_filter_query(query, StockFinancial, "20250115", session)
 
         # 验证 query.filter 被调用（添加了 ann_date <= "20250115" 条件）
         query.filter.assert_called_once()

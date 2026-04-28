@@ -351,7 +351,7 @@ class MultiFactorScorer:
             return g.loc[valid, "value"].corr(g.loc[valid, "forward_return"])
 
         ic_df = (
-            merged.groupby(["factor_code", "trade_date"]).apply(_calc_ic, include_groups=False).reset_index(name="ic")
+            merged.groupby(["factor_code", "trade_date"]).apply(_calc_ic).reset_index(name="ic")
         )
         ic_df = ic_df.dropna(subset=["ic"])
 

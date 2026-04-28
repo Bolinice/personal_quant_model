@@ -1,6 +1,6 @@
 """每日基本面数据模型（PE/PB/市值/换手率等）"""
 
-from sqlalchemy import Column, Float, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Column, Date, Float, Index, Integer, String, UniqueConstraint
 
 from app.db.base import Base
 
@@ -10,7 +10,7 @@ class StockDailyBasic(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     ts_code = Column(String(20), nullable=False, comment="股票代码")
-    trade_date = Column(String(8), nullable=False, comment="交易日期")
+    trade_date = Column(Date, nullable=False, index=True, comment="交易日期")
     close = Column(Float, nullable=True, comment="当日收盘价")
     turnover_rate = Column(Float, nullable=True, comment="换手率(%)")
     turnover_rate_f = Column(Float, nullable=True, comment="换手率(基于自由流通股,%)")

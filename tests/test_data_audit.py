@@ -69,6 +69,7 @@ class TestUniverseDataAudit:
         coverage = non_null / total if total > 0 else 0
         assert coverage >= 0.95, f"list_status覆盖率{coverage:.1%}, 低于95%"
 
+    @pytest.mark.integration
     def test_stock_basic_list_date_coverage(self, db_conn):
         """list_date字段覆盖率 — 上市天数过滤依赖此字段"""
         result = db_conn.execute(text('SELECT COUNT(*) FROM stock_basic WHERE list_date IS NOT NULL'))
@@ -85,6 +86,7 @@ class TestUniverseDataAudit:
         assert 'L' in statuses, "list_status缺少'L'(上市)状态"
         # D和P是可选的, 但L必须存在
 
+    @pytest.mark.integration
     def test_stock_basic_industry_coverage(self, db_conn):
         """industry字段覆盖率 — 行业约束和行业中性化依赖此字段"""
         result = db_conn.execute(text("SELECT COUNT(*) FROM stock_basic WHERE industry IS NOT NULL AND industry != ''"))
@@ -144,6 +146,7 @@ class TestUniverseDataAudit:
         days_since = (date.today() - latest).days
         assert days_since <= 30, f"stock_daily最新数据距今{days_since}天, 超过30天 — 数据可能过期"
 
+    @pytest.mark.integration
     def test_stock_daily_basic_date_format_consistency(self, db_conn):
         """stock_daily_basic日期格式应与stock_daily一致"""
         result = db_conn.execute(text('SELECT trade_date FROM stock_daily LIMIT 1'))
@@ -224,6 +227,7 @@ class TestAlphaFactorDataAudit:
         if count == 0:
             pytest.skip("stock_northbound为空 — north_net_inflow因子无法计算, FlowConfirm模块将退化")
 
+    @pytest.mark.integration
     def test_stock_northbound_coverage_per_stock(self, db_conn):
         """北向资金每只股票的覆盖天数"""
         result = db_conn.execute(text('''
@@ -294,6 +298,7 @@ class TestDateFormatConsistency:
         dtype = result.scalar()
         assert dtype is not None, "stock_daily_basic.trade_date列不存在"
 
+    @pytest.mark.integration
     def test_date_format_cross_table_join(self, db_conn):
         """跨表JOIN时日期格式是否兼容"""
         # stock_daily.trade_date is date, stock_daily_basic.trade_date is integer
@@ -470,6 +475,7 @@ class TestDataQualityAudit:
         neg_count = result.scalar()
         assert neg_count == 0, f"stock_daily_basic有{neg_count}条total_mv<=0的记录"
 
+    @pytest.mark.integration
     def test_stock_daily_vol_amount_consistency(self, db_conn):
         """vol=0时amount也应为0 (停牌)"""
         result = db_conn.execute(text('''

@@ -32,6 +32,14 @@ def safe_float(val):
     try:
         if pd.isna(val):
             return None
+
+
+def _str_to_date(s: str) -> date:
+    """将 YYYYMMDD 或 YYYY-MM-DD 字符串转换为 date 对象"""
+    if isinstance(s, date):
+        return s
+    s = str(s).replace("-", "")
+    return datetime.strptime(s, "%Y%m%d").date()
         v = float(val)
         # np.inf/-inf出现在除零场景(如PE=价格/零eps)，PostgreSQL不接受Inf
         return v if np.isfinite(v) else None
@@ -514,7 +522,7 @@ class ConcurrentDataSyncer:
                     new_records.append(
                         StockDailyBasic(
                             ts_code=ts_code,
-                            trade_date=td,
+                            trade_date=_str_to_date(td),
                             close=safe_float(row.get("close")),
                             turnover_rate=safe_float(row.get("turnover_rate")),
                             turnover_rate_f=safe_float(row.get("turnover_rate_f")),

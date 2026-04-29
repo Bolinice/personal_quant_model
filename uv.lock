@@ -1134,17 +1134,18 @@ wheels = [
 
 [[package]]
 name = "httpx"
-version = "0.28.1"
+version = "0.27.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
     { name = "certifi" },
     { name = "httpcore" },
     { name = "idna" },
+    { name = "sniffio" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b1/df/48c586a5fe32a0f01324ee087459e112ebb7224f646c0b5023f5e79e9956/httpx-0.28.1.tar.gz", hash = "sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc", size = 141406, upload-time = "2024-12-06T15:37:23.222Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/78/82/08f8c936781f67d9e6b9eeb8a0c8b4e406136ea4c3d1f89a5db71d42e0e6/httpx-0.27.2.tar.gz", hash = "sha256:f7c2be1d2f3c3c3160d441802406b206c2b76f5947b11115e6df10c6c65e66c2", size = 144189, upload-time = "2024-08-27T12:54:01.334Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl", hash = "sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad", size = 73517, upload-time = "2024-12-06T15:37:21.509Z" },
+    { url = "https://files.pythonhosted.org/packages/56/95/9377bcb415797e44274b51d46e3249eba641711cf3348050f76ee7b15ffc/httpx-0.27.2-py3-none-any.whl", hash = "sha256:7bb2708e112d8fdd7829cd4243970f0c223274051cb35ee80c03301ee29a3df0", size = 76395, upload-time = "2024-08-27T12:53:59.653Z" },
 ]
 
 [[package]]
@@ -2514,6 +2515,7 @@ dependencies = [
     { name = "scipy" },
     { name = "seaborn" },
     { name = "sqlalchemy" },
+    { name = "structlog" },
     { name = "tushare" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "werkzeug" },
@@ -2553,7 +2555,7 @@ requires-dist = [
     { name = "fastapi-users-db-sqlalchemy", specifier = "==6.0.0" },
     { name = "hmmlearn", specifier = ">=0.3.0" },
     { name = "hmmlearn", marker = "extra == 'ml'", specifier = ">=0.3.0" },
-    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "httpx", specifier = ">=0.27.0,<0.28" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.100.0" },
     { name = "jinja2", specifier = "==3.1.2" },
     { name = "lightgbm", specifier = ">=4.0.0" },
@@ -2590,6 +2592,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.11.4" },
     { name = "seaborn", specifier = "==0.12.2" },
     { name = "sqlalchemy", specifier = "==2.0.23" },
+    { name = "structlog", specifier = ">=24.1.0" },
     { name = "tushare", specifier = ">=1.4.0" },
     { name = "uvicorn", extras = ["standard"], specifier = "==0.24.0" },
     { name = "werkzeug", specifier = "==3.0.1" },
@@ -2950,6 +2953,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/06/68/559bed5484e746f1ab2ebbe22312f2c25ec62e4b534916d41a8c21147bf8/starlette-0.27.0.tar.gz", hash = "sha256:6a6b0d042acb8d469a01eba54e9cda6cbd24ac602c4cd016723117d6a7e73b75", size = 51394, upload-time = "2023-05-16T10:59:56.286Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/58/f8/e2cca22387965584a409795913b774235752be4176d276714e15e1a58884/starlette-0.27.0-py3-none-any.whl", hash = "sha256:918416370e846586541235ccd38a474c08b80443ed31c578a418e2209b3eef91", size = 66978, upload-time = "2023-05-16T10:59:53.927Z" },
+]
+
+[[package]]
+name = "structlog"
+version = "25.5.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ef/52/9ba0f43b686e7f3ddfeaa78ac3af750292662284b3661e91ad5494f21dbc/structlog-25.5.0.tar.gz", hash = "sha256:098522a3bebed9153d4570c6d0288abf80a031dfdb2048d59a49e9dc2190fc98", size = 1460830, upload-time = "2025-10-27T08:28:23.028Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a8/45/a132b9074aa18e799b891b91ad72133c98d8042c70f6240e4c5f9dabee2f/structlog-25.5.0-py3-none-any.whl", hash = "sha256:a8453e9b9e636ec59bd9e79bbd4a72f025981b3ba0f5837aebf48f02f37a7f9f", size = 72510, upload-time = "2025-10-27T08:28:21.535Z" },
 ]
 
 [[package]]

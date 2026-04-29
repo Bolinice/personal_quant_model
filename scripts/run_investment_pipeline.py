@@ -8,6 +8,7 @@
   → Regime检测 → 信号融合 → 组合优化 → 择时信号 → 输出投资决策
 """
 import sys
+from scripts.script_utils import build_in_clause
 sys.path.insert(0, '.')
 
 import argparse
@@ -88,14 +89,14 @@ def step2_load_data(engine, universe_key: str = 'hs300'):
             print("  错误: 股票池为空，请先同步数据")
             return None
 
-        codes_str = ','.join(f"'{c}'" for c in codes)
+        in_clause, in_params = build_in_clause(codes)
 
         # 股票日线
         stock_daily = pd.read_sql(text(
             f"SELECT ts_code, trade_date, open, high, low, close, pre_close, "
             f"pct_chg, vol, amount FROM stock_daily "
-            f"WHERE ts_code IN ({codes_str}) ORDER BY ts_code, trade_date"
-        ), conn)
+            f"WHERE ts_code IN ({in_clause}) ORDER BY ts_code, trade_date"
+        ), conn, params=in_params)
         stock_daily['trade_date'] = pd.to_datetime(stock_daily['trade_date'])
         print(f"  股票日线: {len(stock_daily)} 条, {stock_daily['ts_code'].nunique()} 只")
 
@@ -109,7 +110,7 @@ def step2_load_data(engine, universe_key: str = 'hs300'):
                     f"eps, bvps, pe_ttm, pb, ps_ttm, dividend_yield, "
                     f"revenue, net_profit, operating_cash_flow, total_assets, "
                     f"total_equity, current_assets, current_liabilities "
-                    f"FROM stock_financial WHERE ts_code IN ({codes_str}) ORDER BY ts_code, end_date"
+                    f"FROM stock_financial WHERE ts_code IN ({in_clause}) ORDER BY ts_code, end_date"
                 ), conn2)
             if not financial.empty:
                 financial['end_date'] = pd.to_datetime(financial['end_date'])
@@ -129,7 +130,7 @@ def step2_load_data(engine, universe_key: str = 'hs300'):
                 daily_basic = pd.read_sql(text(
                     f"SELECT ts_code, trade_date, close, turnover_rate, pe, pe_ttm, pb, "
                     f"ps_ttm, dv_ratio, total_mv, circ_mv "
-                    f"FROM stock_daily_basic WHERE ts_code IN ({codes_str}) "
+                    f"FROM stock_daily_basic WHERE ts_code IN ({in_clause}) "
                     f"ORDER BY ts_code, trade_date"
                 ), conn3)
             if not daily_basic.empty:
@@ -146,15 +147,15 @@ def step2_load_data(engine, universe_key: str = 'hs300'):
         index_daily = pd.read_sql(text(
             f"SELECT index_code, trade_date, close, pct_chg "
             f"FROM index_daily WHERE index_code = '{benchmark}' ORDER BY trade_date"
-        ), conn)
+        ), conn, params=in_params)
         index_daily['trade_date'] = pd.to_datetime(index_daily['trade_date'])
         print(f"  基准指数({benchmark}): {len(index_daily)} 条")
 
         # 股票基础信息 (供A股特有因子使用)
         stock_basic = pd.read_sql(text(
             f"SELECT ts_code, name, industry, list_date, list_status "
-            f"FROM stock_basic WHERE ts_code IN ({codes_str})"
-        ), conn)
+            f"FROM stock_basic WHERE ts_code IN ({in_clause})"
+        ), conn, params=in_params)
         print(f"  股票基础: {len(stock_basic)} 条")
 
         # 行业分类 (独立连接)
@@ -162,7 +163,7 @@ def step2_load_data(engine, universe_key: str = 'hs300'):
         try:
             with engine.connect() as conn4:
                 industry_df = pd.read_sql(text(
-                    f"SELECT ts_code, industry FROM stock_industry WHERE ts_code IN ({codes_str})"
+                    f"SELECT ts_code, industry FROM stock_industry WHERE ts_code IN ({in_clause})"
                 ), conn4)
             print(f"  行业分类: {len(industry_df)} 条")
         except Exception:
@@ -174,7 +175,7 @@ def step2_load_data(engine, universe_key: str = 'hs300'):
             with engine.connect() as conn5:
                 northbound = pd.read_sql(text(
                     f"SELECT ts_code, trade_date, north_net_buy, north_buy, north_sell "
-                    f"FROM stock_northbound WHERE ts_code IN ({codes_str}) "
+                    f"FROM stock_northbound WHERE ts_code IN ({in_clause}) "
                     f"ORDER BY ts_code, trade_date"
                 ), conn5)
             if not northbound.empty:
@@ -192,7 +193,7 @@ def step2_load_data(engine, universe_key: str = 'hs300'):
             with engine.connect() as conn6:
                 money_flow = pd.read_sql(text(
                     f"SELECT ts_code, trade_date, smart_net_inflow, smart_net_pct "
-                    f"FROM stock_money_flow WHERE ts_code IN ({codes_str}) "
+                    f"FROM stock_money_flow WHERE ts_code IN ({in_clause}) "
                     f"ORDER BY ts_code, trade_date"
                 ), conn6)
             if not money_flow.empty:
@@ -207,7 +208,7 @@ def step2_load_data(engine, universe_key: str = 'hs300'):
             with engine.connect() as conn7:
                 margin = pd.read_sql(text(
                     f"SELECT ts_code, trade_date, margin_buy, margin_balance "
-                    f"FROM stock_margin WHERE ts_code IN ({codes_str}) "
+                    f"FROM stock_margin WHERE ts_code IN ({in_clause}) "
                     f"ORDER BY ts_code, trade_date"
                 ), conn7)
             if not margin.empty:
@@ -222,7 +223,7 @@ def step2_load_data(engine, universe_key: str = 'hs300'):
             with engine.connect() as conn8:
                 stock_status = pd.read_sql(text(
                     f"SELECT ts_code, trade_date, is_limit_up, is_limit_down "
-                    f"FROM stock_status_daily WHERE ts_code IN ({codes_str}) "
+                    f"FROM stock_status_daily WHERE ts_code IN ({in_clause}) "
                     f"ORDER BY ts_code, trade_date"
                 ), conn8)
             if not stock_status.empty:

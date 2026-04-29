@@ -10,6 +10,7 @@ vs run_strategy.py 的关键升级:
 5. 过拟合检测(DSR)与模型自优化闭环
 """
 import sys
+from scripts.script_utils import build_in_clause
 sys.path.insert(0, '.')
 
 import argparse
@@ -100,13 +101,13 @@ def load_data(engine, universe_key):
 
     with engine.connect() as conn:
         universe_codes = load_universe(conn, universe_key)
-        codes_str = ','.join(f"'{c}'" for c in universe_codes)
+        in_clause, in_params = build_in_clause(universe_codes)
 
         stock_daily = pd.read_sql(text(
             f"SELECT ts_code, trade_date, open, high, low, close, pre_close, "
             f"pct_chg, vol, amount FROM stock_daily "
-            f"WHERE ts_code IN ({codes_str}) ORDER BY ts_code, trade_date"
-        ), conn)
+            f"WHERE ts_code IN ({in_clause}) ORDER BY ts_code, trade_date"
+        ), conn, params=in_params)
         stock_daily['trade_date'] = pd.to_datetime(stock_daily['trade_date'])
         print(f"  股票日线: {len(stock_daily)} 条, {stock_daily['ts_code'].nunique()} 只")
 
@@ -114,8 +115,8 @@ def load_data(engine, universe_key):
             f"SELECT ts_code, end_date, revenue, net_profit, roe, roa, "
             f"gross_profit_margin, net_profit_ratio, asset_liability_ratio, "
             f"operating_cash_flow, total_assets "
-            f"FROM stock_financial WHERE ts_code IN ({codes_str}) ORDER BY ts_code, end_date"
-        ), conn)
+            f"FROM stock_financial WHERE ts_code IN ({in_clause}) ORDER BY ts_code, end_date"
+        ), conn, params=in_params)
         financial['end_date'] = pd.to_datetime(financial['end_date'])
         print(f"  财务数据: {len(financial)} 条")
 

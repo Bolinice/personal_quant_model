@@ -3,6 +3,7 @@
 用法: python scripts/generate_daily_strategy.py
 """
 import sys
+from scripts.script_utils import build_in_clause
 sys.path.insert(0, '.')
 
 import numpy as np
@@ -260,10 +261,10 @@ def save_performance(conn, model_id, trade_date, factor_df, stock_daily, index_d
 
     daily_return = None
     if selected_codes:
-        codes_str = ','.join(f"'{c}'" for c in selected_codes)
+        in_clause, in_params = build_in_clause(selected_codes)
         ret_rows = conn.execute(text(
             f"SELECT ts_code, pct_chg FROM stock_daily "
-            f"WHERE trade_date = :td AND ts_code IN ({codes_str})"
+            f"WHERE trade_date = :td AND ts_code IN ({in_clause})"
         ), {'td': str(trade_date)}).fetchall()
         if ret_rows:
             daily_return = np.mean([float(r[1]) for r in ret_rows if r[1] is not None]) / 100
@@ -274,7 +275,7 @@ def save_performance(conn, model_id, trade_date, factor_df, stock_daily, index_d
         start_date = trade_date - timedelta(days=30)
         cum_rows = conn.execute(text(
             "SELECT trade_date, pct_chg FROM stock_daily "
-            f"WHERE trade_date >= :sd AND trade_date <= :td AND ts_code IN ({codes_str}) "
+            f"WHERE trade_date >= :sd AND trade_date <= :td AND ts_code IN ({in_clause}) "
             "ORDER BY trade_date"
         ), {'sd': str(start_date), 'td': str(trade_date)}).fetchall()
         if cum_rows:
@@ -294,7 +295,7 @@ def save_performance(conn, model_id, trade_date, factor_df, stock_daily, index_d
         start_date = trade_date - timedelta(days=30)
         ret_rows = conn.execute(text(
             "SELECT trade_date, AVG(pct_chg) as avg_ret FROM stock_daily "
-            f"WHERE trade_date >= :sd AND trade_date <= :td AND ts_code IN ({codes_str}) "
+            f"WHERE trade_date >= :sd AND trade_date <= :td AND ts_code IN ({in_clause}) "
             "GROUP BY trade_date ORDER BY trade_date"
         ), {'sd': str(start_date), 'td': str(trade_date)}).fetchall()
         if len(ret_rows) >= 10:

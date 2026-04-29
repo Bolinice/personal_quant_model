@@ -24,6 +24,7 @@ V3优化项:
   - 行业偏离度约束: 相对基准行业偏离≤5%
 """
 import sys
+from scripts.script_utils import build_in_clause
 sys.path.insert(0, '.')
 
 import argparse
@@ -152,10 +153,10 @@ def load_universe(conn, universe_key):
 
 def load_industry_map(conn, universe_codes):
     """加载行业分类映射"""
-    codes_str = ','.join(f"'{c}'" for c in universe_codes)
+    in_clause, in_params = build_in_clause(universe_codes)
     rows = conn.execute(text(
         f"SELECT ts_code, industry_name FROM stock_industry "
-        f"WHERE ts_code IN ({codes_str}) AND standard = 'sw'"
+        f"WHERE ts_code IN ({in_clause}) AND standard = 'sw'"
     )).fetchall()
     industry_map = {r[0]: r[1] for r in rows}
     print(f"  行业分类: {len(industry_map)} 只股票, {len(set(industry_map.values()))} 个行业")
@@ -179,9 +180,9 @@ def load_benchmark_industry_weights(conn, index_code):
 
 def load_stock_names(conn, universe_codes):
     """加载股票名称映射"""
-    codes_str = ','.join(f"'{c}'" for c in universe_codes)
+    in_clause, in_params = build_in_clause(universe_codes)
     rows = conn.execute(text(
-        f"SELECT ts_code, name FROM stock_basic WHERE ts_code IN ({codes_str})"
+        f"SELECT ts_code, name FROM stock_basic WHERE ts_code IN ({in_clause})"
     )).fetchall()
     return {r[0]: r[1] for r in rows}
 
@@ -202,14 +203,14 @@ def load_data(engine, universe_key):
         if 'index_code' in cfg:
             benchmark_industry_weights = load_benchmark_industry_weights(conn, cfg['index_code'])
 
-        codes_str = ','.join(f"'{c}'" for c in universe_codes)
+        in_clause, in_params = build_in_clause(universe_codes)
 
         # 股票日线
         stock_daily = pd.read_sql(text(
             f"SELECT ts_code, trade_date, open, high, low, close, pre_close, "
             f"pct_chg, vol, amount FROM stock_daily "
-            f"WHERE ts_code IN ({codes_str}) ORDER BY ts_code, trade_date"
-        ), conn)
+            f"WHERE ts_code IN ({in_clause}) ORDER BY ts_code, trade_date"
+        ), conn, params=in_params)
         stock_daily['trade_date'] = pd.to_datetime(stock_daily['trade_date'])
         print(f"  股票日线: {len(stock_daily)} 条, {stock_daily['ts_code'].nunique()} 只")
 
@@ -220,8 +221,8 @@ def load_data(engine, universe_key):
             f"operating_cash_flow, total_assets, total_equity, "
             f"current_assets, current_liabilities, "
             f"total_market_cap, pe_ttm, pb, ps_ttm, dividend_yield "
-            f"FROM stock_financial WHERE ts_code IN ({codes_str}) ORDER BY ts_code, end_date"
-        ), conn)
+            f"FROM stock_financial WHERE ts_code IN ({in_clause}) ORDER BY ts_code, end_date"
+        ), conn, params=in_params)
         financial['end_date'] = pd.to_datetime(financial['end_date'])
         print(f"  财务数据: {len(financial)} 条")
 
@@ -232,8 +233,8 @@ def load_data(engine, universe_key):
                 f"SELECT ts_code, trade_date, consensus_eps, consensus_target_price, "
                 f"num_analyst, consensus_rating, consensus_rating_mean "
                 f"FROM stock_analyst_consensus "
-                f"WHERE ts_code IN ({codes_str}) ORDER BY ts_code, trade_date"
-            ), conn)
+                f"WHERE ts_code IN ({in_clause}) ORDER BY ts_code, trade_date"
+            ), conn, params=in_params)
             if not analyst_consensus.empty:
                 analyst_consensus['trade_date'] = pd.to_datetime(analyst_consensus['trade_date'])
             print(f"  分析师一致预期: {len(analyst_consensus)} 条")

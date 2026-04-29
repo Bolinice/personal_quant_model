@@ -190,12 +190,18 @@ class RedisCacheService:
             self._redis.delete(self._prefix + key)
 
     def invalidate_by_prefix(self, prefix: str) -> int:
-        """按前缀批量失效"""
+        """按前缀批量失效 — 使用SCAN替代KEYS避免阻塞Redis"""
         if not self._available:
             return 0
         try:
             pattern = self._prefix + prefix + "*"
-            keys = self._redis.keys(pattern)
+            keys = []
+            cursor = 0
+            while True:
+                cursor, batch = self._redis.scan(cursor, match=pattern, count=100)
+                keys.extend(batch)
+                if cursor == 0:
+                    break
             if keys:
                 return self._redis.delete(*keys)
         except Exception:

@@ -25,6 +25,9 @@ if TYPE_CHECKING:
 class AuthService:
     """认证服务"""
 
+    # Refresh Token 黑名单（生产环境应迁移到 Redis）
+    _revoked_tokens: set[str] = set()
+
     @staticmethod
     def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
         """创建访问令牌"""
@@ -66,12 +69,16 @@ class AuthService:
     def refresh_access_token(refresh_token: str) -> tuple[str, str] | None:
         """
         使用refresh token刷新access token
-        同时签发新的refresh token（轮转策略），旧token自然过期失效
-        注意：无状态JWT无法主动吊销旧refresh token，高安全场景需配合token黑名单
+        同时签发新的refresh token（轮转策略），旧token加入黑名单
 
         Returns:
             (new_access_token, new_refresh_token) 或 None
         """
+        # 检查黑名单
+        token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
+        if token_hash in AuthService._revoked_tokens:
+            return None
+
         payload = AuthService.verify_token(refresh_token, "refresh")
         if not payload:
             return None
@@ -80,11 +87,10 @@ class AuthService:
         if not user_id:
             return None
 
+        # 将旧refresh token加入黑名单
+        AuthService._revoked_tokens.add(token_hash)
+
         new_data = {"sub": user_id, "role": payload.get("role", "user")}
-        # 双token同时刷新：access短效+refresh长效
-        # 轮转策略(refresh token rotation) — 每次刷新都签发新refresh token，旧token在exp前仍可用
-        # 无状态JWT无法主动吊销旧token，若多个请求并发刷新，旧token可能短暂可用（race condition）
-        # 高安全场景需引入token黑名单或在DB中记录refresh token版本号
         new_access = AuthService.create_access_token(new_data)
         new_refresh = AuthService.create_refresh_token(new_data)
         return new_access, new_refresh

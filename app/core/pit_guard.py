@@ -11,10 +11,10 @@ PIT Guard - 点在时数据守卫
 
 import logging
 import warnings
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 import pandas as pd
-from sqlalchemy import String, and_
+from sqlalchemy import String
 from sqlalchemy.orm import Query, Session
 
 logger = logging.getLogger(__name__)
@@ -83,7 +83,6 @@ def pit_filter_df(
     return filtered.drop_duplicates(subset=[code_col, dedup_col], keep="first")
 
 
-
 def pit_filter_query(
     query,
     model_class,
@@ -130,15 +129,14 @@ def pit_filter_query(
     if col_type and issubclass(col_type, String):
         # ann_date 存储为字符串 "YYYYMMDD"
         return query.filter(ann_col <= trade_date_str)
-    else:
-        # ann_date 存储为 Date 类型
-        if isinstance(trade_date, str):
-            trade_date = (
-                datetime.strptime(trade_date, "%Y%m%d").date()
-                if len(trade_date) == 8
-                else datetime.strptime(trade_date, "%Y-%m-%d").date()
-            )
-        return query.filter(ann_col <= trade_date)
+    # ann_date 存储为 Date 类型
+    if isinstance(trade_date, str):
+        trade_date = (
+            datetime.strptime(trade_date, "%Y%m%d").replace(tzinfo=timezone.utc).date()
+            if len(trade_date) == 8
+            else datetime.strptime(trade_date, "%Y-%m-%d").replace(tzinfo=timezone.utc).date()
+        )
+    return query.filter(ann_col <= trade_date)
 
 
 class PITGuardMixin:

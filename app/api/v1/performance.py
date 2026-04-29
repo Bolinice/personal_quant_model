@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 
 from app.core.response import success
 from app.db.base import get_db
@@ -14,6 +15,9 @@ from app.services.performance_service import (
     get_performance_analysis,
     get_style_exposure,
 )
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 router = APIRouter()
 

@@ -25,7 +25,7 @@ V2核心: 5信号4档仓位 + 回撤保护规则
 """
 
 from dataclasses import dataclass
-from enum import Enum, StrEnum
+from enum import StrEnum
 from typing import Any
 
 import numpy as np
@@ -189,7 +189,9 @@ class RiskBudgetEngine:
         result = {
             "total_vol": round(total_vol, 4),
             "portfolio_var": round(portfolio_var, 6),
-            "factor_exposure": {k: round(float(v), 4) for k, v in zip(factor_exposures.columns, portfolio_exposure)},
+            "factor_exposure": {
+                k: round(float(v), 4) for k, v in zip(factor_exposures.columns, portfolio_exposure, strict=False)
+            },
             "factor_risk_pct": {k: round(v, 4) for k, v in factor_contributions.items()},
             "idiosyncratic_risk_pct": round(idio_risk_pct, 4),
             "factor_risk_total_pct": round(1 - idio_risk_pct, 4),

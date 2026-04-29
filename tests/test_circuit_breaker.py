@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from app.data_sources.base import CircuitBreaker, CircuitBreakerOpen
+from app.data_sources.base import CircuitBreaker, CircuitBreakerOpenError
 
 
 class TestCircuitBreaker:
@@ -37,7 +37,7 @@ class TestCircuitBreaker:
             cb.call(lambda: (_ for _ in ()).throw(ValueError("fail")))
 
         assert cb.state == "OPEN"
-        with pytest.raises(CircuitBreakerOpen):
+        with pytest.raises(CircuitBreakerOpenError):
             cb.call(lambda: 42)
 
     def test_half_open_after_recovery_timeout(self):

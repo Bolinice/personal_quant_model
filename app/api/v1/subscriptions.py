@@ -1,6 +1,6 @@
 """订阅管理 API。"""
 
-from datetime import date, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -77,7 +77,7 @@ def check_access(req: CheckAccessRequest, db: Session = Depends(get_db)):
     if not product:
         return success({"has_access": False, "resource_code": req.resource_code})
 
-    today = date.today()
+    today = datetime.now(tz=timezone.utc).date()
     subscription = (
         db.query(Subscription)
         .filter(
@@ -104,7 +104,7 @@ def subscribe(req: SubscribeRequest, db: Session = Depends(get_db)):
     if not products:
         raise HTTPException(status_code=404, detail="没有可订阅的产品")
 
-    today = date.today()
+    today = datetime.now(tz=timezone.utc).date()
     end_date = today + timedelta(days=plan.duration_days or 30)
 
     created = []

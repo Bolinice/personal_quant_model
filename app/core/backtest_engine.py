@@ -9,7 +9,7 @@ A股回测引擎
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
-from enum import Enum, StrEnum
+from enum import StrEnum
 from typing import Any, Protocol
 
 import numpy as np
@@ -406,7 +406,7 @@ class ABShareBacktestEngine:
             stock_data: 当日行情数据
         """
         # 可交易性检查
-        tradable, reason = self.is_tradable(ts_code, trade_date, "buy", stock_data)
+        tradable, _reason = self.is_tradable(ts_code, trade_date, "buy", stock_data)
         if not tradable:
             return None
 
@@ -477,7 +477,7 @@ class ABShareBacktestEngine:
         stock_data: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         """执行卖出 (含T+1限制: 当日买入的部分不可卖出，原有持仓可卖出)"""
-        tradable, reason = self.is_tradable(ts_code, trade_date, "sell", stock_data)
+        tradable, _reason = self.is_tradable(ts_code, trade_date, "sell", stock_data)
         if not tradable:
             return None
 

@@ -179,14 +179,14 @@ class LabelBuilder:
             return stock_fwd
 
         # 截面回归: fwd_return = α + Σ β_k * style_k + ε
-        merged = pd.merge(stock_fwd, style_exposures[[code_col] + available_cols], on=code_col, how="left")
+        merged = pd.merge(stock_fwd, style_exposures[[code_col, *available_cols]], on=code_col, how="left")
 
         # 对每个交易日做截面回归取残差
         # 残差即为剥离风格后的纯alpha, 截面回归而非时间序列: 每天独立回归避免未来函数
         result_parts = []
         for _dt, group in merged.groupby(date_col):
             group = group.copy()  # 避免SettingWithCopyWarning
-            valid = group.dropna(subset=["fwd_return"] + available_cols)
+            valid = group.dropna(subset=["fwd_return", *available_cols])
             if len(valid) < len(available_cols) + 10:
                 # 样本不足时退回原始收益, 避免回归系数不稳定
                 group["style_adjusted_return"] = group["fwd_return"]
@@ -220,7 +220,7 @@ class LabelBuilder:
         self,
         price_df: pd.DataFrame,
         benchmark_df: pd.DataFrame = None,
-        horizons: list[int] = None,
+        horizons: list[int] | None = None,
         code_col: str = "ts_code",
         date_col: str = "trade_date",
         price_col: str = "close",
@@ -265,7 +265,7 @@ class LabelBuilder:
 
         # 合并各周期
         merged = None
-        for h, df in results.items():
+        for df in results.values():
             merged = df if merged is None else pd.merge(merged, df, on=[code_col, date_col], how="outer")
 
         return merged

@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, ".")
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 
@@ -141,14 +141,14 @@ class DataSyncService:
                 # 处理日期格式
                 trade_date = row["trade_date"]
                 if isinstance(trade_date, str):
-                    trade_date = datetime.strptime(trade_date, "%Y-%m-%d").date()
+                    trade_date = datetime.strptime(trade_date, "%Y-%m-%d").replace(tzinfo=timezone.utc).date()
                 elif hasattr(trade_date, "date"):
                     trade_date = trade_date.date()
 
                 pretrade_date = row.get("pretrade_date")
                 if pretrade_date and not pd.isna(pretrade_date):
                     if isinstance(pretrade_date, str):
-                        pretrade_date = datetime.strptime(pretrade_date, "%Y-%m-%d").date()
+                        pretrade_date = datetime.strptime(pretrade_date, "%Y-%m-%d").replace(tzinfo=timezone.utc).date()
                     elif hasattr(pretrade_date, "date"):
                         pretrade_date = pretrade_date.date()
                 else:
@@ -288,7 +288,7 @@ class DataSyncService:
             for _, row in df.iterrows():
                 trade_date = row["trade_date"]
                 if isinstance(trade_date, str):
-                    trade_date = datetime.strptime(trade_date, "%Y-%m-%d").date()
+                    trade_date = datetime.strptime(trade_date, "%Y-%m-%d").replace(tzinfo=timezone.utc).date()
                 elif hasattr(trade_date, "date"):
                     trade_date = trade_date.date()
                 dates_in_df.append(trade_date)
@@ -313,7 +313,7 @@ class DataSyncService:
                 # 处理日期格式
                 trade_date = row["trade_date"]
                 if isinstance(trade_date, str):
-                    trade_date = datetime.strptime(trade_date, "%Y-%m-%d").date()
+                    trade_date = datetime.strptime(trade_date, "%Y-%m-%d").replace(tzinfo=timezone.utc).date()
                 elif hasattr(trade_date, "date"):
                     trade_date = trade_date.date()
 
@@ -413,7 +413,7 @@ class DataSyncService:
                 # 处理日期格式
                 trade_date = row["trade_date"]
                 if isinstance(trade_date, str):
-                    trade_date = datetime.strptime(trade_date, "%Y-%m-%d").date()
+                    trade_date = datetime.strptime(trade_date, "%Y-%m-%d").replace(tzinfo=timezone.utc).date()
                 elif hasattr(trade_date, "date"):
                     trade_date = trade_date.date()
 

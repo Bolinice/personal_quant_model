@@ -5,17 +5,19 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import time
 from collections import OrderedDict
-from collections.abc import Callable
-from datetime import date
 from functools import wraps
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.core.logging import logger
-import contextlib
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from datetime import date
 
 
 class CacheService:

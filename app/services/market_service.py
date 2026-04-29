@@ -1,20 +1,23 @@
 from __future__ import annotations
 
-from datetime import date, datetime
-
-from sqlalchemy.orm import Session
+from datetime import date, datetime, timezone
+from typing import TYPE_CHECKING
 
 from app.core.pit_guard import pit_filter_query
 from app.db.base import with_db
 from app.models.market import IndexDaily, StockBasic, StockDaily, StockFinancial, StockIndustry, TradingCalendar
-from app.schemas.market import IndexDailyCreate, StockDailyCreate
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
+    from app.schemas.market import IndexDailyCreate, StockDailyCreate
 
 
 def _parse_date(date_str: str) -> date:
     """Parse date string in various formats to date"""
     for fmt in ("%Y%m%d", "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"):
         try:
-            return datetime.strptime(date_str, fmt).date()
+            return datetime.strptime(date_str, fmt).replace(tzinfo=timezone.utc).date()
         except ValueError:
             continue
     raise ValueError(f"Cannot parse date: {date_str}")

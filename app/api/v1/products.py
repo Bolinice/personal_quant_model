@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 
 from app.core.response import success
 from app.db.base import get_db
@@ -18,6 +19,9 @@ from app.services.products_service import (
     update_product,
 )
 
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
 router = APIRouter()
 
 
@@ -27,15 +31,11 @@ router = APIRouter()
 @router.get("/pricing-overview")
 def pricing_overview(db: Session = Depends(get_db)):
     """定价总览 - 聚合返回所有定价数据"""
-    plans = (
-        db.query(SubscriptionPlan).filter(SubscriptionPlan.is_active).order_by(SubscriptionPlan.plan_tier).all()
-    )
+    plans = db.query(SubscriptionPlan).filter(SubscriptionPlan.is_active).order_by(SubscriptionPlan.plan_tier).all()
 
     matrices = db.query(PricingMatrix).filter(PricingMatrix.is_active).all()
 
-    packages = (
-        db.query(UpgradePackage).filter(UpgradePackage.is_active).order_by(UpgradePackage.sort_order).all()
-    )
+    packages = db.query(UpgradePackage).filter(UpgradePackage.is_active).order_by(UpgradePackage.sort_order).all()
 
     return success(
         PricingOverviewOut(
@@ -49,9 +49,7 @@ def pricing_overview(db: Session = Depends(get_db)):
 @router.get("/plans")
 def list_plans(db: Session = Depends(get_db)):
     """列出所有订阅方案"""
-    plans = (
-        db.query(SubscriptionPlan).filter(SubscriptionPlan.is_active).order_by(SubscriptionPlan.plan_tier).all()
-    )
+    plans = db.query(SubscriptionPlan).filter(SubscriptionPlan.is_active).order_by(SubscriptionPlan.plan_tier).all()
     return success(plans)
 
 
@@ -65,9 +63,7 @@ def list_pricing_matrix(db: Session = Depends(get_db)):
 @router.get("/upgrade-packages")
 def list_upgrade_packages(db: Session = Depends(get_db)):
     """获取升级包列表"""
-    packages = (
-        db.query(UpgradePackage).filter(UpgradePackage.is_active).order_by(UpgradePackage.sort_order).all()
-    )
+    packages = db.query(UpgradePackage).filter(UpgradePackage.is_active).order_by(UpgradePackage.sort_order).all()
     return success(packages)
 
 

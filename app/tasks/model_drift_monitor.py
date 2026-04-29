@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import datetime
 
 from app.core.celery_config import celery_app
 from app.core.logging import logger
@@ -18,7 +18,7 @@ def check_model_drift(trade_date: str | None = None):
     - OOS偏差
     """
     if trade_date is None:
-        trade_date = str(date.today())
+        trade_date = str(datetime.now(tz=datetime.timezone.utc).date())
 
     logger.info(f"开始模型漂移监控: {trade_date}")
 

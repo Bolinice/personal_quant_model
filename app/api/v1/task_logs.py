@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 
 from app.core.response import success
 from app.db.base import get_db
-from app.schemas.task_logs import TaskLogCreate, TaskLogUpdate
 from app.services.task_logs_service import (
     create_task_log,
     delete_task_log,
@@ -15,6 +15,11 @@ from app.services.task_logs_service import (
     get_task_logs,
     update_task_log,
 )
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
+    from app.schemas.task_logs import TaskLogCreate, TaskLogUpdate
 
 router = APIRouter()
 

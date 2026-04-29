@@ -7,12 +7,15 @@ PIT安全: 所有财务因子计算均遵守Point-in-Time原则，仅使用ann_d
 
 from __future__ import annotations
 
-from datetime import date
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 
 from app.core.factor_preprocess import FactorPreprocessor
+
+if TYPE_CHECKING:
+    from datetime import date
 
 
 def _safe_divide(numerator, denominator, eps: float = 1e-8):
@@ -48,6 +51,7 @@ def pit_filter(financial_df: pd.DataFrame, trade_date: date, ann_date_col: str =
             f"Financial data missing '{ann_date_col}' column, "
             "PIT filtering cannot be applied. This may introduce look-ahead bias.",
             UserWarning,
+            stacklevel=2,
         )
         return financial_df
 
@@ -1040,7 +1044,6 @@ class FactorCalculator:
             direction_map=FACTOR_DIRECTIONS,
         )
 
-
     # ==================== 无数据库便捷函数 ====================
 
     @staticmethod
@@ -1233,9 +1236,8 @@ class FactorCalculator:
 
         # 北向资金动量
         # 20日持仓变化率: 北向持续增仓是中期看多信号(外资研究能力较强)
-        if northbound_df is not None and not northbound_df.empty:
-            if "north_holding" in northbound_df.columns:
-                result["north_momentum_20d"] = northbound_df["north_holding"].pct_change(20)
+        if northbound_df is not None and not northbound_df.empty and "north_holding" in northbound_df.columns:
+            result["north_momentum_20d"] = northbound_df["north_holding"].pct_change(20)
 
         # 融资融券信号
         # 融资余额5日变化率: 融资做多增加=杠杆资金看好(但需警惕极端值=过热)

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-from sqlalchemy.orm import Session
 
 from app.core.cache import cache_service
 from app.core.portfolio_utils import create_simulated_portfolio, get_portfolio_positions
@@ -12,9 +12,10 @@ from app.core.trading_utils import get_trading_calendar
 from app.db.base import with_db
 from app.models.backtests import Backtest, BacktestResult, BacktestTrade
 from app.models.market import StockDaily
-from app.models.models import Model
-from app.models.stock_pools import StockPool
 from app.schemas.backtests import BacktestCreate, BacktestResultCreate, BacktestUpdate
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
 # TODO: implement execute_backtest in app.core.backtest_engine
@@ -36,7 +37,7 @@ def execute_backtest(backtest, db=None):
 # TODO: implement generate_portfolio
 def generate_portfolio(model_id, current_date, db=None):
     """生成新组合 — 待实现"""
-    return None
+    return
 
 
 def get_stock_price(security_id, current_date, db=None):
@@ -147,7 +148,6 @@ def initialize_portfolio(model, initial_capital, db):
     )
 
 
-
 def calculate_portfolio_nav(portfolio, positions, current_date, db):
     """计算投资组合净值"""
     total_value = 0
@@ -193,9 +193,7 @@ def is_last_trading_day_of_month(date, db):
     calendar = get_trading_calendar("SSE", date.strftime("%Y-%m-%d"), next_month.strftime("%Y-%m-%d"), db=db)
 
     # 如果当前日期是最后一个交易日，则返回True
-    if calendar and calendar[-1].cal_date == date:
-        return True
-    return False
+    return bool(calendar and calendar[-1].cal_date == date)
 
 
 def calculate_rebalance_orders(current_portfolio, new_portfolio, current_date, db):

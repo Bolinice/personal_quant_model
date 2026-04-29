@@ -6,14 +6,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
-from enum import Enum, StrEnum
-from typing import Any
+from enum import StrEnum
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pandas as pd
 
 from app.core.logging import logger
+
+if TYPE_CHECKING:
+    from datetime import date
+
+    import pandas as pd
 
 
 class FactorState(StrEnum):
@@ -347,12 +350,11 @@ class AdaptiveFactorEngine:
                 # 保留部分低IC记忆，防止间歇性回升掩盖持续衰减
                 profile.consecutive_low_ic = max(0, profile.consecutive_low_ic - 1)
 
-        elif profile.state == FactorState.INACTIVE:
-            if abs(icir) >= self.RECOVERY_ICIR:
-                # INACTIVE只能恢复到MONITORING而非ACTIVE，需要持续验证
-                # 防止因单期ICIR飙升就立即重用已失效因子
-                profile.state = FactorState.MONITORING
-                profile.consecutive_low_ic = 0
+        elif profile.state == FactorState.INACTIVE and abs(icir) >= self.RECOVERY_ICIR:
+            # INACTIVE只能恢复到MONITORING而非ACTIVE，需要持续验证
+            # 防止因单期ICIR飙升就立即重用已失效因子
+            profile.state = FactorState.MONITORING
+            profile.consecutive_low_ic = 0
 
         if profile.state == FactorState.ACTIVE:
             profile.last_active_date = trade_date

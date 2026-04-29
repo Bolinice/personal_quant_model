@@ -1,26 +1,24 @@
-from __future__ import annotations
-
 """
 数据源基类
 定义统一的数据源接口，支持增量同步、错误重试、限流控制、数据质量校验、主备切换
 """
+
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
 
 from app.core.logging import logger
 
-
 # ==================== 熔断器 ====================
 
 
-class CircuitBreakerOpen(Exception):
+class CircuitBreakerOpenError(Exception):
     """熔断器开启异常"""
-
-    pass
 
 
 class CircuitBreaker:
@@ -53,7 +51,7 @@ class CircuitBreaker:
             if self._should_attempt_recovery():
                 self._state = "HALF_OPEN"
             else:
-                raise CircuitBreakerOpen(
+                raise CircuitBreakerOpenError(
                     f"Circuit breaker is OPEN — {self._failure_count} consecutive failures, "
                     f"retry after {self.recovery_timeout}s"
                 )
@@ -62,7 +60,7 @@ class CircuitBreaker:
             result = func(*args, **kwargs)
             self._on_success()
             return result
-        except Exception as e:
+        except Exception:
             self._on_failure()
             raise
 
@@ -157,7 +155,7 @@ class DataSourceManager:
 
         try:
             return cb.call(func, *args, **kwargs)
-        except CircuitBreakerOpen:
+        except CircuitBreakerOpenError:
             # 主源熔断，尝试备源
             if self._fallback and self._fallback != source_name:
                 logger.warning("Source %s circuit breaker open, falling back to %s", source_name, self._fallback)
@@ -187,7 +185,7 @@ class DataSourceManager:
             return self._sources[self._fallback]
 
         # 最后尝试任意可用源
-        for _name, source in self._sources.items():
+        for source in self._sources.values():
             try:
                 if source.connect():
                     return source
@@ -204,7 +202,7 @@ class DataSourceManager:
                 if last_date is None:
                     freshness[name] = False
                 else:
-                    age = (date.today() - last_date).days
+                    age = (datetime.now(tz=timezone.utc).date() - last_date).days
                     freshness[name] = age <= max_age_days
             except Exception:
                 freshness[name] = False
@@ -242,7 +240,7 @@ class BaseDataSource(ABC):
         self.rate_limit = rate_limit
         self.max_retries = max_retries
         self._call_count = 0
-        self._last_reset = datetime.now()
+        self._last_reset = datetime.now(tz=timezone.utc)
 
     @abstractmethod
     def connect(self) -> bool:
@@ -379,7 +377,7 @@ class BaseDataSource(ABC):
             end_date: 结束日期（默认今天）
         """
         if end_date is None:
-            end_date = date.today()
+            end_date = datetime.now(tz=timezone.utc).date()
 
         start = last_sync_date + timedelta(days=1)
         if start > end_date:
@@ -422,7 +420,7 @@ class BaseDataSource(ABC):
 
     def _rate_limit_check(self):
         """检查API调用频率"""
-        now = datetime.now()
+        now = datetime.now(tz=timezone.utc)
         if (now - self._last_reset).seconds >= 60:
             self._call_count = 0
             self._last_reset = now
@@ -434,7 +432,7 @@ class BaseDataSource(ABC):
             logger.warning(f"Rate limit reached, sleeping {sleep_time}s")
             time.sleep(sleep_time)
             self._call_count = 0
-            self._last_reset = datetime.now()
+            self._last_reset = datetime.now(tz=timezone.utc)
 
         self._call_count += 1
 
@@ -455,3 +453,4 @@ class BaseDataSource(ABC):
                     time.sleep(wait)
                 else:
                     raise
+        return None

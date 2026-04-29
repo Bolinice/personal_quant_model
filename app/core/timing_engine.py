@@ -4,8 +4,8 @@
 机构级增强: HMM市场状态识别、DMA动态模型平均、北向资金择时、政策日历择时、贝叶斯共轭更新
 """
 
-from datetime import date, datetime, timedelta
-from enum import Enum, StrEnum
+from datetime import date, datetime, timedelta, timezone
+from enum import StrEnum
 from typing import Any
 
 import numpy as np
@@ -84,7 +84,7 @@ class TimingEngine:
 
         return signal
 
-    def ma_trend_strength(self, close: pd.Series, windows: list[int] = None) -> pd.Series:
+    def ma_trend_strength(self, close: pd.Series, windows: list[int] | None = None) -> pd.Series:
         """
         多均线趋势强度
         所有均线上方 → 强多头(+1)
@@ -349,7 +349,9 @@ class TimingEngine:
                 "n_signals": n_signals,
                 "n_periods": n_periods,
                 "signal_names": signal_names,
-                "final_weights": {name: round(float(w), 4) for name, w in zip(signal_names, final_weights)},
+                "final_weights": {
+                    name: round(float(w), 4) for name, w in zip(signal_names, final_weights, strict=False)
+                },
                 "has_returns": returns is not None,
                 "decay": decay,
             },
@@ -545,7 +547,7 @@ class TimingEngine:
 
     def _default_policy_calendar(self) -> list[dict[str, Any]]:
         """A股默认政策日历(年度重要事件)"""
-        current_year = datetime.now().year
+        current_year = datetime.now(tz=timezone.utc).year
         return [
             # 两会(3月初): 通常利好
             {

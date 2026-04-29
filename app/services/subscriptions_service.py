@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-
-from sqlalchemy.orm import Session
+from typing import TYPE_CHECKING
 
 from app.db.base import with_db
 from app.models.subscriptions import Subscription, SubscriptionHistory, SubscriptionPermission
@@ -12,6 +11,9 @@ from app.schemas.subscriptions import (
     SubscriptionPermissionCreate,
     SubscriptionUpdate,
 )
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
 @with_db

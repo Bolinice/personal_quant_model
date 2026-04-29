@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import datetime
 
 from app.core.celery_config import celery_app
 from app.core.factor_monitor import FactorMonitor
@@ -20,7 +20,7 @@ def check_factor_health(trade_date: str | None = None):
     - 模块相关性检查
     """
     if trade_date is None:
-        trade_date = str(date.today())
+        trade_date = str(datetime.now(tz=datetime.timezone.utc).date())
 
     logger.info(f"开始因子健康检查: {trade_date}")
 

@@ -5,11 +5,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
-from sqlalchemy.orm import Session
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from app.models.alert_logs import AlertLog, Notification
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
 class NotificationService:
@@ -62,7 +64,7 @@ class NotificationService:
             return False
 
         notification.status = "read"
-        notification.read_at = datetime.now()
+        notification.read_at = datetime.now(tz=timezone.utc)
         self.db.commit()
         return True
 

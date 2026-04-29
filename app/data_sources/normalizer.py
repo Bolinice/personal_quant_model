@@ -64,9 +64,12 @@ class DataNormalizer:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
 
         # 4. 计算 change（如果缺失）
-        if "change" not in df.columns or df["change"].isna().all():
-            if "close" in df.columns and "pre_close" in df.columns:
-                df["change"] = df["close"] - df["pre_close"]
+        if (
+            ("change" not in df.columns or df["change"].isna().all())
+            and "close" in df.columns
+            and "pre_close" in df.columns
+        ):
+            df["change"] = df["close"] - df["pre_close"]
 
         # 5. 口径标注
         df["data_source"] = source
@@ -107,9 +110,12 @@ class DataNormalizer:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
 
         # 计算 change
-        if "change" not in df.columns or df["change"].isna().all():
-            if "close" in df.columns and "pre_close" in df.columns:
-                df["change"] = df["close"] - df["pre_close"]
+        if (
+            ("change" not in df.columns or df["change"].isna().all())
+            and "close" in df.columns
+            and "pre_close" in df.columns
+        ):
+            df["change"] = df["close"] - df["pre_close"]
 
         # 口径标注
         df["data_source"] = source

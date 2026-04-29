@@ -3,7 +3,7 @@
 支持JWT登录、refresh token、API Key认证
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -58,7 +58,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         if username is None:
             raise credentials_exception
     except JWTError:
-        raise credentials_exception
+        raise credentials_exception from None
 
     user = db.query(User).filter(User.username == username).first()
     if user is None:
@@ -83,7 +83,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         )
 
     # 更新登录信息
-    user.last_login_at = datetime.now()
+    user.last_login_at = datetime.now(tz=timezone.utc)
     user.login_count = (user.login_count or 0) + 1
     db.commit()
 
@@ -208,8 +208,8 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
         user_id=user.id,
         plan_type="trial",
         status="active",
-        start_date=datetime.now().date(),
-        end_date=(datetime.now() + timedelta(days=7)).date(),  # 7天试用
+        start_date=datetime.now(tz=timezone.utc).date(),
+        end_date=(datetime.now(tz=timezone.utc) + timedelta(days=7)).date(),  # 7天试用
     )
     db.add(sub)
     db.commit()

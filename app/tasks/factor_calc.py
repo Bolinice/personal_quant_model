@@ -5,12 +5,12 @@
 
 from __future__ import annotations
 
+import contextlib
 from datetime import date, datetime
 
 from app.core.celery_config import celery_app
 from app.core.logging import logger
 from app.db.base import SessionLocal
-import contextlib
 
 
 def _create_task_log(db, task_type, task_name, run_id, params=None):
@@ -23,7 +23,7 @@ def _create_task_log(db, task_type, task_name, run_id, params=None):
         run_id=run_id,
         status="running",
         params_json=params,
-        started_at=datetime.now(),
+        started_at=datetime.now(tz=datetime.timezone.utc),
     )
     db.add(log)
     db.commit()
@@ -34,7 +34,7 @@ def _create_task_log(db, task_type, task_name, run_id, params=None):
 def _update_task_log(db, log, status, result=None, error=None):
     """更新任务日志"""
     log.status = status
-    log.ended_at = datetime.now()
+    log.ended_at = datetime.now(tz=datetime.timezone.utc)
     log.duration = (log.ended_at - log.started_at).total_seconds()
     if result:
         log.result_json = result
@@ -65,7 +65,7 @@ def run_daily_factor_calc(self, trade_date: str | None = None):
 
         # 确定计算日期
         if trade_date is None:
-            today = date.today()
+            today = datetime.now(tz=datetime.timezone.utc).date()
             # 获取最近交易日
             latest = db.query(StockDaily.trade_date).order_by(StockDaily.trade_date.desc()).first()
             calc_date = latest[0] if latest else today
@@ -404,6 +404,6 @@ def run_daily_factor_calc(self, trade_date: str | None = None):
         logger.error(f"Factor calculation failed: {exc}")
         with contextlib.suppress(Exception):
             _update_task_log(db, task_log, "failed", error=exc)
-        raise self.retry(exc=exc, countdown=300)
+        raise self.retry(exc=exc, countdown=300) from exc
     finally:
         db.close()

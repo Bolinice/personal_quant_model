@@ -60,7 +60,10 @@ def calc_rolling_ic(
         滚动IC序列
     """
     merged = pd.merge(factor_df[["trade_date", factor_col]], return_df[["trade_date", return_col]], on="trade_date")
-    merged["ic"] = merged.apply(lambda row: calc_ic(row[factor_col], row[return_col]) if isinstance(row[factor_col], pd.Series) else np.nan, axis=1)
+    merged["ic"] = merged.apply(
+        lambda row: calc_ic(row[factor_col], row[return_col]) if isinstance(row[factor_col], pd.Series) else np.nan,
+        axis=1,
+    )
     return merged["ic"].rolling(window).mean()
 
 
@@ -178,5 +181,4 @@ def calc_psi(reference: pd.Series, current: pd.Series, bins: int = 10) -> float:
     ref_pct = ref_hist / ref_hist.sum()
     cur_pct = cur_hist / cur_hist.sum()
 
-    psi = np.sum((cur_pct - ref_pct) * np.log(cur_pct / ref_pct))
-    return psi
+    return np.sum((cur_pct - ref_pct) * np.log(cur_pct / ref_pct))

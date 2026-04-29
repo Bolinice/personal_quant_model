@@ -13,16 +13,14 @@
 7. 单股最大权重 — 防止 NaN 传播导致单股 100% 权重
 8. 行业集中度 — 单行业权重不应过高
 """
+
 import logging
 from dataclasses import dataclass, field
 
-import numpy as np
 import pandas as pd
 
 from app.core.errors import (
     ErrorCode,
-    PortfolioRiskError,
-    TradingRuleViolationError,
 )
 
 logger = logging.getLogger(__name__)
@@ -31,25 +29,30 @@ logger = logging.getLogger(__name__)
 @dataclass
 class IntegrityCheckResult:
     """完整性检查结果"""
+
     passed: bool = True
     violations: list[dict] = field(default_factory=list)
     warnings: list[dict] = field(default_factory=list)
 
     def add_violation(self, code: ErrorCode, message: str, detail: dict | None = None):
         self.passed = False
-        self.violations.append({
-            "code": code.value,
-            "message": message,
-            "detail": detail or {},
-        })
+        self.violations.append(
+            {
+                "code": code.value,
+                "message": message,
+                "detail": detail or {},
+            }
+        )
         logger.error("VIOLATION [%s]: %s", code.value, message)
 
     def add_warning(self, code: ErrorCode, message: str, detail: dict | None = None):
-        self.warnings.append({
-            "code": code.value,
-            "message": message,
-            "detail": detail or {},
-        })
+        self.warnings.append(
+            {
+                "code": code.value,
+                "message": message,
+                "detail": detail or {},
+            }
+        )
         logger.warning("WARNING [%s]: %s", code.value, message)
 
 
@@ -66,15 +69,13 @@ def check_sharpe_sanity(
     if sharpe > max_sharpe:
         result.add_violation(
             ErrorCode.FACTOR_DEGRADATION,
-            f"Sharpe Ratio {sharpe:.2f} exceeds ceiling {max_sharpe:.1f} — "
-            "likely a bug or severe overfitting",
+            f"Sharpe Ratio {sharpe:.2f} exceeds ceiling {max_sharpe:.1f} — likely a bug or severe overfitting",
             {"sharpe": sharpe, "max_sharpe": max_sharpe},
         )
     elif sharpe > warning_sharpe:
         result.add_warning(
             ErrorCode.FACTOR_IC_BELOW_THRESHOLD,
-            f"Sharpe Ratio {sharpe:.2f} is suspiciously high (>{warning_sharpe:.1f}) — "
-            "verify no look-ahead bias",
+            f"Sharpe Ratio {sharpe:.2f} is suspiciously high (>{warning_sharpe:.1f}) — verify no look-ahead bias",
             {"sharpe": sharpe, "warning_sharpe": warning_sharpe},
         )
     return result

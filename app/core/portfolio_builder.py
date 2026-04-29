@@ -11,7 +11,7 @@
 """
 
 import logging
-from enum import Enum, StrEnum
+from enum import StrEnum
 
 import pandas as pd
 
@@ -119,7 +119,7 @@ class PortfolioBuilder:
 
     def _get_tier_multiplier(self, rank: int) -> float:
         """根据排名获取分层赋权倍率"""
-        for _tier_name, tier_config in self.tier_multipliers.items():
+        for tier_config in self.tier_multipliers.values():
             lo, hi = tier_config["range"]
             if lo <= rank <= hi:
                 return tier_config["multiplier"]
@@ -193,7 +193,6 @@ class PortfolioBuilder:
             }
         )
         return result.sort_values("rank")
-
 
     def build_production_portfolio(
         self,
@@ -302,7 +301,6 @@ class PortfolioBuilder:
 
         return result.sort_values("rank").reset_index(drop=True)
 
-
     def _apply_rebalance_buffer(
         self,
         selected_mask: pd.Series,
@@ -327,7 +325,7 @@ class PortfolioBuilder:
 
             if ts_code not in ranked.index:
                 # 不在当前股票池中, 卖出
-                adjusted[ts_code] = False if ts_code in adjusted.index else False
+                adjusted[ts_code] = False
                 continue
 
             rank = ranked[ts_code]
@@ -335,18 +333,16 @@ class PortfolioBuilder:
             if rank <= hold_top:
                 # 排名在缓冲区内, 继续持有
                 adjusted[ts_code] = True
-            elif rank > hold_top:
+            if rank > hold_top and ts_code in adjusted.index:
                 # 排名跌出缓冲区, 卖出
-                if ts_code in adjusted.index:
-                    adjusted[ts_code] = False
+                adjusted[ts_code] = False
 
         # 新买入需排名≤buy_top
         for ts_code in ranked.index:
             if ts_code in current_holdings.index and current_holdings[ts_code] > 0:
                 continue  # 已持有, 不受买入限制
-            if ranked[ts_code] > buy_top:
-                if ts_code in adjusted.index:
-                    adjusted[ts_code] = False
+            if ranked[ts_code] > buy_top and ts_code in adjusted.index:
+                adjusted[ts_code] = False
 
         return adjusted
 

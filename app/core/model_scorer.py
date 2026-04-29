@@ -6,16 +6,20 @@
 
 from __future__ import annotations
 
-from datetime import date
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-from sqlalchemy.orm import Session
 
 from app.core.factor_preprocess import preprocess_factor_values
 from app.core.logging import logger
 from app.models.factors import Factor, FactorValue
 from app.models.models import Model, ModelFactorWeight
+
+if TYPE_CHECKING:
+    from datetime import date
+
+    from sqlalchemy.orm import Session
 
 
 class MultiFactorScorer:
@@ -117,10 +121,7 @@ class MultiFactorScorer:
             融合评分Series
         """
         # 1. 计算IC加权评分
-        if ic_weights:
-            ic_score = self.icir_weight(factor_scores, ic_weights)  # ICIR比IC更稳定，IC除以标准差降低噪声因子权重
-        else:
-            ic_score = self.equal_weight(factor_scores)
+        ic_score = self.icir_weight(factor_scores, ic_weights) if ic_weights else self.equal_weight(factor_scores)
 
         # 2. 标准化ML预测 (z-score)
         # ML输出量纲与IC评分不同，必须对齐尺度才能融合
@@ -350,9 +351,7 @@ class MultiFactorScorer:
                 return np.nan
             return g.loc[valid, "value"].corr(g.loc[valid, "forward_return"])
 
-        ic_df = (
-            merged.groupby(["factor_code", "trade_date"]).apply(_calc_ic).reset_index(name="ic")
-        )
+        ic_df = merged.groupby(["factor_code", "trade_date"]).apply(_calc_ic).reset_index(name="ic")
         ic_df = ic_df.dropna(subset=["ic"])
 
         if ic_df.empty:
@@ -441,9 +440,7 @@ class MultiFactorScorer:
         # 单调约束
         # 强制模型在指定因子上单调递增/递减，保证经济逻辑不被ML破坏
         if monotone_constraints:
-            constraints = []
-            for col in factor_scores.columns:
-                constraints.append(monotone_constraints.get(col, 0))
+            constraints = [monotone_constraints.get(col, 0) for col in factor_scores.columns]
             params["monotone_constraints"] = constraints
 
         # 训练模型
@@ -599,7 +596,7 @@ class MultiFactorScorer:
         auc = roc_auc_score(y, y_pred_proba)
 
         # 识别漂移最大的因子
-        feature_importance = dict(zip(factor_cols, clf.feature_importances_))
+        feature_importance = dict(zip(factor_cols, clf.feature_importances_, strict=False))
         drifted_factors = [
             f
             for f, imp in sorted(feature_importance.items(), key=lambda x: -x[1])

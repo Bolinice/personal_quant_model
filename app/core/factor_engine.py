@@ -6,18 +6,21 @@
 
 from __future__ import annotations
 
-from datetime import date
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
 from scipy import stats as sp_stats
 from sqlalchemy import and_
-from sqlalchemy.orm import Session
 
 from app.core.factor_calculator import FACTOR_DIRECTIONS, FACTOR_GROUPS, FactorCalculator
 from app.core.factor_preprocess import FactorPreprocessor
 from app.models.factors import Factor, FactorValue
+
+if TYPE_CHECKING:
+    from datetime import date
+
+    from sqlalchemy.orm import Session
 
 
 class FactorEngine:

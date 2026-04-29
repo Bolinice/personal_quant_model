@@ -326,7 +326,7 @@ class RegimeDetector:
         Returns:
             {regime: str, confidence: float, features: Dict, weight_adjustments: Dict}
         """
-        regime = self.detect(market_data, large_cap_df, small_cap_df)
+        regime, _detect_confidence = self.detect(market_data, large_cap_df, small_cap_df)
         features = self.market_features(market_data)
 
         # 简单置信度: 基于特征的一致性
@@ -342,9 +342,13 @@ class RegimeDetector:
         base_weights = {"quality_growth": 0.35, "expectation": 0.30, "residual_momentum": 0.25, "flow_confirm": 0.10}
         adjusted_weights = self.get_weight_adjustments(regime, base_weights)
 
+        # 增量调整（而非归一化后的绝对权重）— 前端需要显示调整幅度
+        adjustments = REGIME_WEIGHT_ADJUSTMENTS.get(regime, {})
+
         return {
             "regime": regime,
             "confidence": round(confidence, 3),
             "features": features,
             "weight_adjustments": adjusted_weights,
+            "module_weight_adjustment": adjustments,
         }

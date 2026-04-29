@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from sqlalchemy.orm import Session
+from typing import TYPE_CHECKING
 
 from app.db.base import with_db
 from app.models.alert_logs import AlertLog
 from app.models.simulated_portfolios import SimulatedPortfolioNav, SimulatedPortfolioPosition
 from app.schemas.alert_logs import AlertLogCreate, AlertLogUpdate
 from app.services.performance_service import get_industry_exposure, get_performance_analysis
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
 @with_db

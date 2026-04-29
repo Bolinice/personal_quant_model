@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -149,7 +149,7 @@ def generate_report(report_id: int, db: Session = None):
 
     try:
         content_parts = []
-        calc9_date = report.report_date or date_type.today()
+        calc9_date = report.report_date or datetime.now(tz=timezone.utc).date()
 
         if report.report_type == "daily":
             # 日报：汇总所有活跃模型表现
@@ -246,15 +246,14 @@ def generate_report(report_id: int, db: Session = None):
             critical = [a for a in alerts if a.get("severity") == "critical"]
             if critical:
                 content_parts.append("\n## 严重预警")
-                for a in critical:
-                    content_parts.append(f"- **{a.get('message', '')}**")
+                content_parts.extend(f"- **{a.get('message', '')}**" for a in critical)
 
         else:
             content_parts.append(f"# {report.title}\n\n报告类型: {report.report_type}")
 
         report.content = "\n".join(content_parts)
         report.status = "generated"
-        report.meta_json = {"generated_at": datetime.now().isoformat()}
+        report.meta_json = {"generated_at": datetime.now(tz=timezone.utc).isoformat()}
         db.commit()
         db.refresh(report)
         return report
@@ -274,14 +273,14 @@ def schedule_report_generation(schedule_id: int, db: Session = None):
     if schedule is None:
         return None
 
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     from app.tasks.report_generate import run_daily_report_generate
 
     # 触发异步报告生成任务
     try:
         task = run_daily_report_generate.delay()
-        schedule.next_run_time = datetime.now().isoformat()
+        schedule.next_run_time = datetime.now(tz=timezone.utc).isoformat()
         schedule.meta_json = schedule.meta_json or {}
         schedule.meta_json["last_task_id"] = task.id
         db.commit()

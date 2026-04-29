@@ -7,7 +7,7 @@
 """
 
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import text
@@ -68,7 +68,7 @@ def check_price_anomaly(
         threshold: 涨跌幅阈值，默认20%
     """
     if trade_date is None:
-        trade_date = date.today() - timedelta(days=1)
+        trade_date = datetime.now(tz=timezone.utc).date() - timedelta(days=1)
 
     anomalies = db.execute(
         text(
@@ -96,7 +96,7 @@ def check_zero_volume(
 ) -> dict[str, Any]:
     """检查成交量为零但价格非零的异常"""
     if trade_date is None:
-        trade_date = date.today() - timedelta(days=1)
+        trade_date = datetime.now(tz=timezone.utc).date() - timedelta(days=1)
 
     zero_vol = db.execute(
         text(
@@ -126,7 +126,7 @@ def check_financial_consistency(
     基本勾稽: 总资产 = 总负债 + 净资产
     """
     if report_date is None:
-        report_date = date.today() - timedelta(days=90)
+        report_date = datetime.now(tz=timezone.utc).date() - timedelta(days=90)
 
     # 简化检查：查找总资产与负债+净资产偏差超过1%的记录
     inconsistent = db.execute(
@@ -166,7 +166,7 @@ def run_all_checks(
 ) -> dict[str, Any]:
     """运行所有数据质量检查"""
     if end_date is None:
-        end_date = date.today() - timedelta(days=1)
+        end_date = datetime.now(tz=timezone.utc).date() - timedelta(days=1)
     if start_date is None:
         start_date = end_date - timedelta(days=30)
 

@@ -15,7 +15,6 @@ from scipy import stats
 
 from app.core.logging import logger
 
-
 # ==================== 全局数据清洗 ====================
 
 
@@ -121,7 +120,7 @@ class FactorPreprocessor:
         # MICE适用于因子间存在经济逻辑关联的场景(如PE/PB/ROE相关性)
         # 简单均值填充会低估方差，MICE通过链式迭代保留协方差结构
         try:
-            from sklearn.experimental import enable_iterative_imputer
+            from sklearn.experimental import enable_iterative_imputer  # noqa: F401
             from sklearn.impute import IterativeImputer
         except ImportError:
             logger.warning("sklearn not available for MICE, falling back to median fill")
@@ -622,7 +621,6 @@ class FactorPreprocessor:
 
         # 5. 方向统一
         return self.align_direction(series, direction)
-
 
     def preprocess_dataframe(
         self,

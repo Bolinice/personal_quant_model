@@ -10,21 +10,26 @@ Tushare 数据源适配器 — 带重试、断路器、数据校验
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import time
-from datetime import date, datetime, timedelta
 from functools import wraps
-from typing import Any, Callable
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
 from app.data_sources.base import CircuitBreaker
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from datetime import date
 
 logger = logging.getLogger(__name__)
 
 # ──────────────────────────────────────────────
 # 重试装饰器
 # ──────────────────────────────────────────────
+
 
 def retry_with_backoff(
     max_retries: int = 3,
@@ -33,6 +38,7 @@ def retry_with_backoff(
     exceptions: tuple = (Exception,),
 ):
     """指数退避重试装饰器"""
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -43,20 +49,26 @@ def retry_with_backoff(
                 except exceptions as e:
                     last_error = e
                     if attempt < max_retries - 1:
-                        delay = min(base_delay * (2 ** attempt), max_delay)
+                        delay = min(base_delay * (2**attempt), max_delay)
                         logger.warning(
                             "重试 %s 第%d次 (等待%.1fs): %s",
-                            func.__name__, attempt + 1, delay, e,
+                            func.__name__,
+                            attempt + 1,
+                            delay,
+                            e,
                         )
                         time.sleep(delay)
             raise last_error
+
         return wrapper
+
     return decorator
 
 
 # ──────────────────────────────────────────────
 # 数据校验
 # ──────────────────────────────────────────────
+
 
 def _validate_dataframe(df: pd.DataFrame, data_type: str = "price") -> pd.DataFrame:
     """通用数据校验"""
@@ -78,10 +90,8 @@ def _validate_dataframe(df: pd.DataFrame, data_type: str = "price") -> pd.DataFr
     date_cols = [c for c in ("trade_date", "ann_date", "end_date") if c in df.columns]
     for col in date_cols:
         if df[col].dtype == object:
-            try:
+            with contextlib.suppress(Exception):
                 df[col] = pd.to_datetime(df[col], format="mixed")
-            except Exception:
-                pass
 
     # 去重
     dedup_cols = [c for c in ("ts_code", "trade_date") if c in df.columns]
@@ -97,6 +107,7 @@ def _validate_dataframe(df: pd.DataFrame, data_type: str = "price") -> pd.DataFr
 # ──────────────────────────────────────────────
 # Tushare 数据源
 # ──────────────────────────────────────────────
+
 
 class TushareSource:
     """Tushare数据源 — 带重试和断路器"""
@@ -116,12 +127,13 @@ class TushareSource:
         if self._pro is None:
             try:
                 import tushare as ts
+
                 if self._token:
                     ts.set_token(self._token)
                 self._pro = ts.pro_api()
                 logger.info("Tushare pro接口初始化成功")
             except ImportError:
-                raise ImportError("请安装tushare: pip install tushare")
+                raise ImportError("请安装tushare: pip install tushare") from None
         return self._pro
 
     @property
@@ -129,6 +141,7 @@ class TushareSource:
         """AKShare fallback数据源"""
         if self._akshare_fallback is None:
             from app.data_sources.akshare_source import AKShareSource
+
             self._akshare_fallback = AKShareSource()
         return self._akshare_fallback
 
@@ -186,16 +199,24 @@ class TushareSource:
     def get_stock_daily(self, ts_code=None, trade_date=None, start_date=None, end_date=None) -> pd.DataFrame:
         """获取股票日线行情"""
         return self._call_with_fallback(
-            lambda **p: self.pro.daily(**p), "price",
-            ts_code=ts_code, trade_date=trade_date, start_date=start_date, end_date=end_date,
+            lambda **p: self.pro.daily(**p),
+            "price",
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
         )
 
     @retry_with_backoff(max_retries=3)
     def get_stock_daily_basic(self, ts_code=None, trade_date=None, start_date=None, end_date=None) -> pd.DataFrame:
         """获取每日指标"""
         return self._call_with_fallback(
-            lambda **p: self.pro.daily_basic(**p), "basic",
-            ts_code=ts_code, trade_date=trade_date, start_date=start_date, end_date=end_date,
+            lambda **p: self.pro.daily_basic(**p),
+            "basic",
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
         )
 
     # ──────────────────────────────────────────────
@@ -206,32 +227,48 @@ class TushareSource:
     def get_income(self, ts_code=None, period=None, start_date=None, end_date=None) -> pd.DataFrame:
         """获取利润表"""
         return self._call_with_fallback(
-            lambda **p: self.pro.income(**p), "financial",
-            ts_code=ts_code, period=period, start_date=start_date, end_date=end_date,
+            lambda **p: self.pro.income(**p),
+            "financial",
+            ts_code=ts_code,
+            period=period,
+            start_date=start_date,
+            end_date=end_date,
         )
 
     @retry_with_backoff(max_retries=3)
     def get_balancesheet(self, ts_code=None, period=None, start_date=None, end_date=None) -> pd.DataFrame:
         """获取资产负债表"""
         return self._call_with_fallback(
-            lambda **p: self.pro.balancesheet(**p), "financial",
-            ts_code=ts_code, period=period, start_date=start_date, end_date=end_date,
+            lambda **p: self.pro.balancesheet(**p),
+            "financial",
+            ts_code=ts_code,
+            period=period,
+            start_date=start_date,
+            end_date=end_date,
         )
 
     @retry_with_backoff(max_retries=3)
     def get_cashflow(self, ts_code=None, period=None, start_date=None, end_date=None) -> pd.DataFrame:
         """获取现金流量表"""
         return self._call_with_fallback(
-            lambda **p: self.pro.cashflow(**p), "financial",
-            ts_code=ts_code, period=period, start_date=start_date, end_date=end_date,
+            lambda **p: self.pro.cashflow(**p),
+            "financial",
+            ts_code=ts_code,
+            period=period,
+            start_date=start_date,
+            end_date=end_date,
         )
 
     @retry_with_backoff(max_retries=3)
     def get_financial_indicator(self, ts_code=None, period=None, start_date=None, end_date=None) -> pd.DataFrame:
         """获取财务指标"""
         return self._call_with_fallback(
-            lambda **p: self.pro.fina_indicator(**p), "financial",
-            ts_code=ts_code, period=period, start_date=start_date, end_date=end_date,
+            lambda **p: self.pro.fina_indicator(**p),
+            "financial",
+            ts_code=ts_code,
+            period=period,
+            start_date=start_date,
+            end_date=end_date,
         )
 
     # ──────────────────────────────────────────────
@@ -242,8 +279,11 @@ class TushareSource:
     def get_index_daily(self, ts_code="000001.SH", start_date=None, end_date=None) -> pd.DataFrame:
         """获取指数日线"""
         return self._call_with_fallback(
-            lambda **p: self.pro.index_daily(**p), "price",
-            ts_code=ts_code, start_date=start_date, end_date=end_date,
+            lambda **p: self.pro.index_daily(**p),
+            "price",
+            ts_code=ts_code,
+            start_date=start_date,
+            end_date=end_date,
         )
 
     # ──────────────────────────────────────────────
@@ -254,8 +294,12 @@ class TushareSource:
     def get_moneyflow(self, ts_code=None, trade_date=None, start_date=None, end_date=None) -> pd.DataFrame:
         """获取个股资金流"""
         return self._call_with_fallback(
-            lambda **p: self.pro.moneyflow(**p), "moneyflow",
-            ts_code=ts_code, trade_date=trade_date, start_date=start_date, end_date=end_date,
+            lambda **p: self.pro.moneyflow(**p),
+            "moneyflow",
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
         )
 
     # ──────────────────────────────────────────────
@@ -266,8 +310,12 @@ class TushareSource:
     def get_margin(self, ts_code=None, trade_date=None, start_date=None, end_date=None) -> pd.DataFrame:
         """获取融资融券数据"""
         return self._call_with_fallback(
-            lambda **p: self.pro.margin(**p), "margin",
-            ts_code=ts_code, trade_date=trade_date, start_date=start_date, end_date=end_date,
+            lambda **p: self.pro.margin(**p),
+            "margin",
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
         )
 
     # ──────────────────────────────────────────────
@@ -278,8 +326,11 @@ class TushareSource:
     def get_north_flow(self, trade_date=None, start_date=None, end_date=None) -> pd.DataFrame:
         """获取北向资金数据"""
         return self._call_with_fallback(
-            lambda **p: self.pro.hk_hold(**p), "northflow",
-            trade_date=trade_date, start_date=start_date, end_date=end_date,
+            lambda **p: self.pro.hk_hold(**p),
+            "northflow",
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
         )
 
     # ──────────────────────────────────────────────
@@ -290,7 +341,8 @@ class TushareSource:
     def get_stock_basic(self, list_status="L") -> pd.DataFrame:
         """获取股票列表"""
         return self._call_with_fallback(
-            lambda **p: self.pro.stock_basic(**p), "basic",
+            lambda **p: self.pro.stock_basic(**p),
+            "basic",
             list_status=list_status,
         )
 
@@ -333,7 +385,6 @@ class TushareSource:
             logger.error("获取northflow失败: %s", e)
 
         success = [k for k, v in result.items() if not v.empty]
-        logger.info("fetch_all_for_date %s: 成功 %d/%d 数据集",
-                     trade_date, len(success), len(result))
+        logger.info("fetch_all_for_date %s: 成功 %d/%d 数据集", trade_date, len(success), len(result))
 
         return result

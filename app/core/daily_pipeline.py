@@ -21,14 +21,12 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import numpy as np
 import pandas as pd
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.core.adaptive_factor_engine import AdaptiveFactorEngine
 from app.core.backtest_engine import ABShareBacktestEngine
@@ -37,7 +35,6 @@ from app.core.factor_calculator import FactorCalculator
 from app.core.factor_monitor import FactorMonitor
 from app.core.factor_preprocess import FactorPreprocessor
 from app.core.labels import LabelBuilder
-from app.core.timing_engine import TimingEngine
 from app.core.model_scorer import MultiFactorScorer
 from app.core.model_trainer import ModelTrainer
 from app.core.pit_guard import PITGuardMixin
@@ -46,7 +43,11 @@ from app.core.portfolio_optimizer import PortfolioOptimizer
 from app.core.regime import RegimeDetector
 from app.core.risk_budget_engine import RiskBudgetEngine
 from app.core.risk_model import RiskModel
+from app.core.timing_engine import TimingEngine
 from app.core.universe import UniverseBuilder
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PipelineResult:
     """流水线单步执行结果"""
+
     step: int
     name: str
     status: str  # ok / error / skipped
@@ -65,6 +67,7 @@ class PipelineResult:
 @dataclass
 class PipelineContext:
     """流水线上下文 — 在步骤间传递数据"""
+
     trade_date: date
     session: Session | None = None
 
@@ -155,7 +158,7 @@ class DailyPipeline:
     def run(self, trade_date: date | None = None) -> list[PipelineResult]:
         """执行完整日终流水线"""
         if trade_date is None:
-            trade_date = date.today()
+            trade_date = datetime.now(tz=timezone.utc).date()
 
         ctx = PipelineContext(trade_date=trade_date, session=self.session)
         logger.info("========== 日终流水线启动 %s ==========", trade_date)
@@ -208,8 +211,9 @@ class DailyPipeline:
     # Step 1: 数据采集与PIT对齐
     # ──────────────────────────────────────────────
     @staticmethod
-    def _load_table(session: Session, model_cls, start_date: date, end_date: date,
-                    date_col: str = "trade_date") -> pd.DataFrame | None:
+    def _load_table(
+        session: Session, model_cls, start_date: date, end_date: date, date_col: str = "trade_date"
+    ) -> pd.DataFrame | None:
         """高效加载表数据 — 使用mappings()避免ORM序列化开销"""
         stmt = (
             select(model_cls)
@@ -231,11 +235,13 @@ class DailyPipeline:
 
         # 1. 行情数据
         from app.models.market.stock_daily import StockDaily
+
         ctx.price_df = self._load_table(ctx.session, StockDaily, start_date, ctx.trade_date)
         logger.info("Step1: 行情数据 %d 条", len(ctx.price_df) if ctx.price_df is not None else 0)
 
         # 2. 财务数据 — PIT对齐 (SQL层过滤ann_date <= trade_date)
         from app.models.market.stock_financial import StockFinancial
+
         stmt = (
             select(StockFinancial)
             .where(StockFinancial.ann_date <= ctx.trade_date.strftime("%Y%m%d"))
@@ -245,22 +251,24 @@ class DailyPipeline:
         if rows:
             raw_fin = pd.DataFrame(dict(r) for r in rows)
             ctx.financial_df = self.pit_guard.align(raw_fin, ctx.trade_date)
-        logger.info("Step1: 财务数据 %d 条(PIT对齐后)",
-                     len(ctx.financial_df) if ctx.financial_df is not None else 0)
+        logger.info("Step1: 财务数据 %d 条(PIT对齐后)", len(ctx.financial_df) if ctx.financial_df is not None else 0)
 
         # 3. 资金流数据
         from app.models.market.stock_money_flow import StockMoneyFlow
+
         ctx.moneyflow_df = self._load_table(ctx.session, StockMoneyFlow, start_date, ctx.trade_date)
         logger.info("Step1: 资金流数据 %d 条", len(ctx.moneyflow_df) if ctx.moneyflow_df is not None else 0)
 
         # 4. 指数数据
         from app.models.market.index_daily import IndexDaily
+
         ctx.index_df = self._load_table(ctx.session, IndexDaily, start_date, ctx.trade_date)
         logger.info("Step1: 指数数据 %d 条", len(ctx.index_df) if ctx.index_df is not None else 0)
 
         # 5. 融资融券数据
         try:
             from app.models.market.stock_margin import StockMargin
+
             ctx.margin_df = self._load_table(ctx.session, StockMargin, start_date, ctx.trade_date)
         except Exception as e:
             logger.warning("Step1: 融资融券数据读取失败: %s", e)
@@ -269,6 +277,7 @@ class DailyPipeline:
         # 6. 北向资金数据
         try:
             from app.models.market.stock_northbound import StockNorthbound
+
             ctx.northflow_df = self._load_table(ctx.session, StockNorthbound, start_date, ctx.trade_date)
         except Exception as e:
             logger.warning("Step1: 北向资金数据读取失败: %s", e)
@@ -279,7 +288,7 @@ class DailyPipeline:
     # ──────────────────────────────────────────────
     def _step2_snapshot(self, ctx: PipelineContext) -> None:
         """生成数据快照ID和文件，用于可复现性"""
-        snapshot_id = f"snapshot_{ctx.trade_date.strftime('%Y%m%d')}_{datetime.now().strftime('%H%M%S')}"
+        snapshot_id = f"snapshot_{ctx.trade_date.strftime('%Y%m%d')}_{datetime.now(tz=timezone.utc).strftime('%H%M%S')}"
         ctx.snapshot_id = snapshot_id
 
         snapshot_data = {}
@@ -329,10 +338,8 @@ class DailyPipeline:
         )
 
         if ctx.factor_df is not None and not ctx.factor_df.empty:
-            ctx.factor_names = [c for c in ctx.factor_df.columns
-                                if c not in ("ts_code", "trade_date")]
-            logger.info("Step4a: 因子计算完成 %d 因子 x %d 股票",
-                         len(ctx.factor_names), len(ctx.factor_df))
+            ctx.factor_names = [c for c in ctx.factor_df.columns if c not in ("ts_code", "trade_date")]
+            logger.info("Step4a: 因子计算完成 %d 因子 x %d 股票", len(ctx.factor_names), len(ctx.factor_df))
 
             # 4b. 因子预处理: 缺失值→去极值(MAD)→标准化(Z-score)→中性化
             ctx.factor_df = self.factor_preprocessor.preprocess_dataframe(
@@ -355,8 +362,7 @@ class DailyPipeline:
             factor_names=ctx.factor_names,
             trade_date=ctx.trade_date,
         )
-        logger.info("Step5: 信号融合完成, 权重数=%d",
-                     len(ctx.ensemble_weights) if ctx.ensemble_weights else 0)
+        logger.info("Step5: 信号融合完成, 权重数=%d", len(ctx.ensemble_weights) if ctx.ensemble_weights else 0)
 
     # ──────────────────────────────────────────────
     # Step 6: 市场状态检测
@@ -416,10 +422,9 @@ class DailyPipeline:
 
             # 对齐索引
             common_idx = ctx.ensemble_scores.index.intersection(ctx.ml_scores.index)
-            ctx.final_scores = (
-                (1 - ml_weight) * ctx.ensemble_scores.loc[common_idx]
-                + ml_weight * ctx.ml_scores.loc[common_idx]
-            )
+            ctx.final_scores = (1 - ml_weight) * ctx.ensemble_scores.loc[common_idx] + ml_weight * ctx.ml_scores.loc[
+                common_idx
+            ]
             logger.info("Step7: ML增强完成 (ml_weight=%.2f, n=%d)", ml_weight, len(common_idx))
         else:
             ctx.final_scores = ctx.ensemble_scores
@@ -452,9 +457,7 @@ class DailyPipeline:
         else:
             # 等权fallback
             n = len(ctx.portfolio_stocks)
-            ctx.portfolio_weights = pd.Series(
-                1.0 / n, index=ctx.portfolio_stocks
-            ) if n > 0 else pd.Series(dtype=float)
+            ctx.portfolio_weights = pd.Series(1.0 / n, index=ctx.portfolio_stocks) if n > 0 else pd.Series(dtype=float)
 
         logger.info("Step8: 组合构建完成 %d 只股票", len(ctx.portfolio_stocks))
 
@@ -512,9 +515,11 @@ class DailyPipeline:
             )
             if ctx.backtest_result:
                 metrics = ctx.backtest_result.get("metrics", {})
-                logger.info("Step10: 回测完成 sharpe=%.2f max_dd=%.2f%%",
-                             metrics.get("sharpe_ratio", 0),
-                             metrics.get("max_drawdown", 0) * 100)
+                logger.info(
+                    "Step10: 回测完成 sharpe=%.2f max_dd=%.2f%%",
+                    metrics.get("sharpe_ratio", 0),
+                    metrics.get("max_drawdown", 0) * 100,
+                )
         except Exception as e:
             logger.warning("Step10: 回测验证失败: %s", e)
 
@@ -534,8 +539,7 @@ class DailyPipeline:
                 trade_date=ctx.trade_date,
             )
             if ctx.factor_health:
-                unhealthy = [k for k, v in ctx.factor_health.items()
-                             if v.get("status") == "unhealthy"]
+                unhealthy = [k for k, v in ctx.factor_health.items() if v.get("status") == "unhealthy"]
                 if unhealthy:
                     logger.warning("Step11: 不健康因子: %s", unhealthy)
                 else:
@@ -594,6 +598,7 @@ class DailyPipeline:
         """将流水线结果写入数据库"""
         try:
             from app.models.strategy import Strategy
+
             strategy = Strategy(
                 name=f"daily_pipeline_{ctx.trade_date}",
                 params={

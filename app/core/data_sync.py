@@ -11,20 +11,20 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
-from datetime import date, datetime, timedelta
+import re
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-import re
-from sqlalchemy import text, inspect as sa_inspect
-from sqlalchemy.orm import Session
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import text
 
-from app.core.config import settings
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +49,7 @@ def _validate_table_columns(session: Session, table_name: str, columns: list[str
             insp = sa_inspect(session.get_bind())
             if table_name not in insp.get_table_names():
                 raise ValueError(f"表不存在: {table_name}")
-            VALIDATED_TABLES[table_name] = {
-                c["name"] for c in insp.get_columns(table_name)
-            }
+            VALIDATED_TABLES[table_name] = {c["name"] for c in insp.get_columns(table_name)}
         except Exception:
             VALIDATED_TABLES[table_name] = set(columns)
     valid_cols = VALIDATED_TABLES[table_name]
@@ -59,9 +57,11 @@ def _validate_table_columns(session: Session, table_name: str, columns: list[str
     if invalid:
         raise ValueError(f"列不存在于{table_name}: {invalid}")
 
+
 # ──────────────────────────────────────────────
 # 工具函数
 # ──────────────────────────────────────────────
+
 
 def safe_float(val):
     """安全转换为float — Tushare返回的数值可能含NaN/Inf/None，
@@ -80,7 +80,7 @@ def _str_to_date(s: str) -> date:
     if isinstance(s, date):
         return s
     s = str(s).replace("-", "")
-    return datetime.strptime(s, "%Y%m%d").date()
+    return datetime.strptime(s, "%Y%m%d").replace(tzinfo=timezone.utc).date()
 
 
 def _validate_price_data(df: pd.DataFrame) -> pd.DataFrame:
@@ -88,8 +88,9 @@ def _validate_price_data(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
 
-    price_cols = [c for c in ("open", "high", "low", "close", "pre_close", "change", "vol", "amount")
-                  if c in df.columns]
+    price_cols = [
+        c for c in ("open", "high", "low", "close", "pre_close", "change", "vol", "amount") if c in df.columns
+    ]
     for col in price_cols:
         mask = df[col] < 0
         if mask.any():
@@ -110,6 +111,7 @@ def _validate_price_data(df: pd.DataFrame) -> pd.DataFrame:
 # ──────────────────────────────────────────────
 # 同步进度持久化
 # ──────────────────────────────────────────────
+
 
 class SyncProgress:
     """同步进度管理 — 记录已同步的日期范围，支持断点续传"""
@@ -151,6 +153,7 @@ class SyncProgress:
 # ──────────────────────────────────────────────
 # 批量 Upsert 引擎
 # ──────────────────────────────────────────────
+
 
 class BulkUpsert:
     """PostgreSQL ON CONFLICT DO UPDATE 批量写入"""
@@ -203,10 +206,7 @@ class BulkUpsert:
             )
 
             # 批量执行
-            params_list = [
-                {str(i): row[i] for i in range(len(columns))}
-                for row in rows
-            ]
+            params_list = [{str(i): row[i] for i in range(len(columns))} for row in rows]
             session.execute(sql, params_list)
             total += len(batch)
 
@@ -217,6 +217,7 @@ class BulkUpsert:
 # ──────────────────────────────────────────────
 # 数据同步主引擎
 # ──────────────────────────────────────────────
+
 
 class DataSyncEngine:
     """高性能数据同步引擎"""
@@ -239,8 +240,7 @@ class DataSyncEngine:
         df = self._prepare_df(df, date_col="trade_date")
 
         # 转换数值列
-        float_cols = ["open", "high", "low", "close", "pre_close", "change",
-                       "pct_chg", "vol", "amount"]
+        float_cols = ["open", "high", "low", "close", "pre_close", "change", "pct_chg", "vol", "amount"]
         for col in float_cols:
             if col in df.columns:
                 df[col] = df[col].apply(safe_float)
@@ -335,8 +335,7 @@ class DataSyncEngine:
         df = _validate_price_data(df)
         df = self._prepare_df(df, date_col="trade_date")
 
-        float_cols = ["open", "high", "low", "close", "pre_close", "change",
-                       "pct_chg", "vol", "amount"]
+        float_cols = ["open", "high", "low", "close", "pre_close", "change", "pct_chg", "vol", "amount"]
         for col in float_cols:
             if col in df.columns:
                 df[col] = df[col].apply(safe_float)
@@ -465,13 +464,11 @@ class DataSyncEngine:
             df["ann_date"] = df["ann_date"].apply(_str_to_date)
 
         # 删除全空列
-        df = df.dropna(axis=1, how="all")
-
-        return df
+        return df.dropna(axis=1, how="all")
 
     def get_incremental_start(self, table_name: str, default_days: int = 30) -> date:
         """获取增量同步起始日期 — 基于上次同步进度"""
         last = self.progress.get_last_sync_date(table_name)
         if last:
             return last + timedelta(days=1)
-        return date.today() - timedelta(days=default_days)
+        return datetime.now(tz=timezone.utc).date() - timedelta(days=default_days)

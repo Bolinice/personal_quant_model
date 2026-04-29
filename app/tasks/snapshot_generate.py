@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import datetime
 
 from app.core.celery_config import celery_app
 from app.core.logging import logger
@@ -17,7 +17,7 @@ def generate_snapshot(trade_date: str | None = None):
     - 记录数据源版本/代码版本/配置版本
     """
     if trade_date is None:
-        trade_date = str(date.today())
+        trade_date = str(datetime.now(tz=datetime.timezone.utc).date())
 
     logger.info(f"开始生成数据快照: {trade_date}")
 

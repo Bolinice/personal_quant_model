@@ -4,7 +4,7 @@
 """
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -129,7 +129,7 @@ class ModelTrainer:
             return None
 
         # 准备数据
-        X, y, valid_idx = self._prepare_training_data(factor_df, return_series, factor_cols)
+        X, y, _valid_idx = self._prepare_training_data(factor_df, return_series, factor_cols)
         if X is None:
             return None
 
@@ -207,6 +207,7 @@ class ModelTrainer:
             zip(
                 factor_cols,
                 full_model.feature_importances_ / full_model.feature_importances_.sum(),
+                strict=False,
             )
         )
 
@@ -220,7 +221,7 @@ class ModelTrainer:
             cv_metrics=cv_metrics,
             oof_predictions=oof_predictions,
             feature_importance=feature_importance,
-            train_date=date.today(),
+            train_date=datetime.now(tz=timezone.utc).date(),
             model_config=config,
             model_type="lgbm",
         )
@@ -264,7 +265,7 @@ class ModelTrainer:
             logger.warning("lightgbm/sklearn not available")
             return None
 
-        X, y, valid_idx = self._prepare_training_data(factor_df, return_series, factor_cols)
+        X, y, _valid_idx = self._prepare_training_data(factor_df, return_series, factor_cols)
         if X is None:
             return None
 
@@ -288,6 +289,7 @@ class ModelTrainer:
             zip(
                 factor_cols,
                 model.feature_importance() / model.feature_importance().sum(),
+                strict=False,
             )
         )
 
@@ -296,7 +298,7 @@ class ModelTrainer:
             scaler=scaler,
             factor_cols=factor_cols,
             feature_importance=feature_importance,
-            train_date=date.today(),
+            train_date=datetime.now(tz=timezone.utc).date(),
             model_config=config,
             model_type="lgbm_rank",
         )
@@ -365,7 +367,7 @@ class ModelTrainer:
             # 训练
             train_returns = train_data.set_index(train_data.index)[return_col]
             trained = self.train_lgbm(
-                train_data[factor_cols + [return_col]],
+                train_data[[*factor_cols, return_col]],
                 train_returns,
                 factor_cols,
                 model_config=model_config,

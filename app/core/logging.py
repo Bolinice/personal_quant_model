@@ -120,10 +120,11 @@ class TextFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         base = super().format(record)
         # 附加extra字段
-        extra_parts = []
-        for key in ("trade_date", "factor_id", "security_id", "n_stocks", "duration_ms", "cache_hit"):
-            if hasattr(record, key):
-                extra_parts.append(f"{key}={getattr(record, key)}")
+        extra_parts = [
+            f"{key}={getattr(record, key)}"
+            for key in ("trade_date", "factor_id", "security_id", "n_stocks", "duration_ms", "cache_hit")
+            if hasattr(record, key)
+        ]
         if extra_parts:
             base += " | " + " ".join(extra_parts)
         return base

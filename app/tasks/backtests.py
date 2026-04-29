@@ -20,7 +20,7 @@ def run_backtest(self, backtest_id: int):
 
     except Exception as exc:
         logger.error(f"Backtest {backtest_id} failed: {exc}")
-        raise self.retry(exc=exc, countdown=60)
+        raise self.retry(exc=exc, countdown=60) from exc
 
 
 @celery_app.task(bind=True, max_retries=3)
@@ -37,4 +37,4 @@ def generate_backtest_report(self, backtest_id: int):
 
     except Exception as exc:
         logger.error(f"Report generation failed: {exc}")
-        raise self.retry(exc=exc, countdown=60)
+        raise self.retry(exc=exc, countdown=60) from exc

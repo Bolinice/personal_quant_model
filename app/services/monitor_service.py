@@ -1,12 +1,12 @@
 """监控服务"""
 
-from datetime import date
-from typing import Any
+from datetime import date, datetime, timezone
 
 import pandas as pd
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from app.models.alert_logs import AlertLog
 from app.models.factors import Factor
 from app.models.market.index_daily import IndexDaily
 from app.models.market.stock_daily import StockDaily
@@ -308,7 +308,7 @@ class MonitorService:
             return []
         return [
             {
-                "trade_date": str(trade_date or date.today()),
+                "trade_date": str(trade_date or datetime.now(tz=timezone.utc).date()),
                 "factor_name": f.factor_name,
                 "factor_code": f.factor_code,
                 "category": f.category,
@@ -357,7 +357,7 @@ class MonitorService:
 
         if not hs300_rows:
             return {
-                "trade_date": str(trade_date or date.today()),
+                "trade_date": str(trade_date or datetime.now(tz=timezone.utc).date()),
                 "regime": "unknown",
                 "confidence": None,
                 "regime_detail": None,
@@ -383,11 +383,11 @@ class MonitorService:
         result = detector.detect_with_confidence(df)
 
         return {
-            "trade_date": str(trade_date or date.today()),
+            "trade_date": str(trade_date or datetime.now(tz=timezone.utc).date()),
             "regime": result["regime"],
             "confidence": result.get("confidence"),
             "regime_detail": result.get("features"),
-            "module_weight_adjustment": result.get("weight_adjustments"),
+            "module_weight_adjustment": result.get("module_weight_adjustment"),
         }
 
     @staticmethod
@@ -397,7 +397,7 @@ class MonitorService:
     ) -> dict[str, Any]:
         """组合监控"""
         return {
-            "trade_date": str(trade_date or date.today()),
+            "trade_date": str(trade_date or datetime.now(tz=timezone.utc).date()),
             "industry_exposure": {},
             "style_exposure": {},
             "turnover_rate": 0.0,
@@ -421,12 +421,40 @@ class MonitorService:
         resolved: bool | None = None,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
-        """获取告警列表"""
-        # TODO: 实现告警存储后对接
-        return []
+        """获取告警列表 — 从AlertLog表查询"""
+        query = db.query(AlertLog)
+        if severity:
+            query = query.filter(AlertLog.severity == severity)
+        if resolved is not None:
+            if resolved:
+                query = query.filter(AlertLog.status == "resolved")
+            else:
+                query = query.filter(AlertLog.status != "resolved")
+        rows = query.order_by(AlertLog.created_at.desc()).limit(limit).all()
+
+        return [
+            {
+                "alert_id": r.id,
+                "alert_type": r.alert_type,
+                "severity": r.severity,
+                "message": r.message or r.title,
+                "object_name": r.title,
+                "object_type": r.alert_type,
+                "alert_time": r.created_at.isoformat() if r.created_at else None,
+                "resolved_flag": r.status == "resolved",
+            }
+            for r in rows
+        ]
 
     @staticmethod
     def resolve_alert(db: Session, alert_id: int) -> bool:
         """解决告警"""
-        # TODO: 实现告警存储后对接
-        return True
+        from datetime import datetime, timezone
+
+        row = db.query(AlertLog).filter(AlertLog.id == alert_id).first()
+        if row:
+            row.status = "resolved"
+            row.resolved_at = datetime.now(tz=timezone.utc)
+            db.commit()
+            return True
+        return False

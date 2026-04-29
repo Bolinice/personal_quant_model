@@ -4,9 +4,6 @@
 所有函数接收权重/约束参数，返回优化后的权重。
 """
 
-import numpy as np
-import pandas as pd
-
 
 def equal_weight(codes: list[str]) -> dict[str, float]:
     """等权组合
@@ -21,7 +18,7 @@ def equal_weight(codes: list[str]) -> dict[str, float]:
     if n == 0:
         return {}
     w = 1.0 / n
-    return {code: w for code in codes}
+    return dict.fromkeys(codes, w)
 
 
 def ic_weighted(ic_values: dict[str, float], min_weight: float = 0.01) -> dict[str, float]:

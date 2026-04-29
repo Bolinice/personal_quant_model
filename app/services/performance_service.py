@@ -1,16 +1,19 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-from sqlalchemy.orm import Session
 
 from app.db.base import with_db
 from app.models.backtests import BacktestResult, BacktestTrade
 from app.models.securities import Security
 from app.models.simulated_portfolios import SimulatedPortfolioNav, SimulatedPortfolioPosition
 from app.schemas.performance import PerformanceAnalysis, PerformanceReport
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
 @with_db
@@ -32,7 +35,7 @@ def get_performance_analysis(
         .filter(
             SimulatedPortfolioNav.portfolio_id == backtest_id,
             SimulatedPortfolioNav.trade_date >= start_date if start_date else "1900-01-01",
-            SimulatedPortfolioNav.trade_date <= end_date if end_date else datetime.now().strftime("%Y-%m-%d"),
+            SimulatedPortfolioNav.trade_date <= end_date if end_date else datetime.now(tz=timezone.utc).strftime("%Y-%m-%d"),
         )
         .all()
     )
@@ -42,7 +45,6 @@ def get_performance_analysis(
 
     # 计算绩效指标
     return calculate_performance_metrics(nav_df, result)
-
 
 
 def calculate_performance_metrics(nav_df, result):
@@ -194,6 +196,5 @@ def generate_performance_report(analysis: PerformanceAnalysis):
     """生成绩效报告"""
     return PerformanceReport(
         analysis=analysis,
-        generated_at=datetime.now(),
+        generated_at=datetime.now(tz=timezone.utc),
     )
-

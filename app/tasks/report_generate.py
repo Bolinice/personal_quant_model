@@ -5,12 +5,12 @@
 
 from __future__ import annotations
 
+import contextlib
 from datetime import date, datetime
 
 from app.core.celery_config import celery_app
 from app.core.logging import logger
 from app.db.base import SessionLocal
-import contextlib
 
 
 def _create_task_log(db, task_type, task_name, run_id, params=None):
@@ -23,7 +23,7 @@ def _create_task_log(db, task_type, task_name, run_id, params=None):
         run_id=run_id,
         status="running",
         params_json=params,
-        started_at=datetime.now(),
+        started_at=datetime.now(tz=datetime.timezone.utc),
     )
     db.add(log)
     db.commit()
@@ -34,7 +34,7 @@ def _create_task_log(db, task_type, task_name, run_id, params=None):
 def _update_task_log(db, log, status, result=None, error=None):
     """更新任务日志"""
     log.status = status
-    log.ended_at = datetime.now()
+    log.ended_at = datetime.now(tz=datetime.timezone.utc)
     log.duration = (log.ended_at - log.started_at).total_seconds()
     if result:
         log.result_json = result
@@ -78,7 +78,7 @@ def run_daily_report_generate(self, trade_date: str | None = None, report_types:
         if trade_date:
             calc_date = date.fromisoformat(trade_date) if isinstance(trade_date, str) else trade_date
         else:
-            calc_date = date.today()
+            calc_date = datetime.now(tz=datetime.timezone.utc).date()
 
         if report_types is None:
             report_types = ["daily", "factor", "risk"]
@@ -303,7 +303,7 @@ def run_daily_report_generate(self, trade_date: str | None = None, report_types:
         logger.error(f"Report generation failed: {exc}")
         with contextlib.suppress(Exception):
             _update_task_log(db, task_log, "failed", error=exc)
-        raise self.retry(exc=exc, countdown=300)
+        raise self.retry(exc=exc, countdown=300) from exc
     finally:
         db.close()
 
@@ -403,17 +403,14 @@ def _generate_risk_report_content(calc_date, risk_summary):
 
     if critical:
         lines.extend(["", "## 严重预警", ""])
-        for a in critical:
-            lines.append(f"- **[{a.get('model_code', '')}]** {a.get('message', '')}")
+        lines.extend(f"- **[{a.get('model_code', '')}]** {a.get('message', '')}" for a in critical)
 
     if high:
         lines.extend(["", "## 高级预警", ""])
-        for a in high:
-            lines.append(f"- **[{a.get('model_code', '')}]** {a.get('message', '')}")
+        lines.extend(f"- **[{a.get('model_code', '')}]** {a.get('message', '')}" for a in high)
 
     if medium:
         lines.extend(["", "## 中级预警", ""])
-        for a in medium:
-            lines.append(f"- [{a.get('model_code', '')}] {a.get('message', '')}")
+        lines.extend(f"- [{a.get('model_code', '')}] {a.get('message', '')}" for a in medium)
 
     return "\n".join(lines)

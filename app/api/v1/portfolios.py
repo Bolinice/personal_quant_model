@@ -2,18 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 
 from app.core.compliance import add_disclaimer
 from app.core.permissions import require_permission
 from app.core.response import success
 from app.db.base import get_db
-from app.models.user import User
-from app.schemas.portfolios import (
-    PortfolioCreate,
-    PortfolioPositionCreate,
-)
 from app.services.portfolios_service import (
     create_portfolio,
     create_portfolio_positions,
@@ -23,6 +19,15 @@ from app.services.portfolios_service import (
     get_portfolios,
     get_rebalance_records,
 )
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
+    from app.models.user import User
+    from app.schemas.portfolios import (
+        PortfolioCreate,
+        PortfolioPositionCreate,
+    )
 
 router = APIRouter()
 

@@ -1,15 +1,19 @@
 from __future__ import annotations
 
-from datetime import datetime
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-from sqlalchemy.orm import Session
 
 from app.db.base import with_db
 from app.models.factors import Factor, FactorAnalysis, FactorValue
 from app.models.market import StockDaily, TradingCalendar
 from app.schemas.factors import FactorAnalysisCreate, FactorCreate, FactorUpdate, FactorValueCreate
+
+if TYPE_CHECKING:
+    from datetime import datetime
+
+    from sqlalchemy.orm import Session
 
 
 @with_db

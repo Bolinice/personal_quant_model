@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
-from sqlalchemy.orm import Session
 
 from app.db.base import with_db
 from app.models.simulated_portfolios import SimulatedPortfolio, SimulatedPortfolioNav, SimulatedPortfolioPosition
@@ -10,6 +11,9 @@ from app.schemas.simulated_portfolios import (
     SimulatedPortfolioNavCreate,
     SimulatedPortfolioPositionCreate,
 )
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
 @with_db

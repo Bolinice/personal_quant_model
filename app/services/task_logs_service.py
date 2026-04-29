@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from sqlalchemy.orm import Session
+from typing import TYPE_CHECKING
 
 from app.db.base import with_db
 from app.models.task_logs import TaskLog
-from app.schemas.task_logs import TaskLogCreate, TaskLogUpdate
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
+    from app.schemas.task_logs import TaskLogCreate, TaskLogUpdate
 
 
 @with_db

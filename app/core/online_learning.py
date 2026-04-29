@@ -81,19 +81,18 @@ class OnlineLearning:
         )
 
         # 转换为字典格式返回
-        results = []
-        for r in wf_results:
-            results.append(
-                {
-                    "train_start": r.train_start,
-                    "train_end": r.train_end,
-                    "test_start": r.test_start,
-                    "test_end": r.test_end,
-                    "test_ic": r.test_ic,
-                    "test_icir": r.test_icir,
-                    "test_rank_ic": r.test_rank_ic,
-                }
-            )
+        results = [
+            {
+                "train_start": r.train_start,
+                "train_end": r.train_end,
+                "test_start": r.test_start,
+                "test_end": r.test_end,
+                "test_ic": r.test_ic,
+                "test_icir": r.test_icir,
+                "test_rank_ic": r.test_rank_ic,
+            }
+            for r in wf_results
+        ]
 
         # 更新当前模型为最后一个窗口的模型
         if wf_results and wf_results[-1].model is not None:

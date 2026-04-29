@@ -13,16 +13,17 @@
   ├── TradingRuleViolationError   — 回测违反 A 股交易规则
   └── PortfolioRiskError          — 组合风险超限
 """
-from enum import Enum
+
+from enum import StrEnum
 
 
-class ErrorSeverity(str, Enum):
+class ErrorSeverity(StrEnum):
     WARNING = "warning"
     CRITICAL = "critical"
     EMERGENCY = "emergency"
 
 
-class ErrorCode(str, Enum):
+class ErrorCode(StrEnum):
     # Data errors
     LOOKAHEAD_BIAS = "DATA_001"
     DATA_STALE = "DATA_002"

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from sqlalchemy.orm import Session
+from typing import TYPE_CHECKING
 
 from app.db.base import with_db
 from app.models.models import Model
 from app.models.portfolios import Portfolio, PortfolioPosition, RebalanceRecord
 from app.schemas.portfolios import PortfolioCreate, PortfolioPositionCreate, RebalanceRecordCreate
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
 @with_db

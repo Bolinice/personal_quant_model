@@ -5,7 +5,6 @@
 不修改输入，不产生副作用，可独立测试。
 """
 
-import numpy as np
 import pandas as pd
 
 
@@ -106,7 +105,9 @@ def calc_ema(series: pd.Series, span: int) -> pd.Series:
     return series.ewm(span=span, adjust=False).mean()
 
 
-def calc_macd(close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> tuple[pd.Series, pd.Series, pd.Series]:
+def calc_macd(
+    close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9
+) -> tuple[pd.Series, pd.Series, pd.Series]:
     """MACD指标
 
     Args:
@@ -126,7 +127,9 @@ def calc_macd(close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9)
     return dif, dea, macd_bar
 
 
-def calc_bollinger_bands(close: pd.Series, period: int = 20, num_std: float = 2.0) -> tuple[pd.Series, pd.Series, pd.Series]:
+def calc_bollinger_bands(
+    close: pd.Series, period: int = 20, num_std: float = 2.0
+) -> tuple[pd.Series, pd.Series, pd.Series]:
     """布林带
 
     Args:

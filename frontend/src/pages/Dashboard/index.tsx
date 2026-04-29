@@ -66,7 +66,7 @@ export default function Dashboard() {
 
   const healthyCount = factorHealth.filter((f) => f.health_status === 'healthy').length;
   const warningCount = factorHealth.filter((f) => f.health_status === 'warning').length;
-  const unhealthyCount = factorHealth.filter((f) => f.health_status === 'unhealthy').length;
+  const unhealthyCount = factorHealth.filter((f) => f.health_status === 'unhealthy' || f.health_status === 'critical').length;
 
   return (
     <Box>

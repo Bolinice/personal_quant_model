@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import datetime, timedelta
 
 from app.core.celery_config import celery_app
 from app.core.logging import logger
@@ -16,7 +16,7 @@ def sync_event_data(trade_date: str | None = None):
     数据源: Tushare / AKShare
     """
     if trade_date is None:
-        trade_date = str(date.today() - timedelta(days=1))
+        trade_date = str(datetime.now(tz=datetime.timezone.utc).date() - timedelta(days=1))
 
     logger.info(f"开始同步事件数据: {trade_date}")
 

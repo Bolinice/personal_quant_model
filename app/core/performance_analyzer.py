@@ -5,15 +5,18 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-from sqlalchemy.orm import Session
 
 from app.db.base import SessionLocal, with_db
 from app.models.backtests import BacktestResult
 from app.models.simulated_portfolios import SimulatedPortfolioNav
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
 class PerformanceAnalyzer:
@@ -362,7 +365,7 @@ class PerformanceAnalyzer:
 
         return {
             "title": title,
-            "generated_at": datetime.now(),
+            "generated_at": datetime.now(tz=timezone.utc),
             "metrics": metrics,
             "monthly_returns": monthly_returns.to_dict(),
             "yearly_returns": yearly_returns.to_dict(),

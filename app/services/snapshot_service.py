@@ -1,7 +1,7 @@
 """数据快照服务"""
 
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -32,10 +32,10 @@ class SnapshotService:
     @staticmethod
     def create_snapshot(db: Session, data: DataSnapshotCreate) -> DataSnapshotRegistry:
         """创建数据快照"""
-        snapshot_id = f"snap_{date.today().strftime('%Y%m%d')}_{uuid.uuid4().hex[:8]}"
+        snapshot_id = f"snap_{datetime.now(tz=timezone.utc).date().strftime('%Y%m%d')}_{uuid.uuid4().hex[:8]}"
         snapshot = DataSnapshotRegistry(
             snapshot_id=snapshot_id,
-            snapshot_date=date.today(),
+            snapshot_date=datetime.now(tz=timezone.utc).date(),
             description=data.description,
             code_version=data.snapshot_type,
         )

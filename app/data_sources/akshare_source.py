@@ -8,8 +8,7 @@ AKShare免费无限制，但数据字段和精度可能略有差异。
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta
-from typing import Any
+from datetime import datetime, timezone
 
 import pandas as pd
 
@@ -41,7 +40,7 @@ class AKShareSource:
             import akshare as ak
 
             ts_code = kwargs.get("ts_code")
-            trade_date = kwargs.get("trade_date")
+            kwargs.get("trade_date")
             start_date = kwargs.get("start_date")
             end_date = kwargs.get("end_date")
 
@@ -52,7 +51,7 @@ class AKShareSource:
                     symbol=symbol,
                     period="daily",
                     start_date=start_date.strftime("%Y%m%d") if start_date else "20200101",
-                    end_date=end_date.strftime("%Y%m%d") if end_date else datetime.now().strftime("%Y%m%d"),
+                    end_date=end_date.strftime("%Y%m%d") if end_date else datetime.now(tz=timezone.utc).strftime("%Y%m%d"),
                     adjust="qfq",
                 )
                 # 列名映射到Tushare格式
@@ -77,7 +76,7 @@ class AKShareSource:
             return pd.DataFrame()
 
         except ImportError:
-            raise ImportError("请安装akshare: pip install akshare")
+            raise ImportError("请安装akshare: pip install akshare") from None
         except Exception as e:
             logger.error("AKShare获取stock_daily失败: %s", e)
             return pd.DataFrame()
@@ -119,8 +118,7 @@ class AKShareSource:
             ts_code = kwargs.get("ts_code")
             if ts_code:
                 symbol = ts_code.split(".")[0] if "." in ts_code else ts_code
-                df = ak.stock_financial_analysis_indicator(symbol=symbol)
-                return df
+                return ak.stock_financial_analysis_indicator(symbol=symbol)
 
             return pd.DataFrame()
 
@@ -134,8 +132,8 @@ class AKShareSource:
             import akshare as ak
 
             ts_code = kwargs.get("ts_code", "000001.SH")
-            start_date = kwargs.get("start_date")
-            end_date = kwargs.get("end_date")
+            kwargs.get("start_date")
+            kwargs.get("end_date")
 
             # 映射Tushare指数代码到AKShare
             index_map = {
@@ -175,8 +173,7 @@ class AKShareSource:
 
             trade_date = kwargs.get("trade_date")
             if trade_date:
-                df = ak.stock_individual_fund_flow_rank(indicator="今日")
-                return df
+                return ak.stock_individual_fund_flow_rank(indicator="今日")
 
             return pd.DataFrame()
 
@@ -192,11 +189,10 @@ class AKShareSource:
             trade_date = kwargs.get("trade_date")
             start_date = kwargs.get("start_date")
 
-            df = ak.stock_margin_detail_sse(
+            return ak.stock_margin_detail_sse(
                 start_date=start_date.strftime("%Y%m%d") if start_date else "20230101",
-                end_date=trade_date.strftime("%Y%m%d") if trade_date else datetime.now().strftime("%Y%m%d"),
+                end_date=trade_date.strftime("%Y%m%d") if trade_date else datetime.now(tz=timezone.utc).strftime("%Y%m%d"),
             )
-            return df
 
         except Exception as e:
             logger.error("AKShare获取margin失败: %s", e)
@@ -207,8 +203,7 @@ class AKShareSource:
         try:
             import akshare as ak
 
-            df = ak.stock_hsgt_north_net_flow_in_em(indicator="北向")
-            return df
+            return ak.stock_hsgt_north_net_flow_in_em(indicator="北向")
 
         except Exception as e:
             logger.error("AKShare获取northflow失败: %s", e)

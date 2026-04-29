@@ -128,8 +128,4 @@ def check_high_risk_text(text: str) -> list:
     Returns:
         找到的高风险词汇列表
     """
-    found = []
-    for term in HIGH_RISK_TERMS:
-        if term in text:
-            found.append(term)
-    return found
+    return [term for term in HIGH_RISK_TERMS if term in text]

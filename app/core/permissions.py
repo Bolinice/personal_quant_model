@@ -38,9 +38,9 @@ class PermissionCode:
 
 def get_user_role(user: User, db: Session) -> str:
     """获取用户当前有效角色（基于订阅计划）"""
-    from datetime import date
+    from datetime import datetime, timezone
 
-    today = date.today()
+    today = datetime.now(tz=timezone.utc).date()
     # 查找当前有效订阅
     subscription = (
         db.query(Subscription)

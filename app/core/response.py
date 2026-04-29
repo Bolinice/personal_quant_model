@@ -4,7 +4,7 @@
 所有响应包含 timestamp 字段，便于客户端判断数据新鲜度。
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, TypeVar
 
 from pydantic import BaseModel, Field
@@ -14,7 +14,7 @@ T = TypeVar("T")
 
 def _now_iso() -> str:
     """当前UTC时间的ISO格式"""
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class Response(BaseModel):

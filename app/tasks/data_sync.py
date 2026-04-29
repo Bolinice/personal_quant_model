@@ -2,7 +2,7 @@
 数据同步异步任务
 """
 
-from datetime import date
+from datetime import datetime
 
 from app.core.celery_config import celery_app
 from app.core.logging import logger
@@ -18,7 +18,7 @@ def run_daily_sync(self):
         db = SessionLocal()
         try:
             service = DataSyncService()
-            trade_date = date.today()
+            trade_date = datetime.now(tz=datetime.timezone.utc).date()
             result = service.run_daily_pipeline(trade_date.strftime("%Y-%m-%d"))
             logger.info(f"Daily sync completed: {result}")
             return result
@@ -26,4 +26,4 @@ def run_daily_sync(self):
             db.close()
     except Exception as exc:
         logger.error(f"Daily sync failed: {exc}")
-        raise self.retry(exc=exc, countdown=300)
+        raise self.retry(exc=exc, countdown=300) from exc

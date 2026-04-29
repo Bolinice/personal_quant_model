@@ -1,18 +1,11 @@
 """回测引擎核心逻辑测试 — T+1/涨跌停/交易成本"""
 
-import numpy as np
-import pandas as pd
 from datetime import date
 
 from app.core.backtest_engine import (
     ABShareBacktestEngine,
     BacktestState,
-    Position,
     TransactionCost,
-    LOT_SIZE,
-    MAIN_BOARD_LIMIT_PCT,
-    GEM_LIMIT_PCT,
-    ST_LIMIT_PCT,
 )
 
 
@@ -97,12 +90,20 @@ class TestT1Rule:
     def test_t1_buy_cannot_sell_same_day(self):
         """当日买入不能当日卖出"""
         self.engine.execute_buy(
-            self.state, "600001.SH", 10000, 10.0, date(2025, 1, 15),
+            self.state,
+            "600001.SH",
+            10000,
+            10.0,
+            date(2025, 1, 15),
             stock_data={"pct_chg": 0, "is_suspended": False, "is_st": False, "is_delist": False},
         )
         # 当日卖出应失败
         result = self.engine.execute_sell(
-            self.state, "600001.SH", 100, 10.0, date(2025, 1, 15),
+            self.state,
+            "600001.SH",
+            100,
+            10.0,
+            date(2025, 1, 15),
             stock_data={"pct_chg": 0, "is_suspended": False, "is_st": False, "is_delist": False},
         )
         assert result is None  # T+1限制
@@ -110,14 +111,22 @@ class TestT1Rule:
     def test_t1_can_sell_next_day(self):
         """次日可以卖出前日买入的股票"""
         self.engine.execute_buy(
-            self.state, "600001.SH", 10000, 10.0, date(2025, 1, 15),
+            self.state,
+            "600001.SH",
+            10000,
+            10.0,
+            date(2025, 1, 15),
             stock_data={"pct_chg": 0, "is_suspended": False, "is_st": False, "is_delist": False},
         )
         # 重置shares_bought_today (模拟次日)
         for pos in self.state.positions.values():
             pos.shares_bought_today = 0
         result = self.engine.execute_sell(
-            self.state, "600001.SH", 100, 10.5, date(2025, 1, 16),
+            self.state,
+            "600001.SH",
+            100,
+            10.5,
+            date(2025, 1, 16),
             stock_data={"pct_chg": 5, "is_suspended": False, "is_st": False, "is_delist": False},
         )
         assert result is not None  # T+1后可卖出

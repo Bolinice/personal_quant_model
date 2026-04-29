@@ -2,7 +2,6 @@
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from app.core.ensemble import EnsembleEngine
 
@@ -55,18 +54,18 @@ class TestEnsembleEngine:
         _, meta_defensive = self.engine.fuse(factor_df, regime="defensive", ic_dict=ic_dict)
         # 不同regime的权重应不同
         w1 = meta_trending.get("step5_final_weights", {})
-        w2 = meta_defensive.get("step5_final_weights", {})
+        meta_defensive.get("step5_final_weights", {})
         # 至少权重比例应不同
         assert isinstance(w1, dict)
 
     def test_fuse_empty_data(self):
         """空数据应返回空结果"""
         factor_df = pd.DataFrame()
-        scores, meta = self.engine.fuse(factor_df)
+        scores, _meta = self.engine.fuse(factor_df)
         assert len(scores) == 0
 
     def test_fuse_single_factor(self):
         """单因子融合应正常工作"""
         factor_df = _make_factor_df(n_factors=1)
-        scores, meta = self.engine.fuse(factor_df)
+        scores, _meta = self.engine.fuse(factor_df)
         assert len(scores) == 50

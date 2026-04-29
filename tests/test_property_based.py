@@ -9,10 +9,11 @@ Property-based Testing (Hypothesis)
 3. 中性化后组内均值≈0
 4. 组合权重之和 = 1.0
 """
+
 import numpy as np
 import pandas as pd
 import pytest
-from hypothesis import given, settings, assume
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from app.core.factor_preprocess import FactorPreprocessor
@@ -28,13 +29,15 @@ positive_floats = st.floats(min_value=0.01, max_value=1e6, allow_nan=False, allo
 # 生成有变化的因子值（排除常量序列）
 factor_values = st.lists(
     st.floats(min_value=-1e6, max_value=1e6, allow_nan=False, allow_infinity=False),
-    min_size=30, max_size=200,
+    min_size=30,
+    max_size=200,
 ).filter(lambda xs: len(set(xs)) > 5)  # 至少5个不同值
 
 mad_thresholds = st.floats(min_value=1.0, max_value=5.0)
 
 
 # ==================== MAD Winsorization ====================
+
 
 class TestMADWinsorization:
     """MAD 去极值不变量测试"""
@@ -87,6 +90,7 @@ class TestMADWinsorization:
 
 # ==================== Z-score Standardization ====================
 
+
 class TestZScoreStandardization:
     """Z-score 标准化不变量测试"""
 
@@ -122,6 +126,7 @@ class TestZScoreStandardization:
             return
 
         from scipy.stats import rankdata
+
         original_ranks = rankdata(series[valid].values)
         result_ranks = rankdata(result[valid].values)
         # 容忍浮点精度：rank 应大致一致
@@ -131,6 +136,7 @@ class TestZScoreStandardization:
 
 
 # ==================== Rank Normal Standardization ====================
+
 
 class TestRankNormalStandardization:
     """逆正态秩变换不变量测试"""
@@ -153,6 +159,7 @@ class TestRankNormalStandardization:
 
 
 # ==================== Preprocessing Pipeline ====================
+
 
 class TestPreprocessingPipeline:
     """完整预处理流水线不变量测试"""

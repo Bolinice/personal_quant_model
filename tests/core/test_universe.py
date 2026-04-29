@@ -1,21 +1,23 @@
 """UniverseBuilder 单元测试 — 股票池构建"""
 
+from datetime import date
+
 import numpy as np
 import pandas as pd
-import pytest
 
-from datetime import date
 from app.core.universe import UniverseBuilder
 
 
 def _make_stock_basic(n: int = 100) -> pd.DataFrame:
     """生成模拟股票基本信息"""
     np.random.seed(42)
-    return pd.DataFrame({
-        "ts_code": [f"{600000 + i:06d}.SH" for i in range(n)],
-        "list_date": pd.date_range("2015-01-01", periods=n, freq="7D").strftime("%Y%m%d"),
-        "list_status": ["L"] * n,
-    })
+    return pd.DataFrame(
+        {
+            "ts_code": [f"{600000 + i:06d}.SH" for i in range(n)],
+            "list_date": pd.date_range("2015-01-01", periods=n, freq="7D").strftime("%Y%m%d"),
+            "list_status": ["L"] * n,
+        }
+    )
 
 
 def _make_price_df(n: int = 100, days: int = 30) -> pd.DataFrame:
@@ -24,14 +26,16 @@ def _make_price_df(n: int = 100, days: int = 30) -> pd.DataFrame:
     ts_codes = [f"{600000 + i:06d}.SH" for i in range(n)]
     rows = []
     for code in ts_codes:
-        for d in range(days):
-            rows.append({
+        rows.extend(
+            {
                 "ts_code": code,
                 "trade_date": date(2025, 1, 1) + pd.Timedelta(days=d),
                 "close": np.random.uniform(5, 100),
                 "amount": np.random.uniform(5e7, 5e8),
                 "vol": np.random.uniform(1e6, 1e8),
-            })
+            }
+            for d in range(days)
+        )
     return pd.DataFrame(rows)
 
 
@@ -58,11 +62,13 @@ class TestUniverseBuilder:
         """ST股应被排除"""
         stock_basic = _make_stock_basic()
         price_df = _make_price_df()
-        status_df = pd.DataFrame({
-            "ts_code": [stock_basic["ts_code"].iloc[0]],
-            "trade_date": [date(2025, 1, 30)],
-            "is_st": [True],
-        })
+        status_df = pd.DataFrame(
+            {
+                "ts_code": [stock_basic["ts_code"].iloc[0]],
+                "trade_date": [date(2025, 1, 30)],
+                "is_st": [True],
+            }
+        )
         result_without = self.builder.build(
             trade_date=date(2025, 1, 30),
             stock_basic_df=stock_basic,

@@ -4,12 +4,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import app.models  # noqa: F401 - register models with Base.metadata
+import app.models
 from app.db.base import Base, get_db
 from app.main import app
 from app.models.user import User
 from app.services.auth_service import AuthService
-
 
 # ==================== Golden Master CLI Option ====================
 
@@ -22,6 +21,7 @@ def pytest_addoption(parser):
 def update_golden(request):
     """判断是否更新 golden master"""
     return request.config.getoption("update_golden")
+
 
 # Use shared in-memory SQLite for tests (StaticPool keeps same DB across connections)
 _test_engine = create_engine(
@@ -66,7 +66,10 @@ def auth_headers(client, db):
     existing = db.query(User).filter(User.username == "testuser").first()
     if not existing:
         user = AuthService.create_user(
-            db, "testuser", "test@example.com", "TestPass1",
+            db,
+            "testuser",
+            "test@example.com",
+            "TestPass1",
             role="admin",
         )
     else:

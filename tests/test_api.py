@@ -1,6 +1,7 @@
 """
 API集成测试 - 使用conftest.py中的共享fixtures
 """
+
 import pytest
 
 
@@ -22,10 +23,13 @@ class TestAuthAPI:
     """认证API测试"""
 
     def test_login_missing_credentials(self, client):
-        response = client.post("/api/v1/auth/login", data={
-            "username": "nonexistent",
-            "password": "wrong",
-        })
+        response = client.post(
+            "/api/v1/auth/login",
+            data={
+                "username": "nonexistent",
+                "password": "wrong",
+            },
+        )
         assert response.status_code in [401, 422, 400]
 
 
@@ -33,11 +37,14 @@ class TestMarketAPI:
     """市场数据API测试"""
 
     def test_get_market_data(self, client):
-        response = client.get("/api/v1/market/stock-daily", params={
-            "ts_code": "000001.SZ",
-            "start_date": "2024-01-01",
-            "end_date": "2024-01-31",
-        })
+        response = client.get(
+            "/api/v1/market/stock-daily",
+            params={
+                "ts_code": "000001.SZ",
+                "start_date": "2024-01-01",
+                "end_date": "2024-01-31",
+            },
+        )
         assert response.status_code in [200, 404]
 
 

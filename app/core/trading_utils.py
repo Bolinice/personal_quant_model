@@ -38,9 +38,7 @@ class TradingCalendar:
 
             records = (
                 self.db.query(TradingCalendarModel)
-                .filter(
-                    TradingCalendarModel.is_open == True  # noqa: E712
-                )
+                .filter(TradingCalendarModel.is_open)
                 .order_by(TradingCalendarModel.cal_date)
                 .all()
             )

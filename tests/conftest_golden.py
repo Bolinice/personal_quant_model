@@ -75,15 +75,11 @@ def compare_with_golden(name: str, current: pd.DataFrame, atol: float = 1e-6) ->
 
     # 列名必须一致
     assert list(golden.columns) == list(current.columns), (
-        f"Column mismatch for '{name}':\n"
-        f"  Golden: {list(golden.columns)}\n"
-        f"  Current: {list(current.columns)}"
+        f"Column mismatch for '{name}':\n  Golden: {list(golden.columns)}\n  Current: {list(current.columns)}"
     )
 
     # 行数必须一致
-    assert len(golden) == len(current), (
-        f"Row count mismatch for '{name}': golden={len(golden)}, current={len(current)}"
-    )
+    assert len(golden) == len(current), f"Row count mismatch for '{name}': golden={len(golden)}, current={len(current)}"
 
     # 数值列逐列对比
     for col in golden.select_dtypes(include=["number"]).columns:

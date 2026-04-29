@@ -114,7 +114,7 @@ class UniverseBuilder:
         if exclude_st and stock_status_df is not None and not stock_status_df.empty:
             status_on_date = self._filter_by_date(stock_status_df, trade_date)
             if "is_st" in status_on_date.columns:
-                st_stocks = status_on_date[status_on_date["is_st"] == True]["ts_code"]  # noqa: E712
+                st_stocks = status_on_date[status_on_date["is_st"]]["ts_code"]
                 excluded_reasons["st"] = len(st_stocks)
                 candidates -= set(st_stocks)
 
@@ -122,7 +122,7 @@ class UniverseBuilder:
         if exclude_suspended and stock_status_df is not None and not stock_status_df.empty:
             status_on_date = self._filter_by_date(stock_status_df, trade_date)
             if "is_suspended" in status_on_date.columns:
-                suspended = status_on_date[status_on_date["is_suspended"] == True]["ts_code"]  # noqa: E712
+                suspended = status_on_date[status_on_date["is_suspended"]]["ts_code"]
                 excluded_reasons["suspended"] = len(suspended)
                 candidates -= set(suspended)
 
@@ -130,7 +130,7 @@ class UniverseBuilder:
         if exclude_delist and stock_status_df is not None and not stock_status_df.empty:
             status_on_date = self._filter_by_date(stock_status_df, trade_date)
             if "is_delist" in status_on_date.columns:
-                delist_stocks = status_on_date[status_on_date["is_delist"] == True]["ts_code"]  # noqa: E712
+                delist_stocks = status_on_date[status_on_date["is_delist"]]["ts_code"]
                 excluded_reasons["delist_organizing"] = len(delist_stocks)
                 candidates -= set(delist_stocks)
 

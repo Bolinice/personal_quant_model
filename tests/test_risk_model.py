@@ -1,7 +1,7 @@
 """
 风险模型测试
 """
-import pytest
+
 import numpy as np
 import pandas as pd
 
@@ -11,10 +11,11 @@ class TestRiskModelCovariance:
 
     def test_sample_covariance(self):
         from app.core.risk_model import RiskModel
+
         model = RiskModel()
 
         np.random.seed(42)
-        returns = pd.DataFrame(np.random.randn(100, 3), columns=['A', 'B', 'C'])
+        returns = pd.DataFrame(np.random.randn(100, 3), columns=["A", "B", "C"])
         cov = model.sample_covariance(returns)
 
         assert cov.shape == (3, 3)
@@ -22,10 +23,11 @@ class TestRiskModelCovariance:
 
     def test_ledoit_wolf_shrinkage(self):
         from app.core.risk_model import RiskModel
+
         model = RiskModel()
 
         np.random.seed(42)
-        returns = pd.DataFrame(np.random.randn(100, 5), columns=list('ABCDE'))
+        returns = pd.DataFrame(np.random.randn(100, 5), columns=list("ABCDE"))
         cov = model.ledoit_wolf_shrinkage(returns)
 
         assert cov.shape == (5, 5)
@@ -35,10 +37,11 @@ class TestRiskModelCovariance:
 
     def test_ewma_covariance(self):
         from app.core.risk_model import RiskModel
+
         model = RiskModel()
 
         np.random.seed(42)
-        returns = pd.DataFrame(np.random.randn(100, 3), columns=['A', 'B', 'C'])
+        returns = pd.DataFrame(np.random.randn(100, 3), columns=["A", "B", "C"])
         cov = model.ewma_covariance(returns, halflife=20)
 
         assert cov.shape == (3, 3)
@@ -49,6 +52,7 @@ class TestRiskModelVaR:
 
     def test_historical_var(self):
         from app.core.risk_model import RiskModel
+
         model = RiskModel()
 
         np.random.seed(42)
@@ -58,6 +62,7 @@ class TestRiskModelVaR:
 
     def test_parametric_var(self):
         from app.core.risk_model import RiskModel
+
         model = RiskModel()
 
         np.random.seed(42)
@@ -67,6 +72,7 @@ class TestRiskModelVaR:
 
     def test_conditional_var(self):
         from app.core.risk_model import RiskModel
+
         model = RiskModel()
 
         np.random.seed(42)
@@ -79,6 +85,7 @@ class TestRiskModelVaR:
 
     def test_student_t_var(self):
         from app.core.risk_model import RiskModel
+
         model = RiskModel()
 
         np.random.seed(42)
@@ -92,6 +99,7 @@ class TestRiskDecomposition:
 
     def test_risk_contribution(self):
         from app.core.risk_model import RiskModel
+
         model = RiskModel()
 
         weights = np.array([0.25, 0.25, 0.25, 0.25])
@@ -102,6 +110,7 @@ class TestRiskDecomposition:
 
     def test_marginal_risk_contribution(self):
         from app.core.risk_model import RiskModel
+
         model = RiskModel()
 
         weights = np.array([0.5, 0.5])
@@ -112,12 +121,11 @@ class TestRiskDecomposition:
 
     def test_liquidity_adjusted_var(self):
         from app.core.risk_model import RiskModel
+
         model = RiskModel()
 
         np.random.seed(42)
         returns = pd.Series(np.random.randn(252) * 0.02)
-        result = model.liquidity_adjusted_var(
-            returns, position_size=1e6, daily_volume=1e8
-        )
-        assert result['lvar'] > result['var']  # LVaR should be > VaR
-        assert result['impact_cost'] > 0
+        result = model.liquidity_adjusted_var(returns, position_size=1e6, daily_volume=1e8)
+        assert result["lvar"] > result["var"]  # LVaR should be > VaR
+        assert result["impact_cost"] > 0

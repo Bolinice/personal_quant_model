@@ -2,11 +2,9 @@
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from app.core.alpha_modules import (
     MODULE_REGISTRY,
-    AlphaModuleBase,
     ExpectationModule,
     FlowConfirmModule,
     QualityGrowthModule,

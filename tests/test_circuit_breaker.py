@@ -23,8 +23,8 @@ class TestCircuitBreaker:
         """连续失败达到阈值后进入 OPEN 状态"""
         cb = CircuitBreaker(failure_threshold=3, recovery_timeout=60)
 
-        for i in range(3):
-            with pytest.raises(ValueError):
+        for _i in range(3):
+            with pytest.raises(ValueError, match="fail"):
                 cb.call(lambda: (_ for _ in ()).throw(ValueError("fail")))
 
         assert cb.state == "OPEN"
@@ -33,7 +33,7 @@ class TestCircuitBreaker:
     def test_open_state_rejects_calls(self):
         """OPEN 状态下拒绝调用"""
         cb = CircuitBreaker(failure_threshold=1, recovery_timeout=60)
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="fail"):
             cb.call(lambda: (_ for _ in ()).throw(ValueError("fail")))
 
         assert cb.state == "OPEN"
@@ -44,7 +44,7 @@ class TestCircuitBreaker:
         """恢复超时后进入 HALF_OPEN 状态"""
         cb = CircuitBreaker(failure_threshold=1, recovery_timeout=0.1)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="fail"):
             cb.call(lambda: (_ for _ in ()).throw(ValueError("fail")))
 
         assert cb.state == "OPEN"
@@ -59,13 +59,13 @@ class TestCircuitBreaker:
         """HALF_OPEN 状态下失败重新进入 OPEN"""
         cb = CircuitBreaker(failure_threshold=1, recovery_timeout=0.1)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="fail"):
             cb.call(lambda: (_ for _ in ()).throw(ValueError("fail")))
 
         time.sleep(0.2)
 
         # HALF_OPEN 试探失败
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="fail"):
             cb.call(lambda: (_ for _ in ()).throw(ValueError("fail")))
 
         assert cb.state == "OPEN"
@@ -74,7 +74,7 @@ class TestCircuitBreaker:
         """成功调用重置失败计数"""
         cb = CircuitBreaker(failure_threshold=3, recovery_timeout=60)
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="fail"):
             cb.call(lambda: (_ for _ in ()).throw(ValueError("fail")))
         assert cb._failure_count == 1
 

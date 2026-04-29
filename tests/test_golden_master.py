@@ -11,10 +11,7 @@ Golden Master 测试
 
 import numpy as np
 import pandas as pd
-import pytest
-
-from tests.conftest_golden import compare_with_golden, load_golden, save_golden
-
+from tests.conftest_golden import compare_with_golden, save_golden
 
 # ==================== 测试数据生成 ====================
 
@@ -30,8 +27,8 @@ def _make_sample_factor_data() -> pd.DataFrame:
 
     rows = []
     for date in dates:
-        for code in codes:
-            rows.append({
+        rows.extend(
+            {
                 "trade_date": date.strftime("%Y%m%d"),
                 "ts_code": code,
                 "roe_ttm": rng.normal(0.10, 0.05),
@@ -40,7 +37,9 @@ def _make_sample_factor_data() -> pd.DataFrame:
                 "eps_revision_fy0": rng.normal(0.02, 0.05),
                 "residual_return_20d": rng.normal(0.01, 0.03),
                 "volatility_20d": rng.normal(0.02, 0.01),
-            })
+            }
+            for code in codes
+        )
 
     return pd.DataFrame(rows)
 
@@ -56,14 +55,16 @@ def _make_sample_label_data() -> pd.DataFrame:
 
     rows = []
     for date in dates:
-        for code in codes:
-            rows.append({
+        rows.extend(
+            {
                 "trade_date": date.strftime("%Y%m%d"),
                 "ts_code": code,
                 "fwd_return_5d": rng.normal(0.005, 0.03),
                 "excess_return_5d": rng.normal(0.002, 0.02),
                 "industry_neutral_return": rng.normal(0.001, 0.015),
-            })
+            }
+            for code in codes
+        )
 
     return pd.DataFrame(rows)
 
@@ -79,8 +80,8 @@ def _make_sample_ensemble_data() -> pd.DataFrame:
 
     rows = []
     for date in dates:
-        for code in codes:
-            rows.append({
+        rows.extend(
+            {
                 "trade_date": date.strftime("%Y%m%d"),
                 "ts_code": code,
                 "quality_growth_score": rng.normal(0, 1),
@@ -89,7 +90,9 @@ def _make_sample_ensemble_data() -> pd.DataFrame:
                 "flow_confirm_score": rng.normal(0, 1),
                 "risk_penalty_score": rng.normal(0, 0.5),
                 "final_score": rng.normal(0, 1),
-            })
+            }
+            for code in codes
+        )
 
     return pd.DataFrame(rows)
 

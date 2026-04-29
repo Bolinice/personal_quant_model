@@ -1,11 +1,10 @@
 """
 回测完整性检查测试
 """
+
 import pandas as pd
-import pytest
 
 from app.core.backtest_integrity import (
-    IntegrityCheckResult,
     check_lot_size,
     check_no_trades_on_non_trading_days,
     check_position_limits,
@@ -57,20 +56,24 @@ class TestTurnoverCheck:
 
 class TestTPlusOne:
     def test_no_same_day_buy_sell(self):
-        trades = pd.DataFrame({
-            "trade_date": ["20250110", "20250110", "20250111"],
-            "ts_code": ["000001.SZ", "000002.SZ", "000001.SZ"],
-            "action": ["buy", "buy", "sell"],
-        })
+        trades = pd.DataFrame(
+            {
+                "trade_date": ["20250110", "20250110", "20250111"],
+                "ts_code": ["000001.SZ", "000002.SZ", "000001.SZ"],
+                "action": ["buy", "buy", "sell"],
+            }
+        )
         result = check_t_plus_1(trades)
         assert result.passed
 
     def test_same_day_buy_sell_violation(self):
-        trades = pd.DataFrame({
-            "trade_date": ["20250110", "20250110"],
-            "ts_code": ["000001.SZ", "000001.SZ"],
-            "action": ["buy", "sell"],
-        })
+        trades = pd.DataFrame(
+            {
+                "trade_date": ["20250110", "20250110"],
+                "ts_code": ["000001.SZ", "000001.SZ"],
+                "action": ["buy", "sell"],
+            }
+        )
         result = check_t_plus_1(trades)
         assert not result.passed
         assert result.violations[0]["code"] == ErrorCode.T_PLUS_1_VIOLATION.value
@@ -82,21 +85,25 @@ class TestTPlusOne:
 
 class TestNonTradingDays:
     def test_all_trading_days(self):
-        trades = pd.DataFrame({
-            "trade_date": ["20250110", "20250113"],
-            "ts_code": ["000001.SZ", "000002.SZ"],
-            "action": ["buy", "sell"],
-        })
+        trades = pd.DataFrame(
+            {
+                "trade_date": ["20250110", "20250113"],
+                "ts_code": ["000001.SZ", "000002.SZ"],
+                "action": ["buy", "sell"],
+            }
+        )
         trading_dates = {"20250110", "20250113"}
         result = check_no_trades_on_non_trading_days(trades, trading_dates)
         assert result.passed
 
     def test_non_trading_day_violation(self):
-        trades = pd.DataFrame({
-            "trade_date": ["20250111"],  # 周六
-            "ts_code": ["000001.SZ"],
-            "action": ["buy"],
-        })
+        trades = pd.DataFrame(
+            {
+                "trade_date": ["20250111"],  # 周六
+                "ts_code": ["000001.SZ"],
+                "action": ["buy"],
+            }
+        )
         trading_dates = {"20250110", "20250113"}
         result = check_no_trades_on_non_trading_days(trades, trading_dates)
         assert not result.passed
@@ -116,7 +123,7 @@ class TestPositionLimits:
 
     def test_sector_concentration(self):
         weights = {"000001.SZ": 0.09, "000002.SZ": 0.09, "000003.SZ": 0.09, "000004.SZ": 0.09, "000005.SZ": 0.09}
-        sector_map = {c: "银行" for c in weights}
+        sector_map = dict.fromkeys(weights, "银行")
         result = check_position_limits(weights, sector_map=sector_map)
         assert not result.passed
         assert any(v["code"] == ErrorCode.SECTOR_CONCENTRATION_BREACH.value for v in result.violations)
@@ -140,12 +147,14 @@ class TestRunAllChecks:
         result = run_all_integrity_checks(
             sharpe=1.5,
             turnover_ratio=0.3,
-            trades=pd.DataFrame({
-                "trade_date": ["20250110"],
-                "ts_code": ["000001.SZ"],
-                "action": ["buy"],
-                "volume": [100],
-            }),
+            trades=pd.DataFrame(
+                {
+                    "trade_date": ["20250110"],
+                    "ts_code": ["000001.SZ"],
+                    "action": ["buy"],
+                    "volume": [100],
+                }
+            ),
             weights={"000001.SZ": 0.05},
             trading_dates={"20250110"},
         )

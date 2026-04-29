@@ -2,9 +2,8 @@
 
 import numpy as np
 import pandas as pd
-import pytest
 
-from app.core.regime import REGIME_TRENDING, REGIME_MEAN_REVERTING, REGIME_DEFENSIVE, RegimeDetector
+from app.core.regime import REGIME_DEFENSIVE, REGIME_MEAN_REVERTING, REGIME_TRENDING, RegimeDetector
 
 
 def _make_market_data(n: int = 120, trend: float = 0.5, vol: float = 0.01) -> pd.DataFrame:
@@ -40,7 +39,7 @@ class TestRegimeDetector:
     def test_detect_regime_is_valid(self):
         """检测到的状态应是有效值"""
         df = _make_market_data()
-        regime, confidence = self.detector.detect(df)
+        regime, _confidence = self.detector.detect(df)
         assert regime in {REGIME_TRENDING, REGIME_MEAN_REVERTING, REGIME_DEFENSIVE}
 
     def test_detect_trending_market(self):

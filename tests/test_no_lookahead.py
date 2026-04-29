@@ -9,15 +9,15 @@ Look-ahead Bias 黄金测试套件
 3. 重新运行流水线
 4. 断言输出不变 — 如果变了，说明存在未来数据泄漏
 """
+
 import warnings
 from datetime import date
 
-import numpy as np
 import pandas as pd
 import pytest
 
-from app.core.pit_guard import pit_filter_df, pit_filter_query
 from app.core.factor_calculator import pit_filter
+from app.core.pit_guard import pit_filter_df, pit_filter_query
 
 
 class TestPITGuardDataFrame:
@@ -26,13 +26,15 @@ class TestPITGuardDataFrame:
     @pytest.fixture
     def financial_df(self):
         """模拟财务数据，包含未来公告"""
-        return pd.DataFrame({
-            "ts_code": ["000001.SZ", "000001.SZ", "000002.SZ", "000002.SZ"],
-            "ann_date": ["20250110", "20250120", "20250110", "20250125"],
-            "end_date": ["20240930", "20241231", "20240930", "20241231"],
-            "net_profit": [100.0, 120.0, 200.0, 250.0],
-            "total_equity": [1000.0, 1050.0, 2000.0, 2100.0],
-        })
+        return pd.DataFrame(
+            {
+                "ts_code": ["000001.SZ", "000001.SZ", "000002.SZ", "000002.SZ"],
+                "ann_date": ["20250110", "20250120", "20250110", "20250125"],
+                "end_date": ["20240930", "20241231", "20240930", "20241231"],
+                "net_profit": [100.0, 120.0, 200.0, 250.0],
+                "total_equity": [1000.0, 1050.0, 2000.0, 2100.0],
+            }
+        )
 
     def test_filters_future_announcements(self, financial_df):
         """PIT Guard 必须过滤掉 ann_date > trade_date 的记录"""
@@ -41,9 +43,7 @@ class TestPITGuardDataFrame:
 
         # 20250120 和 20250125 的记录应被过滤
         assert len(result) == 2
-        assert all(
-            pd.to_datetime(result["ann_date"]) <= pd.to_datetime(trade_date)
-        )
+        assert all(pd.to_datetime(result["ann_date"]) <= pd.to_datetime(trade_date))
 
     def test_no_filter_when_all_past(self, financial_df):
         """所有公告都在交易日前时，不应过滤任何记录"""
@@ -61,18 +61,20 @@ class TestPITGuardDataFrame:
         df = pd.DataFrame({"ts_code": ["000001.SZ"], "net_profit": [100.0]})
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            result = pit_filter_df(df, date(2025, 1, 15))
+            pit_filter_df(df, date(2025, 1, 15))
             assert len(w) == 1
             assert "look-ahead bias" in str(w[0].message).lower()
 
     def test_dedup_by_report_period(self):
         """同一股票同一报告期，取最新公告记录"""
-        df = pd.DataFrame({
-            "ts_code": ["000001.SZ", "000001.SZ", "000001.SZ"],
-            "ann_date": ["20250105", "20250110", "20250115"],
-            "end_date": ["20241231", "20241231", "20241231"],
-            "net_profit": [90.0, 100.0, 110.0],  # 更正公告
-        })
+        df = pd.DataFrame(
+            {
+                "ts_code": ["000001.SZ", "000001.SZ", "000001.SZ"],
+                "ann_date": ["20250105", "20250110", "20250115"],
+                "end_date": ["20241231", "20241231", "20241231"],
+                "net_profit": [90.0, 100.0, 110.0],  # 更正公告
+            }
+        )
         trade_date = date(2025, 1, 12)
         result = pit_filter_df(df, trade_date)
 
@@ -91,12 +93,14 @@ class TestPITGuardFactorCalculator:
 
     def test_consistent_with_pit_guard(self):
         """factor_calculator 的 pit_filter 应与 pit_guard 行为一致"""
-        df = pd.DataFrame({
-            "ts_code": ["000001.SZ", "000001.SZ", "000002.SZ"],
-            "ann_date": ["20250110", "20250120", "20250110"],
-            "end_date": ["20240930", "20241231", "20240930"],
-            "net_profit": [100.0, 120.0, 200.0],
-        })
+        df = pd.DataFrame(
+            {
+                "ts_code": ["000001.SZ", "000001.SZ", "000002.SZ"],
+                "ann_date": ["20250110", "20250120", "20250110"],
+                "end_date": ["20240930", "20241231", "20240930"],
+                "net_profit": [100.0, 120.0, 200.0],
+            }
+        )
         trade_date = date(2025, 1, 15)
 
         result_old = pit_filter(df, trade_date)
@@ -124,24 +128,34 @@ class TestNoLookaheadBias:
         trade_date = date(2025, 1, 15)
 
         # 基线数据
-        baseline_financial = pd.DataFrame({
-            "ts_code": ["000001.SZ", "000002.SZ", "000003.SZ"],
-            "ann_date": ["20250110", "20250110", "20250110"],
-            "end_date": ["20240930", "20240930", "20240930"],
-            "net_profit": [100.0, 200.0, 300.0],
-            "total_equity": [1000.0, 2000.0, 3000.0],
-            "total_assets": [5000.0, 10000.0, 15000.0],
-        })
+        baseline_financial = pd.DataFrame(
+            {
+                "ts_code": ["000001.SZ", "000002.SZ", "000003.SZ"],
+                "ann_date": ["20250110", "20250110", "20250110"],
+                "end_date": ["20240930", "20240930", "20240930"],
+                "net_profit": [100.0, 200.0, 300.0],
+                "total_equity": [1000.0, 2000.0, 3000.0],
+                "total_assets": [5000.0, 10000.0, 15000.0],
+            }
+        )
 
         # 注入未来数据（ann_date 在 trade_date 之后）
-        future_injected = pd.concat([baseline_financial, pd.DataFrame({
-            "ts_code": ["000001.SZ", "000002.SZ"],
-            "ann_date": ["20250116", "20250120"],  # 未来公告
-            "end_date": ["20241231", "20241231"],
-            "net_profit": [999.0, 888.0],  # 篡改数据
-            "total_equity": [9999.0, 8888.0],
-            "total_assets": [99999.0, 88888.0],
-        })], ignore_index=True)
+        future_injected = pd.concat(
+            [
+                baseline_financial,
+                pd.DataFrame(
+                    {
+                        "ts_code": ["000001.SZ", "000002.SZ"],
+                        "ann_date": ["20250116", "20250120"],  # 未来公告
+                        "end_date": ["20241231", "20241231"],
+                        "net_profit": [999.0, 888.0],  # 篡改数据
+                        "total_equity": [9999.0, 8888.0],
+                        "total_assets": [99999.0, 88888.0],
+                    }
+                ),
+            ],
+            ignore_index=True,
+        )
 
         # PIT 过滤后，两组数据应产生相同结果
         result_baseline = pit_filter_df(baseline_financial, trade_date)
@@ -154,12 +168,14 @@ class TestNoLookaheadBias:
 
     def test_pit_filter_idempotent(self):
         """PIT 过滤是幂等的：多次过滤结果不变"""
-        df = pd.DataFrame({
-            "ts_code": ["000001.SZ", "000001.SZ"],
-            "ann_date": ["20250110", "20250120"],
-            "end_date": ["20240930", "20241231"],
-            "net_profit": [100.0, 120.0],
-        })
+        df = pd.DataFrame(
+            {
+                "ts_code": ["000001.SZ", "000001.SZ"],
+                "ann_date": ["20250110", "20250120"],
+                "end_date": ["20240930", "20241231"],
+                "net_profit": [100.0, 120.0],
+            }
+        )
         trade_date = date(2025, 1, 15)
 
         result1 = pit_filter_df(df, trade_date)
@@ -172,12 +188,14 @@ class TestNoLookaheadBias:
 
     def test_earlier_trade_date_subset(self):
         """更早的 trade_date 应产生更少或相等的记录数"""
-        df = pd.DataFrame({
-            "ts_code": ["000001.SZ"] * 5,
-            "ann_date": [f"2025010{i}" for i in range(1, 6)],
-            "end_date": ["20240930"] * 5,
-            "net_profit": [100.0, 110.0, 120.0, 130.0, 140.0],
-        })
+        df = pd.DataFrame(
+            {
+                "ts_code": ["000001.SZ"] * 5,
+                "ann_date": [f"2025010{i}" for i in range(1, 6)],
+                "end_date": ["20240930"] * 5,
+                "net_profit": [100.0, 110.0, 120.0, 130.0, 140.0],
+            }
+        )
 
         result_early = pit_filter_df(df, date(2025, 1, 3))
         result_late = pit_filter_df(df, date(2025, 1, 5))

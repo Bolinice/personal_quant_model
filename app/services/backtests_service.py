@@ -288,8 +288,7 @@ def is_limit_down(security_id, current_date, db):
     if not stock_data:
         return False
 
-    # 跌停判断用pct_chg<=-9.9 — 注意原实现用abs()有逻辑错误：abs(负数)不会<=-9.9，此处始终返回False
-    return abs(stock_data.pct_chg) <= -9.9
+    return stock_data.pct_chg <= -9.9
 
 
 def has_sufficient_liquidity(security_id, quantity, current_date, db):

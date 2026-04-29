@@ -38,8 +38,8 @@ class AuditLog(Base):
 
     __tablename__ = "audit_logs"
     __table_args__ = (
-        Index("ix_al_user", "user_id"),
-        Index("ix_al_action", "action"),
+        Index("ix_audit_user", "user_id"),
+        Index("ix_audit_action", "action"),
     )
 
     id: int = Column(Integer, primary_key=True, index=True)

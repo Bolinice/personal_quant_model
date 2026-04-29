@@ -9,8 +9,8 @@ class AlertLog(Base):
 
     __tablename__ = "alert_logs"
     __table_args__ = (
-        Index("ix_al_rule", "rule_id"),
-        Index("ix_al_status", "status"),
+        Index("ix_alert_rule", "rule_id"),
+        Index("ix_alert_status", "status"),
     )
 
     id: int = Column(Integer, primary_key=True, index=True)

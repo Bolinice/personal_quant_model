@@ -97,7 +97,7 @@ def generate_research_snapshot(model_id: int, trade_date: str, db: Session = Non
                 ModelScore.model_id == model_id,
                 ModelScore.trade_date == trade_date,
             )
-            .order_by(ModelScore.composite_score.desc())
+            .order_by(ModelScore.score.desc())
             .all()
         )
     except Exception:

@@ -54,6 +54,8 @@ class UniverseBuilder:
         price_df: pd.DataFrame,
         stock_status_df: pd.DataFrame = None,
         daily_basic_df: pd.DataFrame = None,
+        risk_events_df: pd.DataFrame = None,
+        blacklist_df: pd.DataFrame = None,
         min_list_days: int = 120,
         min_daily_amount: float = 5e7,
         min_price: float = 2.0,
@@ -168,6 +170,19 @@ class UniverseBuilder:
                 small_cap = daily_on_date[daily_on_date["total_mv"] < min_market_cap]["ts_code"]
                 excluded_reasons["small_cap"] = len(small_cap)
                 candidates -= set(small_cap)
+
+        # 8. V2新增过滤: 风险事件/黑名单/涨跌停
+        if exclude_risk_events and risk_events_df is not None:
+            candidates, risk_excluded = self.filter_risk_events(candidates, risk_events_df, trade_date)
+            excluded_reasons.update(risk_excluded)
+
+        if exclude_blacklist and blacklist_df is not None:
+            candidates, bl_excluded = self.filter_blacklist(candidates, blacklist_df, trade_date)
+            excluded_reasons.update(bl_excluded)
+
+        if exclude_limit_up_down and not price_df.empty:
+            candidates, limit_excluded = self.filter_limit_up_down(candidates, price_df, trade_date)
+            excluded_reasons.update(limit_excluded)
 
         # 只保留在candidates中的有效代码
         result = sorted([c for c in candidates if isinstance(c, str) and len(c) > 0])

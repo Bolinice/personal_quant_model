@@ -1,15 +1,19 @@
-from datetime import datetime
+"""组合相关 Pydantic 模型。"""
+
+from datetime import date, datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
 
 class PortfolioBase(BaseModel):
-    portfolio_code: str
-    portfolio_name: str
-    description: str | None = None
-    initial_capital: float = 1000000.0
-    current_value: float = 1000000.0
-    is_active: bool = True
+    model_config = ConfigDict(from_attributes=True)
+
+    model_id: int
+    trade_date: date
+    portfolio_version: int = 1
+    target_exposure: float | None = None
+    total_weight: float | None = None
 
 
 class PortfolioCreate(PortfolioBase):
@@ -17,88 +21,69 @@ class PortfolioCreate(PortfolioBase):
 
 
 class PortfolioUpdate(BaseModel):
-    portfolio_name: str | None = None
-    description: str | None = None
-    initial_capital: float | None = None
-    current_value: float | None = None
-    is_active: bool | None = None
-
-
-class PortfolioInDB(PortfolioBase):
-    id: int
-    created_at: datetime
-    updated_at: datetime
-
     model_config = ConfigDict(from_attributes=True)
+
+    portfolio_version: int | None = None
+    target_exposure: float | None = None
+    total_weight: float | None = None
 
 
 class PortfolioOut(PortfolioBase):
     id: int
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class Portfolio(PortfolioOut):
-    pass
+    created_at: datetime | None = None
 
 
 class PortfolioPositionBase(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     portfolio_id: int
-    security_id: int
-    quantity: float
+    security_id: str
     weight: float
+    shares: int | None = None
+    target_weight: float | None = None
+    actual_weight: float | None = None
 
 
 class PortfolioPositionCreate(PortfolioPositionBase):
     pass
 
 
-class PortfolioPositionInDB(PortfolioPositionBase):
-    id: int
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class PortfolioPositionOut(PortfolioPositionBase):
     id: int
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class PortfolioPosition(PortfolioPositionOut):
-    pass
 
 
 class RebalanceRecordBase(BaseModel):
-    model_id: int
-    trade_date: datetime
-    rebalance_type: str  # scheduled, signal, risk
-    buy_list: list = []
-    sell_list: list = []
-    total_turnover: float = 0.0
+    model_config = ConfigDict(from_attributes=True)
+
+    portfolio_id: int
+    trade_date: date
+    rebalance_type: str | None = None
+    buy_list: Any | None = None
+    sell_list: Any | None = None
+    turnover: float | None = None
 
 
 class RebalanceRecordCreate(RebalanceRecordBase):
     pass
 
 
-class RebalanceRecordInDB(RebalanceRecordBase):
-    id: int
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class RebalanceRecordOut(RebalanceRecordBase):
     id: int
-    created_at: datetime
 
+
+class TimingSignalBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    model_id: int
+    trade_date: date
+    signal_type: str | None = None
+    signal_value: float | None = None
+    position_ratio: float | None = None
 
-class RebalanceRecord(RebalanceRecordOut):
+
+class TimingSignalCreate(TimingSignalBase):
     pass
+
+
+class TimingSignalOut(TimingSignalBase):
+    id: int

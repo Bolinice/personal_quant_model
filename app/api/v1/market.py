@@ -3,8 +3,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.v1.auth import get_current_user
 from app.core.response import success
 from app.db.base import get_db
+from app.models.user import User
 from app.schemas.market import IndexDailyCreate, StockDailyCreate
 from app.services.market_service import (
     create_index_daily,
@@ -35,14 +37,22 @@ def read_index_daily(index_code: str, start_date: str, end_date: str, db: Sessio
 
 
 @router.post("/stock-daily")
-def create_stock_daily_endpoint(stock_data: StockDailyCreate, db: Session = Depends(get_db)):
-    """创建股票日线数据"""
+def create_stock_daily_endpoint(
+    stock_data: StockDailyCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """创建股票日线数据（需认证）"""
     result = create_stock_daily(stock_data, db=db)
     return success(result)
 
 
 @router.post("/index-daily")
-def create_index_daily_endpoint(index_data: IndexDailyCreate, db: Session = Depends(get_db)):
-    """创建指数日线数据"""
+def create_index_daily_endpoint(
+    index_data: IndexDailyCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """创建指数日线数据（需认证）"""
     result = create_index_daily(index_data, db=db)
     return success(result)

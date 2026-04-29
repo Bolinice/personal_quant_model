@@ -6,8 +6,8 @@
   2. 数据快照
   3. 股票池构建
   4. 因子计算与预处理
-  5. 信号融合(Ensemble)
-  6. 市场状态检测(Regime)
+  5. 市场状态检测(Regime) — 提前到融合之前，为融合提供regime参数
+  6. 信号融合(Ensemble) — 使用Step5的regime状态进行调权
   7. ML增强评分
   8. 组合构建与优化
   9. 风险预算与择时
@@ -168,8 +168,8 @@ class DailyPipeline:
             (2, "数据快照", self._step2_snapshot),
             (3, "股票池构建", self._step3_universe),
             (4, "因子计算与预处理", self._step4_factor_calc),
-            (5, "信号融合", self._step5_ensemble),
-            (6, "市场状态检测", self._step6_regime),
+            (5, "市场状态检测", self._step5_regime),
+            (6, "信号融合", self._step6_ensemble),
             (7, "ML增强评分", self._step7_ml_scoring),
             (8, "组合构建与优化", self._step8_portfolio),
             (9, "风险预算与择时", self._step9_risk_timing),
@@ -199,7 +199,7 @@ class DailyPipeline:
                 )
                 logger.error("Step %2d %-20s ERROR: %s", step_num, step_name, e)
                 # 非关键步骤失败不中断流水线
-                if step_num in (1, 3, 4, 5, 8):
+                if step_num in (1, 3, 4, 6, 8):
                     raise
 
             self.results.append(result)
@@ -250,7 +250,7 @@ class DailyPipeline:
         rows = ctx.session.execute(stmt).mappings().all()
         if rows:
             raw_fin = pd.DataFrame(dict(r) for r in rows)
-            ctx.financial_df = self.pit_guard.align(raw_fin, ctx.trade_date)
+            ctx.financial_df = self.pit_guard.pit_filter_df(raw_fin, ctx.trade_date)
         logger.info("Step1: 财务数据 %d 条(PIT对齐后)", len(ctx.financial_df) if ctx.financial_df is not None else 0)
 
         # 3. 资金流数据
@@ -311,9 +311,30 @@ class DailyPipeline:
         if ctx.price_df is None or ctx.price_df.empty:
             raise ValueError("Step3: 无行情数据，无法构建股票池")
 
+        if ctx.session is None:
+            raise ValueError("Step3: 无数据库会话，无法加载股票池所需数据")
+
+        # 加载股票池构建所需的辅助数据
+        from app.models.market.stock_basic import StockBasic
+        from app.models.market.stock_status_daily import StockStatusDaily
+        from app.models.market.stock_daily_basic import StockDailyBasic
+
+        stock_basic_df = self._load_table(
+            ctx.session, StockBasic, ctx.trade_date - timedelta(days=365 * 5), ctx.trade_date
+        )
+        stock_status_df = self._load_table(
+            ctx.session, StockStatusDaily, ctx.trade_date - timedelta(days=30), ctx.trade_date
+        )
+        daily_basic_df = self._load_table(
+            ctx.session, StockDailyBasic, ctx.trade_date - timedelta(days=30), ctx.trade_date
+        )
+
         ctx.universe = self.universe_builder.build_core_pool(
-            price_df=ctx.price_df,
             trade_date=ctx.trade_date,
+            stock_basic_df=stock_basic_df if stock_basic_df is not None else pd.DataFrame(),
+            price_df=ctx.price_df,
+            stock_status_df=stock_status_df,
+            daily_basic_df=daily_basic_df,
         )
         logger.info("Step3: 股票池 %d 只", len(ctx.universe) if ctx.universe else 0)
 
@@ -350,36 +371,36 @@ class DailyPipeline:
             logger.warning("Step4: 因子计算结果为空")
 
     # ──────────────────────────────────────────────
-    # Step 5: 信号融合
+    # Step 5: 市场状态检测 (提前到融合之前)
     # ──────────────────────────────────────────────
-    def _step5_ensemble(self, ctx: PipelineContext) -> None:
+    def _step5_regime(self, ctx: PipelineContext) -> None:
+        """检测市场状态: 趋势/震荡/防御/进攻"""
+        if ctx.index_df is None or ctx.index_df.empty:
+            logger.warning("Step5: 无指数数据，使用默认市场状态")
+            ctx.regime_state = "mean_reverting"
+            ctx.regime_confidence = 0.3
+            return
+
+        ctx.regime_state, ctx.regime_confidence = self.regime_detector.detect(
+            market_data=ctx.index_df,
+        )
+        logger.info("Step5: 市场状态=%s 置信度=%.2f", ctx.regime_state, ctx.regime_confidence)
+
+    # ──────────────────────────────────────────────
+    # Step 6: 信号融合 (依赖Step5的regime状态)
+    # ──────────────────────────────────────────────
+    def _step6_ensemble(self, ctx: PipelineContext) -> None:
         """动态IC加权 + Regime调权信号融合"""
         if ctx.factor_df is None or ctx.factor_df.empty:
-            raise ValueError("Step5: 无因子数据，无法融合信号")
+            raise ValueError("Step6: 无因子数据，无法融合信号")
 
         ctx.ensemble_scores, ctx.ensemble_weights = self.ensemble_engine.combine(
             factor_df=ctx.factor_df,
             factor_names=ctx.factor_names,
             trade_date=ctx.trade_date,
+            regime=ctx.regime_state or "mean_reverting",
         )
-        logger.info("Step5: 信号融合完成, 权重数=%d", len(ctx.ensemble_weights) if ctx.ensemble_weights else 0)
-
-    # ──────────────────────────────────────────────
-    # Step 6: 市场状态检测
-    # ──────────────────────────────────────────────
-    def _step6_regime(self, ctx: PipelineContext) -> None:
-        """检测市场状态: 趋势/震荡/防御/进攻"""
-        if ctx.index_df is None or ctx.index_df.empty:
-            logger.warning("Step6: 无指数数据，使用默认市场状态")
-            ctx.regime_state = "normal"
-            ctx.regime_confidence = 0.5
-            return
-
-        ctx.regime_state, ctx.regime_confidence = self.regime_detector.detect(
-            index_df=ctx.index_df,
-            trade_date=ctx.trade_date,
-        )
-        logger.info("Step6: 市场状态=%s 置信度=%.2f", ctx.regime_state, ctx.regime_confidence)
+        logger.info("Step6: 信号融合完成, 权重数=%d", len(ctx.ensemble_weights) if ctx.ensemble_weights else 0)
 
     # ──────────────────────────────────────────────
     # Step 7: ML增强评分
@@ -415,9 +436,9 @@ class DailyPipeline:
         if ctx.ml_scores is not None and not ctx.ml_scores.empty:
             # ML权重根据regime调整: 防御状态下降低ML权重
             ml_weight = 0.3
-            if ctx.regime_state in ("defensive", "crisis"):
+            if ctx.regime_state == "defensive":
                 ml_weight = 0.15
-            elif ctx.regime_state in ("aggressive", "trending"):
+            elif ctx.regime_state == "risk_on":
                 ml_weight = 0.4
 
             # 对齐索引
@@ -533,13 +554,24 @@ class DailyPipeline:
             return
 
         try:
+            # 构建module_ic_map: 按alpha模块分组计算截面IC
+            from app.core.alpha_modules import MODULE_REGISTRY
+
+            module_ic_map = {}
+            if ctx.ensemble_weights:
+                for module_name in ctx.ensemble_weights:
+                    module = MODULE_REGISTRY.get(module_name)
+                    if module:
+                        module_factors = [f for f in module.FACTOR_CONFIG if f in ctx.factor_names]
+                        if module_factors:
+                            module_score = ctx.factor_df[module_factors].mean(axis=1)
+                            module_ic_map[module_name] = module_score
+
             ctx.factor_health = self.factor_monitor.check_all_modules(
-                factor_df=ctx.factor_df,
-                factor_names=ctx.factor_names,
-                trade_date=ctx.trade_date,
+                module_ic_map=module_ic_map,
             )
             if ctx.factor_health:
-                unhealthy = [k for k, v in ctx.factor_health.items() if v.get("status") == "unhealthy"]
+                unhealthy = [k for k, v in ctx.factor_health.items() if not v.get("is_healthy", True)]
                 if unhealthy:
                     logger.warning("Step11: 不健康因子: %s", unhealthy)
                 else:

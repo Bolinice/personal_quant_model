@@ -3,8 +3,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.v1.auth import get_current_user
 from app.core.response import success
 from app.db.base import get_db
+from app.models.user import User
 from app.schemas.securities import SecurityCreate, SecurityUpdate
 from app.services.securities_service import (
     create_security,
@@ -34,25 +36,34 @@ def read_security(ts_code: str, db: Session = Depends(get_db)):
 
 
 @router.post("/")
-def create_security_endpoint(security: SecurityCreate, db: Session = Depends(get_db)):
-    """创建证券"""
+def create_security_endpoint(
+    security: SecurityCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """创建证券（需认证）"""
     result = create_security(security, db=db)
     return success(result)
 
 
-@router.put("/{security_id}")
-def update_security_endpoint(security_id: int, security_update: SecurityUpdate, db: Session = Depends(get_db)):
-    """更新证券"""
-    security = update_security(security_id, security_update, db=db)
-    if security is None:
-        raise HTTPException(status_code=404, detail="Security not found")
-    return success(security)
+@router.put("/{ts_code}")
+def update_security_endpoint(
+    ts_code: str,
+    security_update: SecurityUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """更新证券（需认证）"""
+    result = update_security(ts_code, security_update, db=db)
+    return success(result)
 
 
-@router.delete("/{security_id}")
-def delete_security_endpoint(security_id: int, db: Session = Depends(get_db)):
-    """删除证券"""
-    deleted = delete_security(security_id, db=db)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Security not found")
-    return success(message="Security deleted successfully")
+@router.delete("/{ts_code}")
+def delete_security_endpoint(
+    ts_code: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """删除证券（需认证）"""
+    result = delete_security(ts_code, db=db)
+    return success(result)

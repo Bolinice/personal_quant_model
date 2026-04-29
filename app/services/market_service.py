@@ -98,8 +98,6 @@ def get_stock_financial(ts_code: str, end_date: str, report_type: str | None = N
     )
     # PIT Guard: 仅使用截至 end_date 已公告的财务数据，杜绝未来函数
     query = pit_filter_query(query, StockFinancial, _parse_date(end_date), db)
-    if report_type:
-        query = query.filter(StockFinancial.report_type == report_type)
     return query.all()
 
 

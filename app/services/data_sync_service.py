@@ -219,7 +219,7 @@ class DataSyncService:
                     existing.name = row.get("name")
                     existing.market = row.get("market")
                     existing.list_status = row.get("status", "L")
-                if not existing:
+                else:
                     # 新增 — 仅插入不更新，股票基础信息变更走全量重刷
                     # 处理 list_date，避免 nan
                     list_date = row.get("list_date")

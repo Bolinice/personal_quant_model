@@ -86,7 +86,14 @@ def create_model_scores(model_id: int, trade_date: str, scores: list, db: Sessio
     db_scores = []
     for score in scores:
         db_score = ModelScore(
-            model_id=model_id, trade_date=trade_date, security_id=score["security_id"], total_score=score["total_score"]
+            model_id=model_id,
+            trade_date=trade_date,
+            security_id=score["security_id"],
+            score=score.get("score"),
+            rank=score.get("rank"),
+            quantile=score.get("quantile"),
+            is_selected=score.get("is_selected", False),
+            factor_contributions=score.get("factor_contributions"),
         )
         db.add(db_score)
         db_scores.append(db_score)
@@ -100,7 +107,7 @@ def create_model_scores(model_id: int, trade_date: str, scores: list, db: Sessio
 def calculate_model_scores(model_id: int, trade_date: str, db: Session = None):
     """计算模型评分"""
     # 获取模型配置
-    model = get_model_by_code(str(model_id), db=db)
+    model = db.query(Model).filter(Model.id == model_id).first()
     if not model:
         return []
 
@@ -114,18 +121,44 @@ def calculate_model_scores(model_id: int, trade_date: str, db: Session = None):
     for weight in weights:
         factor_values[weight.factor_id] = get_factor_values(weight.factor_id, trade_date, db=db)
 
-    # 计算总分（简化示例）
-    scores = []
-    for security_id in range(1, 101):  # 模拟100只股票
-        total_score = 0
-        for weight in weights:
-            # 获取该股票的因子值
-            factor_value = next(
-                (fv.value for fv in factor_values[weight.factor_id] if fv.security_id == security_id), 0
-            )
-            total_score += factor_value * weight.weight
+    # 收集所有股票ID
+    all_security_ids = set()
+    for fv_list in factor_values.values():
+        if fv_list:
+            for fv in fv_list:
+                if hasattr(fv, "security_id"):
+                    all_security_ids.add(fv.security_id)
 
-        scores.append({"security_id": security_id, "total_score": total_score})
+    if not all_security_ids:
+        return []
+
+    # 计算评分
+    scores = []
+    for security_id in all_security_ids:
+        total_score = 0
+        contributions = {}
+        for weight in weights:
+            factor_value = next(
+                (fv.value for fv in factor_values.get(weight.factor_id, []) if hasattr(fv, "security_id") and fv.security_id == security_id),
+                0,
+            )
+            contribution = factor_value * weight.weight
+            total_score += contribution
+            contributions[weight.factor_id] = contribution
+
+        scores.append({
+            "security_id": security_id,
+            "score": total_score,
+            "factor_contributions": contributions,
+        })
+
+    # 按score降序排序并赋rank/quantile
+    scores.sort(key=lambda x: x["score"], reverse=True)
+    n = len(scores)
+    for i, s in enumerate(scores):
+        s["rank"] = i + 1
+        s["quantile"] = int((i + 1) / n * 100)
+        s["is_selected"] = s["rank"] <= max(1, n // 5)
 
     # 保存评分
     return create_model_scores(model_id, trade_date, scores, db=db)

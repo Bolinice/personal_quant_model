@@ -1,16 +1,15 @@
 """回测管理 API。"""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
 
 from app.api.v1.auth import get_current_user
 from app.core.permissions import PermissionCode, require_permission
 from app.core.response import success
 from app.db.base import get_db
 from app.models.backtests import Backtest
+from app.models.user import User
+from app.schemas.backtests import BacktestCreate, BacktestUpdate
 from app.services import usage_service
 from app.services.backtests_service import (
     cancel_backtest,
@@ -20,12 +19,6 @@ from app.services.backtests_service import (
     run_backtest,
     update_backtest,
 )
-
-if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
-
-    from app.models.user import User
-    from app.schemas.backtests import BacktestCreate, BacktestUpdate
 
 router = APIRouter()
 

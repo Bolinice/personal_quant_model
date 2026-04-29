@@ -1,14 +1,18 @@
 """因子管理 API。"""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
 
 from app.api.v1.auth import get_current_user
 from app.core.response import success
 from app.db.base import get_db
+from app.models.user import User
+from app.schemas.factors import (
+    FactorAnalysisCreate,
+    FactorCreate,
+    FactorUpdate,
+    FactorValueCreate,
+)
 from app.services.factors_service import (
     calculate_factor_values,
     create_factor,
@@ -21,17 +25,6 @@ from app.services.factors_service import (
     preprocess_factor_values,
     update_factor,
 )
-
-if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
-
-    from app.models.user import User
-    from app.schemas.factors import (
-        FactorAnalysisCreate,
-        FactorCreate,
-        FactorUpdate,
-        FactorValueCreate,
-    )
 
 router = APIRouter()
 

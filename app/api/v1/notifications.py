@@ -2,19 +2,14 @@
 通知API
 """
 
-from __future__ import annotations
-
 from datetime import UTC
-from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
 
 from app.core.response import page_result, success
 from app.db.base import get_db
 from app.models.alert_logs import Notification
-
-if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
 
 router = APIRouter()
 

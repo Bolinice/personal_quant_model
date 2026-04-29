@@ -1,13 +1,11 @@
 """股票池管理 API。"""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
 from app.core.response import success
 from app.db.base import get_db
+from app.schemas.stock_pools import StockPoolCreate, StockPoolSnapshotCreate, StockPoolUpdate
 from app.services.stock_pool_service import (
     create_stock_pool,
     create_stock_pool_snapshot,
@@ -16,11 +14,6 @@ from app.services.stock_pool_service import (
     get_stock_pools,
     update_stock_pool,
 )
-
-if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
-
-    from app.schemas.stock_pools import StockPoolCreate, StockPoolSnapshotCreate, StockPoolUpdate
 
 router = APIRouter()
 

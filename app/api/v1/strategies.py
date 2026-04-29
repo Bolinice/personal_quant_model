@@ -2,22 +2,15 @@
 策略管理API
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from app.api.v1.auth import get_current_user
 from app.core.response import page_result, success
 from app.db.base import get_db
 from app.models.models import Model, ModelFactorWeight
-
-if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
-
-    from app.models.user import User
+from app.models.user import User
 
 router = APIRouter()
 

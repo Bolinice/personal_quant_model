@@ -1,10 +1,7 @@
 """产品管理 API。"""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
 from app.core.response import success
 from app.db.base import get_db
@@ -18,9 +15,6 @@ from app.services.products_service import (
     get_products,
     update_product,
 )
-
-if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
 
 router = APIRouter()
 

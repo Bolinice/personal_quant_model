@@ -1,13 +1,14 @@
 """模拟组合 API。"""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
 from app.core.response import success
 from app.db.base import get_db
+from app.schemas.simulated_portfolios import (
+    SimulatedPortfolioCreate,
+    SimulatedPortfolioPositionCreate,
+)
 from app.services.simulated_portfolios_service import (
     calculate_simulated_portfolio_nav,
     create_simulated_portfolio,
@@ -17,14 +18,6 @@ from app.services.simulated_portfolios_service import (
     get_simulated_portfolios,
     update_simulated_portfolio,
 )
-
-if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
-
-    from app.schemas.simulated_portfolios import (
-        SimulatedPortfolioCreate,
-        SimulatedPortfolioPositionCreate,
-    )
 
 router = APIRouter()
 

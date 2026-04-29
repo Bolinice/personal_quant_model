@@ -145,7 +145,6 @@ def generate_report(report_id: int, db: Session = None):
     if report is None:
         return None
 
-
     try:
         content_parts = []
         calc9_date = report.report_date or datetime.now(tz=UTC).date()

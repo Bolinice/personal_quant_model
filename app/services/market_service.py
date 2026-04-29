@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING
 
 from app.core.pit_guard import pit_filter_query
@@ -17,7 +17,7 @@ def _parse_date(date_str: str) -> date:
     """Parse date string in various formats to date"""
     for fmt in ("%Y%m%d", "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"):
         try:
-            return datetime.strptime(date_str, fmt).replace(tzinfo=timezone.utc).date()
+            return datetime.strptime(date_str, fmt).replace(tzinfo=UTC).date()
         except ValueError:
             continue
     raise ValueError(f"Cannot parse date: {date_str}")

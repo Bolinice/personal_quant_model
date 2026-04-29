@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -80,7 +80,7 @@ def _str_to_date(s: str) -> date:
     if isinstance(s, date):
         return s
     s = str(s).replace("-", "")
-    return datetime.strptime(s, "%Y%m%d").replace(tzinfo=timezone.utc).date()
+    return datetime.strptime(s, "%Y%m%d").replace(tzinfo=UTC).date()
 
 
 def _validate_price_data(df: pd.DataFrame) -> pd.DataFrame:
@@ -471,4 +471,4 @@ class DataSyncEngine:
         last = self.progress.get_last_sync_date(table_name)
         if last:
             return last + timedelta(days=1)
-        return datetime.now(tz=timezone.utc).date() - timedelta(days=default_days)
+        return datetime.now(tz=UTC).date() - timedelta(days=default_days)

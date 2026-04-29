@@ -1,6 +1,6 @@
 """事件中心API路由"""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -107,6 +107,6 @@ async def get_risk_flags(
 @router.get("/risk-flags/blacklist")
 async def get_blacklist(db: Session = Depends(get_db)):
     """查询当前黑名单"""
-    today = datetime.now(tz=timezone.utc).date()
+    today = datetime.now(tz=UTC).date()
     blacklist = EventService.get_blacklist(db, today)
     return success_response(data=[{"stock_id": b.stock_id} for b in blacklist])

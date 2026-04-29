@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -145,11 +145,10 @@ def generate_report(report_id: int, db: Session = None):
     if report is None:
         return None
 
-    from datetime import date as date_type
 
     try:
         content_parts = []
-        calc9_date = report.report_date or datetime.now(tz=timezone.utc).date()
+        calc9_date = report.report_date or datetime.now(tz=UTC).date()
 
         if report.report_type == "daily":
             # 日报：汇总所有活跃模型表现
@@ -253,7 +252,7 @@ def generate_report(report_id: int, db: Session = None):
 
         report.content = "\n".join(content_parts)
         report.status = "generated"
-        report.meta_json = {"generated_at": datetime.now(tz=timezone.utc).isoformat()}
+        report.meta_json = {"generated_at": datetime.now(tz=UTC).isoformat()}
         db.commit()
         db.refresh(report)
         return report
@@ -273,14 +272,14 @@ def schedule_report_generation(schedule_id: int, db: Session = None):
     if schedule is None:
         return None
 
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from app.tasks.report_generate import run_daily_report_generate
 
     # 触发异步报告生成任务
     try:
         task = run_daily_report_generate.delay()
-        schedule.next_run_time = datetime.now(tz=timezone.utc).isoformat()
+        schedule.next_run_time = datetime.now(tz=UTC).isoformat()
         schedule.meta_json = schedule.meta_json or {}
         schedule.meta_json["last_task_id"] = task.id
         db.commit()

@@ -1,6 +1,6 @@
 """监控API路由"""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -107,7 +107,7 @@ async def get_regime(
     except Exception:
         return success_response(
             data={
-                "trade_date": str(trade_date or datetime.now(tz=timezone.utc).date()),
+                "trade_date": str(trade_date or datetime.now(tz=UTC).date()),
                 "regime": "unknown",
                 "confidence": None,
                 "regime_detail": None,

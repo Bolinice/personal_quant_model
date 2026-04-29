@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -117,11 +117,11 @@ class CrawlerDataSource(BaseDataSource):
                     data = json.loads(text)
                     if isinstance(data, list):
                         rows = []
-                        start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-                        end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                        start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
+                        end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC)
 
                         for item in data:
-                            trade_date = datetime.strptime(item["day"], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                            trade_date = datetime.strptime(item["day"], "%Y-%m-%d").replace(tzinfo=UTC)
                             if start_dt <= trade_date <= end_dt:
                                 rows.append(
                                     {
@@ -173,11 +173,11 @@ class CrawlerDataSource(BaseDataSource):
                     data = json.loads(text)
                     if isinstance(data, list):
                         rows = []
-                        start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-                        end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                        start_dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
+                        end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC)
 
                         for item in data:
-                            trade_date = datetime.strptime(item["day"], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                            trade_date = datetime.strptime(item["day"], "%Y-%m-%d").replace(tzinfo=UTC)
                             if start_dt <= trade_date <= end_dt:
                                 rows.append(
                                     {

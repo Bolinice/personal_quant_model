@@ -1,6 +1,7 @@
 """监控服务"""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
+from typing import Any
 
 import pandas as pd
 from sqlalchemy import desc
@@ -308,7 +309,7 @@ class MonitorService:
             return []
         return [
             {
-                "trade_date": str(trade_date or datetime.now(tz=timezone.utc).date()),
+                "trade_date": str(trade_date or datetime.now(tz=UTC).date()),
                 "factor_name": f.factor_name,
                 "factor_code": f.factor_code,
                 "category": f.category,
@@ -357,7 +358,7 @@ class MonitorService:
 
         if not hs300_rows:
             return {
-                "trade_date": str(trade_date or datetime.now(tz=timezone.utc).date()),
+                "trade_date": str(trade_date or datetime.now(tz=UTC).date()),
                 "regime": "unknown",
                 "confidence": None,
                 "regime_detail": None,
@@ -383,7 +384,7 @@ class MonitorService:
         result = detector.detect_with_confidence(df)
 
         return {
-            "trade_date": str(trade_date or datetime.now(tz=timezone.utc).date()),
+            "trade_date": str(trade_date or datetime.now(tz=UTC).date()),
             "regime": result["regime"],
             "confidence": result.get("confidence"),
             "regime_detail": result.get("features"),
@@ -397,7 +398,7 @@ class MonitorService:
     ) -> dict[str, Any]:
         """组合监控"""
         return {
-            "trade_date": str(trade_date or datetime.now(tz=timezone.utc).date()),
+            "trade_date": str(trade_date or datetime.now(tz=UTC).date()),
             "industry_exposure": {},
             "style_exposure": {},
             "turnover_rate": 0.0,
@@ -449,12 +450,12 @@ class MonitorService:
     @staticmethod
     def resolve_alert(db: Session, alert_id: int) -> bool:
         """解决告警"""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         row = db.query(AlertLog).filter(AlertLog.id == alert_id).first()
         if row:
             row.status = "resolved"
-            row.resolved_at = datetime.now(tz=timezone.utc)
+            row.resolved_at = datetime.now(tz=UTC)
             db.commit()
             return True
         return False

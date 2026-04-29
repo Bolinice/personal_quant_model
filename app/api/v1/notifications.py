@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -85,9 +86,9 @@ def mark_as_read(notification_id: int, user_id: int, db: Session = Depends(get_d
         raise HTTPException(status_code=404, detail="通知不存在")
 
     notification.status = "read"
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    notification.read_at = datetime.now(tz=timezone.utc)
+    notification.read_at = datetime.now(tz=UTC)
     db.commit()
 
     return success(message="已标记为已读")
@@ -105,11 +106,11 @@ def mark_all_as_read(user_id: int, db: Session = Depends(get_db)):
         .all()
     )
 
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     for n in notifications:
         n.status = "read"
-        n.read_at = datetime.now(tz=timezone.utc)
+        n.read_at = datetime.now(tz=UTC)
 
     db.commit()
     return success({"count": len(notifications)}, message="全部标记为已读")

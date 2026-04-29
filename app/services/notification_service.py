@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from app.models.alert_logs import AlertLog, Notification
@@ -64,7 +64,7 @@ class NotificationService:
             return False
 
         notification.status = "read"
-        notification.read_at = datetime.now(tz=timezone.utc)
+        notification.read_at = datetime.now(tz=UTC)
         self.db.commit()
         return True
 

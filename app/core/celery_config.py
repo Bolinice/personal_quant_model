@@ -3,6 +3,8 @@ Celery任务调度配置
 实现ADD 4.3节: 异步任务调度 + 日终任务链
 """
 
+from datetime import UTC
+
 from celery import Celery
 from celery.schedules import crontab
 
@@ -89,7 +91,7 @@ celery_app.conf.beat_schedule = {
 def cleanup_old_tasks(self):
     """清理过期任务"""
     try:
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
         from app.db.base import SessionLocal
         from app.models.task_logs import TaskLog
@@ -97,7 +99,7 @@ def cleanup_old_tasks(self):
         db = SessionLocal()
         try:
             # 清理30天前的任务日志
-            cutoff = datetime.now(tz=timezone.utc) - timedelta(days=30)
+            cutoff = datetime.now(tz=UTC) - timedelta(days=30)
             deleted = (
                 db.query(TaskLog)
                 .filter(

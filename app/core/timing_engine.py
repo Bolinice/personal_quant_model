@@ -4,7 +4,7 @@
 机构级增强: HMM市场状态识别、DMA动态模型平均、北向资金择时、政策日历择时、贝叶斯共轭更新
 """
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
@@ -547,7 +547,7 @@ class TimingEngine:
 
     def _default_policy_calendar(self) -> list[dict[str, Any]]:
         """A股默认政策日历(年度重要事件)"""
-        current_year = datetime.now(tz=timezone.utc).year
+        current_year = datetime.now(tz=UTC).year
         return [
             # 两会(3月初): 通常利好
             {

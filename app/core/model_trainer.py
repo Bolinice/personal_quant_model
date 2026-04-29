@@ -4,7 +4,7 @@
 """
 
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -221,7 +221,7 @@ class ModelTrainer:
             cv_metrics=cv_metrics,
             oof_predictions=oof_predictions,
             feature_importance=feature_importance,
-            train_date=datetime.now(tz=timezone.utc).date(),
+            train_date=datetime.now(tz=UTC).date(),
             model_config=config,
             model_type="lgbm",
         )
@@ -298,7 +298,7 @@ class ModelTrainer:
             scaler=scaler,
             factor_cols=factor_cols,
             feature_importance=feature_importance,
-            train_date=datetime.now(tz=timezone.utc).date(),
+            train_date=datetime.now(tz=UTC).date(),
             model_config=config,
             model_type="lgbm_rank",
         )

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -35,7 +35,7 @@ def get_performance_analysis(
         .filter(
             SimulatedPortfolioNav.portfolio_id == backtest_id,
             SimulatedPortfolioNav.trade_date >= start_date if start_date else "1900-01-01",
-            SimulatedPortfolioNav.trade_date <= end_date if end_date else datetime.now(tz=timezone.utc).strftime("%Y-%m-%d"),
+            SimulatedPortfolioNav.trade_date <= end_date if end_date else datetime.now(tz=UTC).strftime("%Y-%m-%d"),
         )
         .all()
     )
@@ -196,5 +196,5 @@ def generate_performance_report(analysis: PerformanceAnalysis):
     """生成绩效报告"""
     return PerformanceReport(
         analysis=analysis,
-        generated_at=datetime.now(tz=timezone.utc),
+        generated_at=datetime.now(tz=UTC),
     )

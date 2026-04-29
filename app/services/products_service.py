@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from app.db.base import with_db
@@ -111,13 +111,13 @@ def get_subscriptions(user_id: int | None = None, product_id: int | None = None,
 def create_subscription(subscription: SubscriptionCreate, db: Session = None):
     # 计算结束时间
     _duration = subscription.plan_id
-    end_time = datetime.now(tz=timezone.utc) + timedelta(days=30)  # 简化：假设月度订阅
+    end_time = datetime.now(tz=UTC) + timedelta(days=30)  # 简化：假设月度订阅
 
     db_subscription = Subscription(
         user_id=subscription.user_id,
         product_id=subscription.product_id,
         plan_id=subscription.plan_id,
-        start_time=datetime.now(tz=timezone.utc),
+        start_time=datetime.now(tz=UTC),
         end_time=end_time,
     )
     db.add(db_subscription)

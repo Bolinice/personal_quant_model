@@ -8,7 +8,7 @@ AKShare免费无限制，但数据字段和精度可能略有差异。
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pandas as pd
 
@@ -51,7 +51,7 @@ class AKShareSource:
                     symbol=symbol,
                     period="daily",
                     start_date=start_date.strftime("%Y%m%d") if start_date else "20200101",
-                    end_date=end_date.strftime("%Y%m%d") if end_date else datetime.now(tz=timezone.utc).strftime("%Y%m%d"),
+                    end_date=end_date.strftime("%Y%m%d") if end_date else datetime.now(tz=UTC).strftime("%Y%m%d"),
                     adjust="qfq",
                 )
                 # 列名映射到Tushare格式
@@ -191,7 +191,7 @@ class AKShareSource:
 
             return ak.stock_margin_detail_sse(
                 start_date=start_date.strftime("%Y%m%d") if start_date else "20230101",
-                end_date=trade_date.strftime("%Y%m%d") if trade_date else datetime.now(tz=timezone.utc).strftime("%Y%m%d"),
+                end_date=trade_date.strftime("%Y%m%d") if trade_date else datetime.now(tz=UTC).strftime("%Y%m%d"),
             )
 
         except Exception as e:

@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 import re
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from jose import JWTError, jwt
@@ -29,7 +29,7 @@ class AuthService:
     def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
         """创建访问令牌"""
         to_encode = data.copy()
-        expire = datetime.now(tz=timezone.utc) + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
+        expire = datetime.now(tz=UTC) + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
         # 在payload中嵌入type字段，防止access token被当作refresh token滥用
         to_encode.update({"exp": expire, "type": "access"})
         # HS256对称签名 — 密钥由settings.SECRET_KEY统一管理，适用于单体应用；分布式场景需考虑RS256非对称签名
@@ -39,7 +39,7 @@ class AuthService:
     def create_refresh_token(data: dict) -> str:
         """创建刷新令牌"""
         to_encode = data.copy()
-        expire = datetime.now(tz=timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        expire = datetime.now(tz=UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
         to_encode.update({"exp": expire, "type": "refresh"})
         # refresh token与access token使用相同密钥和算法，仅通过type和exp区分用途
         return jwt.encode(to_encode, settings.SECRET_KEY, algorithm="HS256")
@@ -133,7 +133,7 @@ class AuthService:
             return None
 
         # 更新登录信息
-        user.last_login_at = datetime.now(tz=timezone.utc)
+        user.last_login_at = datetime.now(tz=UTC)
         user.login_count = (user.login_count or 0) + 1
         db.commit()
 
@@ -176,7 +176,7 @@ class AuthService:
         )
 
         if key_record:
-            key_record.last_used_at = datetime.now(tz=timezone.utc)
+            key_record.last_used_at = datetime.now(tz=UTC)
             db.commit()
 
         return key_record
@@ -190,7 +190,7 @@ class AuthService:
 
         token = secrets.token_urlsafe(32)
         user.reset_token = token
-        user.reset_token_expires = datetime.now(tz=timezone.utc) + timedelta(hours=1)  # 重置令牌1小时有效，缩短窗口降低泄露风险
+        user.reset_token_expires = datetime.now(tz=UTC) + timedelta(hours=1)  # 重置令牌1小时有效，缩短窗口降低泄露风险
         db.commit()
 
         logger.info(f"Password reset token generated for {email}")
@@ -208,7 +208,7 @@ class AuthService:
         if not user:
             return False, "重置令牌无效"
 
-        if user.reset_token_expires and user.reset_token_expires < datetime.now(tz=timezone.utc):
+        if user.reset_token_expires and user.reset_token_expires < datetime.now(tz=UTC):
             # 令牌已过期，清除 — 防止过期token被反复尝试
             user.reset_token = None
             user.reset_token_expires = None

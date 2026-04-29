@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -158,7 +158,7 @@ class DailyPipeline:
     def run(self, trade_date: date | None = None) -> list[PipelineResult]:
         """执行完整日终流水线"""
         if trade_date is None:
-            trade_date = datetime.now(tz=timezone.utc).date()
+            trade_date = datetime.now(tz=UTC).date()
 
         ctx = PipelineContext(trade_date=trade_date, session=self.session)
         logger.info("========== 日终流水线启动 %s ==========", trade_date)
@@ -288,7 +288,7 @@ class DailyPipeline:
     # ──────────────────────────────────────────────
     def _step2_snapshot(self, ctx: PipelineContext) -> None:
         """生成数据快照ID和文件，用于可复现性"""
-        snapshot_id = f"snapshot_{ctx.trade_date.strftime('%Y%m%d')}_{datetime.now(tz=timezone.utc).strftime('%H%M%S')}"
+        snapshot_id = f"snapshot_{ctx.trade_date.strftime('%Y%m%d')}_{datetime.now(tz=UTC).strftime('%H%M%S')}"
         ctx.snapshot_id = snapshot_id
 
         snapshot_data = {}

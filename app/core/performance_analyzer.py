@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -365,7 +365,7 @@ class PerformanceAnalyzer:
 
         return {
             "title": title,
-            "generated_at": datetime.now(tz=timezone.utc),
+            "generated_at": datetime.now(tz=UTC),
             "metrics": metrics,
             "monthly_returns": monthly_returns.to_dict(),
             "yearly_returns": yearly_returns.to_dict(),

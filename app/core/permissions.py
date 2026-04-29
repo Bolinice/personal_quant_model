@@ -5,6 +5,8 @@
 - get_user_permissions: 获取用户当前权限列表
 """
 
+from datetime import UTC
+
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -38,9 +40,9 @@ class PermissionCode:
 
 def get_user_role(user: User, db: Session) -> str:
     """获取用户当前有效角色（基于订阅计划）"""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    today = datetime.now(tz=timezone.utc).date()
+    today = datetime.now(tz=UTC).date()
     # 查找当前有效订阅
     subscription = (
         db.query(Subscription)

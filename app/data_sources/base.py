@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -202,7 +202,7 @@ class DataSourceManager:
                 if last_date is None:
                     freshness[name] = False
                 else:
-                    age = (datetime.now(tz=timezone.utc).date() - last_date).days
+                    age = (datetime.now(tz=UTC).date() - last_date).days
                     freshness[name] = age <= max_age_days
             except Exception:
                 freshness[name] = False
@@ -240,7 +240,7 @@ class BaseDataSource(ABC):
         self.rate_limit = rate_limit
         self.max_retries = max_retries
         self._call_count = 0
-        self._last_reset = datetime.now(tz=timezone.utc)
+        self._last_reset = datetime.now(tz=UTC)
 
     @abstractmethod
     def connect(self) -> bool:
@@ -377,7 +377,7 @@ class BaseDataSource(ABC):
             end_date: 结束日期（默认今天）
         """
         if end_date is None:
-            end_date = datetime.now(tz=timezone.utc).date()
+            end_date = datetime.now(tz=UTC).date()
 
         start = last_sync_date + timedelta(days=1)
         if start > end_date:
@@ -420,7 +420,7 @@ class BaseDataSource(ABC):
 
     def _rate_limit_check(self):
         """检查API调用频率"""
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         if (now - self._last_reset).seconds >= 60:
             self._call_count = 0
             self._last_reset = now
@@ -432,7 +432,7 @@ class BaseDataSource(ABC):
             logger.warning(f"Rate limit reached, sleeping {sleep_time}s")
             time.sleep(sleep_time)
             self._call_count = 0
-            self._last_reset = datetime.now(tz=timezone.utc)
+            self._last_reset = datetime.now(tz=UTC)
 
         self._call_count += 1
 

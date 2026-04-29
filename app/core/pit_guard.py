@@ -11,7 +11,7 @@ PIT Guard - 点在时数据守卫
 
 import logging
 import warnings
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pandas as pd
 from sqlalchemy import String
@@ -132,9 +132,9 @@ def pit_filter_query(
     # ann_date 存储为 Date 类型
     if isinstance(trade_date, str):
         trade_date = (
-            datetime.strptime(trade_date, "%Y%m%d").replace(tzinfo=timezone.utc).date()
+            datetime.strptime(trade_date, "%Y%m%d").replace(tzinfo=UTC).date()
             if len(trade_date) == 8
-            else datetime.strptime(trade_date, "%Y-%m-%d").replace(tzinfo=timezone.utc).date()
+            else datetime.strptime(trade_date, "%Y-%m-%d").replace(tzinfo=UTC).date()
         )
     return query.filter(ann_col <= trade_date)
 

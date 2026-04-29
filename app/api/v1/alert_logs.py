@@ -1,13 +1,11 @@
 """告警日志 API。"""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
 from app.core.response import success
 from app.db.base import get_db
+from app.schemas.alert_logs import AlertLogCreate, AlertLogUpdate
 from app.services.alert_logs_service import (
     create_alert_log,
     delete_alert_log,
@@ -18,11 +16,6 @@ from app.services.alert_logs_service import (
     trigger_alerts,
     update_alert_log,
 )
-
-if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
-
-    from app.schemas.alert_logs import AlertLogCreate, AlertLogUpdate
 
 router = APIRouter()
 

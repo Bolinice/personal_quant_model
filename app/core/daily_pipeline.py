@@ -30,6 +30,8 @@ from sqlalchemy import select
 
 from app.core.adaptive_factor_engine import AdaptiveFactorEngine
 from app.core.backtest_engine import ABShareBacktestEngine
+from app.core.capacity_test import CapacityTester
+from app.core.checkpoint import CheckpointManager, deserialize_context, serialize_context
 from app.core.ensemble import EnsembleEngine
 from app.core.factor_calculator import FactorCalculator
 from app.core.factor_monitor import FactorMonitor
@@ -113,6 +115,7 @@ class PipelineContext:
 
     # Step 10: 回测
     backtest_result: dict | None = None
+    capacity_test_result: Any | None = None
 
     # Step 11: 因子健康
     factor_health: dict | None = None
@@ -129,11 +132,15 @@ class DailyPipeline:
         session: Session | None = None,
         lookback_days: int = 250,
         snapshot_dir: str = "data/snapshots",
+        enable_checkpoint: bool = True,
+        enable_capacity_test: bool = False,
     ):
         self.session = session
         self.lookback_days = lookback_days
         self.snapshot_dir = Path(snapshot_dir)
         self.snapshot_dir.mkdir(parents=True, exist_ok=True)
+        self.enable_checkpoint = enable_checkpoint
+        self.enable_capacity_test = enable_capacity_test
 
         # 初始化各模块
         self.pit_guard = PITGuardMixin()
@@ -150,19 +157,36 @@ class DailyPipeline:
         self.market_timer = TimingEngine()
         self.risk_budget_engine = RiskBudgetEngine()
         self.backtest_engine = ABShareBacktestEngine()
+        self.capacity_tester = CapacityTester(self.backtest_engine)
         self.factor_monitor = FactorMonitor()
         self.adaptive_engine = AdaptiveFactorEngine()
         self.label_builder = LabelBuilder()
+        self.checkpoint_manager = CheckpointManager() if enable_checkpoint else None
 
         self.results: list[PipelineResult] = []
 
-    def run(self, trade_date: date | None = None) -> list[PipelineResult]:
-        """执行完整日终流水线"""
+    def run(self, trade_date: date | None = None, resume: bool = True) -> list[PipelineResult]:
+        """
+        执行完整日终流水线
+
+        Args:
+            trade_date: 交易日期
+            resume: 是否从断点恢复
+        """
         if trade_date is None:
             trade_date = datetime.now(tz=UTC).date()
 
         ctx = PipelineContext(trade_date=trade_date, session=self.session)
         logger.info("========== 日终流水线启动 %s ==========", trade_date)
+
+        # 尝试从检查点恢复
+        start_step = 1
+        if resume and self.checkpoint_manager:
+            checkpoint = self.checkpoint_manager.load(trade_date)
+            if checkpoint:
+                logger.info("从检查点恢复: step=%d", checkpoint.last_completed_step)
+                deserialize_context(checkpoint.context_data, ctx)
+                start_step = checkpoint.last_completed_step + 1
 
         steps = [
             (1, "数据采集与PIT对齐", self._step1_data_collection),
@@ -180,6 +204,11 @@ class DailyPipeline:
         ]
 
         for step_num, step_name, step_fn in steps:
+            # 跳过已完成步骤
+            if step_num < start_step:
+                logger.info("Step %2d %-20s SKIPPED (已完成)", step_num, step_name)
+                continue
+
             t0 = pd.Timestamp.now()
             try:
                 step_fn(ctx)
@@ -190,6 +219,11 @@ class DailyPipeline:
                     duration_ms=(pd.Timestamp.now() - t0).total_seconds() * 1000,
                 )
                 logger.info("Step %2d %-20s OK (%.0fms)", step_num, step_name, result.duration_ms)
+
+                # 保存检查点（关键步骤后）
+                if self.checkpoint_manager and step_num in (1, 3, 4, 6, 8, 10):
+                    self.checkpoint_manager.save(trade_date, step_num, serialize_context(ctx))
+
             except Exception as e:
                 result = PipelineResult(
                     step=step_num,
@@ -199,11 +233,21 @@ class DailyPipeline:
                     duration_ms=(pd.Timestamp.now() - t0).total_seconds() * 1000,
                 )
                 logger.error("Step %2d %-20s ERROR: %s", step_num, step_name, e)
+
+                # 保存错误检查点
+                if self.checkpoint_manager:
+                    self.checkpoint_manager.save(trade_date, step_num - 1, serialize_context(ctx))
+
                 # 非关键步骤失败不中断流水线
                 if step_num in (1, 3, 4, 6, 8):
                     raise
 
             self.results.append(result)
+
+        # 流水线完成，清理检查点
+        if self.checkpoint_manager:
+            self.checkpoint_manager.delete(trade_date)
+            self.checkpoint_manager.cleanup_old(days=7)
 
         logger.info("========== 日终流水线完成 %s ==========", trade_date)
 
@@ -524,11 +568,12 @@ class DailyPipeline:
     # Step 10: 回测验证
     # ──────────────────────────────────────────────
     def _step10_backtest(self, ctx: PipelineContext) -> None:
-        """对当前组合做快速回测验证"""
+        """对当前组合做快速回测验证 + 可选容量测试"""
         if ctx.price_df is None or ctx.price_df.empty:
             logger.warning("Step10: 无行情数据，跳过回测验证")
             return
 
+        # 10a. 基础回测验证
         try:
             ctx.backtest_result = self.backtest_engine.run(
                 price_df=ctx.price_df,
@@ -539,12 +584,18 @@ class DailyPipeline:
             if ctx.backtest_result:
                 metrics = ctx.backtest_result.get("metrics", {})
                 logger.info(
-                    "Step10: 回测完成 sharpe=%.2f max_dd=%.2f%%",
+                    "Step10a: 回测完成 sharpe=%.2f max_dd=%.2f%%",
                     metrics.get("sharpe_ratio", 0),
                     metrics.get("max_drawdown", 0) * 100,
                 )
         except Exception as e:
-            logger.warning("Step10: 回测验证失败: %s", e)
+            logger.warning("Step10a: 回测验证失败: %s", e)
+
+        # 10b. 容量测试（可选）- 暂时禁用，需要完整历史数据
+        # 容量测试需要完整的回测流程，不适合在单日流水线中执行
+        # 应该作为独立的批量分析任务运行
+        if self.enable_capacity_test:
+            logger.info("Step10b: 容量测试已配置，但需要在独立批量任务中运行")
 
     # ──────────────────────────────────────────────
     # Step 11: 因子健康检查

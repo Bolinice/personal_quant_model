@@ -244,7 +244,7 @@ class DailyPipeline:
 
         stmt = (
             select(StockFinancial)
-            .where(StockFinancial.ann_date <= ctx.trade_date.strftime("%Y%m%d"))
+            .where(StockFinancial.ann_date <= ctx.trade_date)
             .order_by(StockFinancial.ann_date)
         )
         rows = ctx.session.execute(stmt).mappings().all()

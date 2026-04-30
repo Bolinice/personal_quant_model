@@ -14,7 +14,10 @@ sys.path.insert(0, '.')
 
 import time
 import pandas as pd
-from datetime import datetime
+from datetime import date as date_type, datetime
+
+from scripts.script_utils import safe_date
+
 from sqlalchemy import text
 from app.db.base import SessionLocal
 from app.models.market.stock_institutional_holding import StockInstitutionalHolding
@@ -58,13 +61,13 @@ def sync_institutional_tushare(ts_code: str, source: TushareDataSource) -> int:
 
         new_records = []
         for _, row in df.iterrows():
-            trade_date = str(row.get('end_date', ''))[:8]
+            trade_date = safe_date(row.get('end_date'))
             if not trade_date or trade_date in existing_dates:
                 continue
             new_records.append(StockInstitutionalHolding(
                 ts_code=ts_code,
                 trade_date=trade_date,
-                ann_date=str(row.get('ann_date', ''))[:8] if pd.notna(row.get('ann_date')) else None,
+                ann_date=safe_date(row.get('ann_date')),
                 hold_ratio=safe_float(row.get('hold_ratio')),
             ))
 
@@ -103,7 +106,7 @@ def sync_institutional_akshare(ts_code: str) -> int:
                 # 计算汇总: 所有机构的持股比例之和
                 if '持股比例' in df.columns:
                     total_ratio = df['持股比例'].sum()
-                    end_date = f"{year}{['0331','0630','0930','1231'][q-1]}"
+                    end_date = date_type(year, [3,6,9,12][q-1], [31,30,30,31][q-1])
                     existing = db.query(StockInstitutionalHolding).filter(
                         StockInstitutionalHolding.ts_code == ts_code,
                         StockInstitutionalHolding.trade_date == end_date,

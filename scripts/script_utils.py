@@ -1,13 +1,12 @@
 """
 脚本公共工具函数
-消除各脚本中重复的 safe_float、SQL IN 子句拼接等
+消除各脚本中重复的 safe_float、SQL IN 子句拼接、日期转换等
 """
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
-
-from sqlalchemy import text
 
 
 def safe_float(value: Any, default: float = 0.0) -> float:
@@ -21,6 +20,22 @@ def safe_float(value: Any, default: float = 0.0) -> float:
         return result
     except (ValueError, TypeError):
         return default
+
+
+def safe_date(value: Any) -> date | None:
+    """安全转换为date对象，处理None/NaN/空字符串/各种日期格式"""
+    if value is None:
+        return None
+    try:
+        import pandas as pd
+
+        if isinstance(value, date) and not isinstance(value, type):  # 已经是date
+            return value
+        if pd.isna(value):
+            return None
+        return pd.Timestamp(value).date()
+    except (ValueError, TypeError):
+        return None
 
 
 def build_in_clause(codes: list[str] | set[str], param_prefix: str = "code") -> tuple[str, dict[str, str]]:

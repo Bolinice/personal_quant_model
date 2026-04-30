@@ -15,6 +15,8 @@ import time
 import pandas as pd
 from datetime import datetime, timedelta
 from sqlalchemy import text
+from scripts.script_utils import safe_date
+
 from app.db.base import SessionLocal
 from app.models.market.stock_analyst_consensus import StockAnalystConsensus
 from app.data_sources.tushare_source import TushareDataSource
@@ -65,13 +67,13 @@ def sync_analyst_tushare(ts_code: str, start_date: str, end_date: str,
 
         new_records = []
         for _, row in df.iterrows():
-            effective_date = str(row.get('end_date', ''))[:8]
+            effective_date = safe_date(row.get('end_date'))
             if not effective_date or effective_date in existing_dates:
                 continue
             new_records.append(StockAnalystConsensus(
                 ts_code=ts_code,
                 effective_date=effective_date,
-                ann_date=str(row.get('ann_date', ''))[:8] if pd.notna(row.get('ann_date')) else None,
+                ann_date=safe_date(row.get('ann_date')),
                 consensus_eps_fy0=safe_float(row.get('consensus_eps_fy0')),
                 consensus_eps_fy1=safe_float(row.get('consensus_eps_fy1')),
                 consensus_eps_fy2=safe_float(row.get('consensus_eps_fy2')),
@@ -108,7 +110,7 @@ def sync_analyst_akshare(ts_code: str = None) -> int:
             return 0
 
         # 格式化日期
-        today = datetime.now().strftime('%Y%m%d')
+        today = datetime.now().date()
 
         def format_ts_code(code):
             code = str(code).zfill(6)

@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, ".")
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pandas as pd
 
@@ -25,6 +25,23 @@ from app.data_sources.cleaner import DataCleaner
 from app.data_sources.normalizer import DataNormalizer
 from app.db.base import SessionLocal
 from app.models.market import IndexDaily, StockBasic, StockDaily, StockFinancial, TradingCalendar
+
+
+def _safe_date(value) -> date | None:
+    """安全转换为date对象，处理None/NaN/空字符串/各种日期格式"""
+    if value is None:
+        return None
+    try:
+        if isinstance(value, date) and not isinstance(value, type):
+            return value
+        if pd.isna(value):
+            return None
+        ts = pd.Timestamp(value)
+        if pd.isna(ts):
+            return None
+        return ts.date()
+    except (ValueError, TypeError):
+        return None
 
 
 class DataSyncService:
@@ -484,15 +501,15 @@ class DataSyncService:
                 # 财务数据按报告期(end_date)去重 — 同一报告期可能有多次修正，以最新一次为准
                 existing = (
                     db.query(StockFinancial)
-                    .filter(StockFinancial.ts_code == ts_code, StockFinancial.end_date == row.get("end_date"))
+                    .filter(StockFinancial.ts_code == ts_code, StockFinancial.end_date == _safe_date(row.get("end_date")))
                     .first()
                 )
 
                 if not existing:
                     financial = StockFinancial(
                         ts_code=ts_code,
-                        end_date=row.get("end_date"),
-                        ann_date=row.get("ann_date"),
+                        end_date=_safe_date(row.get("end_date")),
+                        ann_date=_safe_date(row.get("ann_date")),
                         revenue=row.get("revenue"),
                         net_profit=row.get("net_profit"),
                         roe=row.get("roe"),

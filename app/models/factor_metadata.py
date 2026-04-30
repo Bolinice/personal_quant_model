@@ -1,4 +1,10 @@
-"""因子元数据模型"""
+"""因子元数据模型 — V2因子治理层
+
+与 app.models.factors.Factor 的关系：
+- Factor: 操作层模型，用于因子计算、评分、存储（factor_code为业务键）
+- FactorMetadata: 治理层模型，用于因子ID卡、PIT要求、覆盖率阈值、版本管理（factor_name为PK）
+- 两者通过 factor_code ↔ factor_name 关联，但无外键约束
+"""
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
 from sqlalchemy.sql import func

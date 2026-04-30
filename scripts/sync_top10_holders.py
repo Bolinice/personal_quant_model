@@ -16,6 +16,8 @@ import time
 import pandas as pd
 from datetime import datetime
 from sqlalchemy import text
+from scripts.script_utils import safe_date
+
 from app.db.base import SessionLocal
 from app.models.market.stock_top10_holders import StockTop10Holders
 from app.data_sources.tushare_source import TushareDataSource
@@ -59,7 +61,7 @@ def sync_top10_tushare(ts_code: str, source: TushareDataSource) -> int:
             # 检查是否已存在
             existing = db.query(StockTop10Holders).filter(
                 StockTop10Holders.ts_code == ts_code,
-                StockTop10Holders.end_date == period,
+                StockTop10Holders.end_date == safe_date(period),
             ).first()
             if existing:
                 continue
@@ -75,8 +77,8 @@ def sync_top10_tushare(ts_code: str, source: TushareDataSource) -> int:
             for rank_val, (_, row) in enumerate(df.iterrows(), 1):
                 new_records.append(StockTop10Holders(
                     ts_code=ts_code,
-                    end_date=period,
-                    ann_date=str(row.get('ann_date', ''))[:8] if pd.notna(row.get('ann_date')) else None,
+                    end_date=safe_date(period),
+                    ann_date=safe_date(row.get('ann_date')),
                     holder_name=str(row.get('holder_name', ''))[:100],
                     hold_amount=safe_float(row.get('hold_amount')),
                     hold_ratio=safe_float(row.get('hold_ratio')),
@@ -115,7 +117,7 @@ def sync_top10_akshare(ts_code: str) -> int:
 
         # AKShare返回所有报告期数据, 按end_date分组
         for end_date, group in df.groupby('报告期' if '报告期' in df.columns else df.columns[1]):
-            ed = str(end_date)[:10].replace('-', '')
+            ed = safe_date(end_date)
             if not ed:
                 continue
             existing = db.query(StockTop10Holders).filter(

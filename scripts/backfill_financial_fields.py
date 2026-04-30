@@ -22,6 +22,7 @@ from app.db.base import SessionLocal
 from app.models.market.stock_financial import StockFinancial
 from app.data_sources.tushare_source import TushareDataSource
 from app.core.config import settings
+from scripts.script_utils import safe_date
 
 
 BATCH_SIZE = 50
@@ -82,7 +83,7 @@ def backfill_stock(ts_code: str, source: TushareDataSource) -> int:
         bs_map = {}
         if bs_df is not None and not bs_df.empty:
             for _, row in bs_df.iterrows():
-                ed = str(row.get('end_date', ''))[:8]
+                ed = safe_date(row.get('end_date'))
                 if ed:
                     bs_map[ed] = {
                         'total_assets': safe_float(row.get('total_assets')),
@@ -93,7 +94,7 @@ def backfill_stock(ts_code: str, source: TushareDataSource) -> int:
         inc_map = {}
         if inc_df is not None and not inc_df.empty:
             for _, row in inc_df.iterrows():
-                ed = str(row.get('end_date', ''))[:8]
+                ed = safe_date(row.get('end_date'))
                 if ed:
                     inc_map[ed] = {
                         'operating_revenue': safe_float(row.get('revenue')),
@@ -105,7 +106,7 @@ def backfill_stock(ts_code: str, source: TushareDataSource) -> int:
         cf_map = {}
         if cf_df is not None and not cf_df.empty:
             for _, row in cf_df.iterrows():
-                ed = str(row.get('end_date', ''))[:8]
+                ed = safe_date(row.get('end_date'))
                 if ed:
                     cf_map[ed] = {
                         'operating_cash_flow': safe_float(row.get('n_cashflow_act')),
@@ -114,7 +115,7 @@ def backfill_stock(ts_code: str, source: TushareDataSource) -> int:
         fi_map = {}
         if fi_df is not None and not fi_df.empty:
             for _, row in fi_df.iterrows():
-                ed = str(row.get('end_date', ''))[:8]
+                ed = safe_date(row.get('end_date'))
                 if ed:
                     fi_map[ed] = {
                         'gross_profit_margin': safe_float(row.get('grossprofit_margin')),
@@ -130,7 +131,7 @@ def backfill_stock(ts_code: str, source: TushareDataSource) -> int:
 
         updated = 0
         for rec in records:
-            ed = str(rec.end_date).replace('-', '')[:8]
+            ed = rec.end_date
             changed = False
 
             # balancesheet 字段

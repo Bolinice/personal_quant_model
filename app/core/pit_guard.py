@@ -14,7 +14,6 @@ import warnings
 from datetime import UTC, date, datetime
 
 import pandas as pd
-from sqlalchemy import String
 from sqlalchemy.orm import Query, Session
 
 logger = logging.getLogger(__name__)
@@ -117,19 +116,7 @@ def pit_filter_query(
         )
         return query
 
-    # 处理 ann_date 可能是 String 或 Date 类型
-    trade_date_str = str(trade_date).replace("-", "") if len(str(trade_date).replace("-", "")) == 8 else str(trade_date)
-
-    col_type = None
-    for col in model_class.__table__.columns:
-        if col.name == ann_date_col:
-            col_type = type(col.type)
-            break
-
-    if col_type and issubclass(col_type, String):
-        # ann_date 存储为字符串 "YYYYMMDD"
-        return query.filter(ann_col <= trade_date_str)
-    # ann_date 存储为 Date 类型
+    # 统一转换为 date 对象
     if isinstance(trade_date, str):
         trade_date = (
             datetime.strptime(trade_date, "%Y%m%d").replace(tzinfo=UTC).date()

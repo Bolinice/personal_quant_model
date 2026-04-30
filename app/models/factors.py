@@ -37,6 +37,7 @@ class FactorValue(Base):
 
     __tablename__ = "factor_values"
     __table_args__ = (
+        UniqueConstraint("factor_id", "trade_date", "security_id", name="uq_fv_factor_date_sec"),
         Index("ix_fv_factor_date_stock", "factor_id", "trade_date", "security_id"),
         Index("ix_fv_date_stock", "trade_date", "security_id"),
         Index("ix_fv_factor_date", "factor_id", "trade_date"),
@@ -66,7 +67,10 @@ class FactorAnalysis(Base):
     """因子分析结果表"""
 
     __tablename__ = "factor_analysis"
-    __table_args__ = (Index("ix_fa_factor_date", "factor_id", "analysis_date"),)
+    __table_args__ = (
+        UniqueConstraint("factor_id", "analysis_date", "analysis_type", name="uq_fa_factor_date_type"),
+        Index("ix_fa_factor_date", "factor_id", "analysis_date"),
+    )
 
     id: int = Column(Integer, primary_key=True, index=True)
     factor_id: int = Column(Integer, index=True, nullable=False)
@@ -105,7 +109,10 @@ class FactorResult(Base):
     """因子评分结果表"""
 
     __tablename__ = "factor_results"
-    __table_args__ = (Index("ix_fr_factor_date", "factor_id", "trade_date"),)
+    __table_args__ = (
+        UniqueConstraint("factor_id", "security_id", "trade_date", name="uq_fr_factor_sec_date"),
+        Index("ix_fr_factor_date", "factor_id", "trade_date"),
+    )
 
     id: int = Column(Integer, primary_key=True, index=True)
     factor_id: int = Column(Integer, index=True, nullable=False)

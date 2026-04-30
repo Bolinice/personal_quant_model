@@ -1,4 +1,4 @@
-from sqlalchemy import JSON, Column, Date, DateTime, Float, Index, Integer, String, Text
+from sqlalchemy import JSON, Column, Date, DateTime, Float, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.sql import func
 
 from app.db.base_class import Base
@@ -47,7 +47,10 @@ class BacktestNav(Base):
     """回测净值表"""
 
     __tablename__ = "backtest_navs"
-    __table_args__ = (Index("ix_bn_bt_date", "backtest_id", "trade_date"),)
+    __table_args__ = (
+        UniqueConstraint("backtest_id", "trade_date", name="uq_bn_bt_date"),
+        Index("ix_bn_bt_date", "backtest_id", "trade_date"),
+    )
 
     id: int = Column(Integer, primary_key=True, index=True)
     backtest_id: int = Column(Integer, index=True, nullable=False)
@@ -65,7 +68,10 @@ class BacktestPosition(Base):
     """回测持仓表"""
 
     __tablename__ = "backtest_positions"
-    __table_args__ = (Index("ix_bp_bt_date", "backtest_id", "trade_date"),)
+    __table_args__ = (
+        UniqueConstraint("backtest_id", "trade_date", "security_id", name="uq_bp_bt_date_sec"),
+        Index("ix_bp_bt_date", "backtest_id", "trade_date"),
+    )
 
     id: int = Column(Integer, primary_key=True, index=True)
     backtest_id: int = Column(Integer, index=True, nullable=False)
@@ -82,7 +88,10 @@ class BacktestTrade(Base):
     """回测成交表"""
 
     __tablename__ = "backtest_trades"
-    __table_args__ = (Index("ix_bt_trade_bt_date", "backtest_id", "trade_date"),)
+    __table_args__ = (
+        UniqueConstraint("backtest_id", "trade_date", "security_id", "action", name="uq_bt_date_sec_action"),
+        Index("ix_bt_trade_bt_date", "backtest_id", "trade_date"),
+    )
 
     id: int = Column(Integer, primary_key=True, index=True)
     backtest_id: int = Column(Integer, index=True, nullable=False)
@@ -111,7 +120,10 @@ class BacktestResult(Base):
     """回测指标汇总表"""
 
     __tablename__ = "backtest_results"
-    __table_args__ = (Index("ix_br_bt", "backtest_id"),)
+    __table_args__ = (
+        UniqueConstraint("backtest_id", name="uq_br_bt"),
+        Index("ix_br_bt", "backtest_id"),
+    )
 
     id: int = Column(Integer, primary_key=True, index=True)
     backtest_id: int = Column(Integer, index=True, nullable=False)

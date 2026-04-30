@@ -9,6 +9,8 @@ import time
 import pandas as pd
 from datetime import datetime, timedelta
 from sqlalchemy import text
+from scripts.script_utils import safe_date
+
 from app.db.base import SessionLocal
 from app.models.market.stock_margin import StockMargin
 from app.data_sources.tushare_source import TushareDataSource
@@ -31,7 +33,7 @@ def sync_margin_by_date(trade_date: str, source: TushareDataSource):
     try:
         existing = set(r[0] for r in db.execute(text(
             "SELECT ts_code FROM stock_margin WHERE trade_date = :d"
-        ), {"d": trade_date}).fetchall())
+        ), {"d": safe_date(trade_date)}).fetchall())
 
         if existing:
             print(f"  {trade_date}: 已存在 {len(existing)} 条，跳过")
@@ -54,7 +56,7 @@ def sync_margin_by_date(trade_date: str, source: TushareDataSource):
                 continue
             new_records.append(StockMargin(
                 ts_code=ts_code,
-                trade_date=trade_date,
+                trade_date=safe_date(trade_date),
                 margin_buy=safe_float(row.get('rzye')),  # 融资余额
                 margin_balance=safe_float(row.get('rzrqye')),  # 融资融券余额
                 margin_sell=safe_float(row.get('rqye')),  # 融券余额
@@ -98,7 +100,7 @@ def sync_margin_detail(ts_code: str, start_date: str, end_date: str,
 
         new_records = []
         for _, row in df.iterrows():
-            trade_date = row.get('trade_date', '')
+            trade_date = safe_date(row.get('trade_date'))
             if trade_date in existing_dates:
                 continue
             new_records.append(StockMargin(

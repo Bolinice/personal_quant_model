@@ -65,6 +65,7 @@ class ModelScore(Base):
 
     __tablename__ = "model_scores"
     __table_args__ = (
+        UniqueConstraint("model_id", "security_id", "trade_date", name="uq_ms_model_sec_date"),
         Index("ix_ms_model_date", "model_id", "trade_date"),
         Index("ix_ms_security_date", "security_id", "trade_date"),
     )
@@ -88,7 +89,10 @@ class ModelPerformance(Base):
     """模型表现跟踪表"""
 
     __tablename__ = "model_performance"
-    __table_args__ = (Index("ix_mp_model_date", "model_id", "trade_date"),)
+    __table_args__ = (
+        UniqueConstraint("model_id", "trade_date", name="uq_mp_model_date"),
+        Index("ix_mp_model_date", "model_id", "trade_date"),
+    )
 
     id: int = Column(Integer, primary_key=True, index=True)
     model_id: int = Column(Integer, index=True, nullable=False)

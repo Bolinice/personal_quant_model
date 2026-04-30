@@ -22,6 +22,7 @@ from sqlalchemy import text
 from app.core.config import settings
 from app.data_sources.tushare_source import TushareDataSource
 from app.db.base import SessionLocal
+from scripts.script_utils import safe_date
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
@@ -102,22 +103,22 @@ def fetch_one_stock(pro, ts_code: str) -> pd.DataFrame:
     if not dfs:
         return pd.DataFrame()
 
-    # 统一end_date格式为字符串YYYYMMDD
+    # 统一end_date格式为date对象
     for key, df in dfs.items():
-        df['end_date'] = df['end_date'].astype(str).str[:8]
+        df['end_date'] = pd.to_datetime(df['end_date']).dt.date
 
     # 收集ann_date (优先f_ann_date)
     ann_date_map = {}
     for key in ['income', 'bs', 'cf']:
         if key in dfs:
             for _, row in dfs[key].iterrows():
-                k = (str(row['ts_code']), str(row['end_date']))
+                k = (str(row['ts_code']), row['end_date'])
                 fad = row.get('f_ann_date')
                 ad = row.get('ann_date')
                 if pd.notna(fad) and fad:
-                    ann_date_map[k] = str(fad)[:8]
+                    ann_date_map[k] = safe_date(fad)
                 elif pd.notna(ad) and ad:
-                    ann_date_map[k] = str(ad)[:8]
+                    ann_date_map[k] = safe_date(ad)
 
     # 以income为基准合并
     base_key = 'income' if 'income' in dfs else list(dfs.keys())[0]
@@ -236,21 +237,20 @@ def save_to_db(merged_df: pd.DataFrame, db) -> int:
     for r in db.query(StockFinancial.id, StockFinancial.end_date).filter(
         StockFinancial.ts_code == ts_code
     ).all():
-        existing[str(r[1])] = r[0]
+        existing[r[1]] = r[0]
 
     count = 0
     for _, row in merged_df.iterrows():
-        end_date = str(row.get('end_date', ''))
-        if not end_date or len(end_date) < 8:
+        end_date = safe_date(row.get('end_date'))
+        if not end_date:
             continue
 
-        ann_date_val = row.get('ann_date')
-        ann_date_str = str(ann_date_val)[:8] if ann_date_val else None
+        ann_date_val = safe_date(row.get('ann_date'))
 
         data = {
             'ts_code': ts_code,
             'end_date': end_date,
-            'ann_date': ann_date_str,
+            'ann_date': ann_date_val,
             'total_revenue': safe_float(row.get('total_revenue')),
             'operating_revenue': safe_float(row.get('operating_revenue')),
             'operating_cost': safe_float(row.get('operating_cost')),
@@ -321,8 +321,8 @@ def main():
             cutoff = (datetime.now() - timedelta(days=730)).strftime('%Y%m%d')
             ts_codes = [
                 r[0] for r in db.execute(text(
-                    f"SELECT DISTINCT ts_code FROM stock_financial WHERE ann_date >= '{cutoff}' ORDER BY ts_code"
-                )).fetchall()
+                    "SELECT DISTINCT ts_code FROM stock_financial WHERE ann_date >= :cutoff ORDER BY ts_code"
+                ), {"cutoff": safe_date(cutoff)}).fetchall()
             ]
             logger.info(f"增量模式: {len(ts_codes)} 只股票")
         else:

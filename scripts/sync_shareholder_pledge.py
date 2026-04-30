@@ -15,6 +15,8 @@ import time
 import pandas as pd
 from datetime import datetime, timedelta
 from sqlalchemy import text
+from scripts.script_utils import safe_date
+
 from app.db.base import SessionLocal
 from app.models.market.stock_shareholder_pledge import StockShareholderPledge
 from app.data_sources.tushare_source import TushareDataSource
@@ -65,7 +67,7 @@ def sync_pledge_tushare(ts_code: str, start_date: str, end_date: str,
 
         new_records = []
         for _, row in df.iterrows():
-            trade_date = str(row.get('end_date', ''))[:8]
+            trade_date = safe_date(row.get('end_date'))
             if not trade_date or trade_date in existing_dates:
                 continue
             new_records.append(StockShareholderPledge(
@@ -99,7 +101,7 @@ def sync_pledge_akshare(ts_code: str = None) -> int:
             return 0
 
         # 格式化日期
-        trade_date = str(df['交易日期'].iloc[0])[:10].replace('-', '') if not df.empty else None
+        trade_date = safe_date(df['交易日期'].iloc[0]) if not df.empty else None
         if not trade_date:
             return 0
 

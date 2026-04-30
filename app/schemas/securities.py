@@ -1,4 +1,6 @@
-from datetime import datetime
+"""证券管理 Pydantic 模型。"""
+
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
 
@@ -7,9 +9,9 @@ class SecurityBase(BaseModel):
     ts_code: str
     symbol: str
     name: str
-    board: str
+    board: str | None = None
     industry_name: str | None = None
-    list_date: datetime | None = None
+    list_date: date | None = None
     status: str = "listed"
     is_st: bool = False
 

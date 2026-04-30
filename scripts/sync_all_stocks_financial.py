@@ -15,6 +15,7 @@ from sqlalchemy import text
 from app.db.base import SessionLocal
 from app.data_sources.tushare_source import TushareDataSource
 from app.core.config import settings
+from scripts.script_utils import safe_date
 
 BATCH_SIZE = 50
 DELAY = 0.3
@@ -64,7 +65,7 @@ def sync_financial_tushare(ts_code: str, source: TushareDataSource) -> int:
             bs_df = source.get_balance_sheet_with_goodwill(ts_code)
             if bs_df is not None and not bs_df.empty and 'end_date' in bs_df.columns:
                 for _, bs_row in bs_df.iterrows():
-                    ed = str(bs_row.get('end_date', ''))
+                    ed = safe_date(bs_row.get('end_date'))
                     if ed and 'goodwill' in bs_df.columns and pd.notna(bs_row.get('goodwill')):
                         goodwill_map[ed] = safe_float(bs_row['goodwill'])
         except Exception:
@@ -73,12 +74,9 @@ def sync_financial_tushare(ts_code: str, source: TushareDataSource) -> int:
         # 批量获取已存在的end_date
         end_dates = []
         for _, row in df.iterrows():
-            ed = str(row.get('end_date', ''))
+            ed = safe_date(row.get('end_date'))
             if ed:
-                try:
-                    end_dates.append(pd.Timestamp(ed).date())
-                except Exception:
-                    continue
+                end_dates.append(ed)
 
         if not end_dates:
             return 0
@@ -90,21 +88,17 @@ def sync_financial_tushare(ts_code: str, source: TushareDataSource) -> int:
 
         new_records = []
         for _, row in df.iterrows():
-            ed = str(row.get('end_date', ''))
-            if not ed:
-                continue
-            try:
-                end_date = pd.Timestamp(ed).date()
-            except Exception:
+            end_date = safe_date(row.get('end_date'))
+            if not end_date:
                 continue
 
             if end_date in existing_dates:
                 continue
 
-            ann_date = str(row.get('ann_date', ''))[:8] if pd.notna(row.get('ann_date')) else None
+            ann_date = safe_date(row.get('ann_date'))
 
             # 从balancesheet获取商誉
-            goodwill = goodwill_map.get(ed) or goodwill_map.get(str(end_date))
+            goodwill = goodwill_map.get(end_date)
 
             new_records.append(StockFinancial(
                 ts_code=ts_code,

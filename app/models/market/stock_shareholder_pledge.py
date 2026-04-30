@@ -1,6 +1,6 @@
 """股权质押数据模型"""
 
-from sqlalchemy import Column, Float, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Column, Date, Index, Integer, Numeric, String, UniqueConstraint
 
 from app.db.base_class import Base
 
@@ -10,10 +10,10 @@ class StockShareholderPledge(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     ts_code = Column(String(20), nullable=False, comment="股票代码")
-    trade_date = Column(String(8), nullable=False, comment="交易日期")
-    pledge_ratio = Column(Float, nullable=True, comment="质押比例(%)")
-    total_pledge_shares = Column(Float, nullable=True, comment="质押总股数(股)")
-    total_shares = Column(Float, nullable=True, comment="总股本(股)")
+    trade_date = Column(Date, nullable=False, comment="交易日期")
+    pledge_ratio = Column(Numeric(12, 4), nullable=True, comment="质押比例(%)")
+    total_pledge_shares = Column(Numeric(20, 4), nullable=True, comment="质押总股数(股)")
+    total_shares = Column(Numeric(20, 4), nullable=True, comment="总股本(股)")
     pledgor_count = Column(Integer, nullable=True, comment="质押股东数")
 
     __table_args__ = (

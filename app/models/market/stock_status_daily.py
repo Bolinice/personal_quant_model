@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Date, DateTime, Integer, String
+from sqlalchemy import Boolean, Column, Date, DateTime, Integer, String, UniqueConstraint
 from sqlalchemy.sql import func
 
 from app.db.base_class import Base
@@ -8,6 +8,9 @@ class StockStatusDaily(Base):
     """股票状态日表 - 支持按交易日回放"""
 
     __tablename__ = "stock_status_daily"
+    __table_args__ = (
+        UniqueConstraint("ts_code", "trade_date", name="uq_ssd_code_date"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     ts_code = Column(String(20), nullable=False)

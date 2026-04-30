@@ -28,6 +28,7 @@ from sqlalchemy import text
 from app.core.config import settings
 from app.data_sources.tushare_source import TushareDataSource
 from app.db.base import SessionLocal
+from scripts.script_utils import safe_date
 
 logging.basicConfig(
     level=logging.INFO,
@@ -224,8 +225,8 @@ def sync_financial(source: TushareDataSource, max_workers: int = 8) -> int:
             for _, row in df.iterrows():
                 new_records.append(StockFinancial(
                     ts_code=ts_code,
-                    end_date=str(row.get('end_date', '')),
-                    ann_date=str(row.get('ann_date', ''))[:8] if pd.notna(row.get('ann_date')) else None,
+                    end_date=safe_date(row.get('end_date')),
+                    ann_date=safe_date(row.get('ann_date')),
                     roe=safe_float(row.get('roe')),
                     roa=safe_float(row.get('roa')),
                     gross_profit_margin=safe_float(row.get('grossprofit_margin')),
@@ -325,7 +326,7 @@ def sync_financial_income(source: TushareDataSource, max_workers: int = 8) -> in
                 # 查找已有记录
                 existing = db2.query(StockFinancial).filter(
                     StockFinancial.ts_code == ts_code,
-                    StockFinancial.end_date == str(ed),
+                    StockFinancial.end_date == safe_date(ed),
                 ).first()
 
                 if existing is None:
@@ -338,7 +339,7 @@ def sync_financial_income(source: TushareDataSource, max_workers: int = 8) -> in
                     if bs is not None and not bs.empty:
                         bs_row = bs[bs['end_date'] == ed]
                         if not bs_row.empty:
-                            ann_date = str(bs_row.iloc[0].get('ann_date', ''))[:8] if pd.notna(bs_row.iloc[0].get('ann_date')) else None
+                            ann_date = safe_date(bs_row.iloc[0].get('ann_date'))
                             total_assets_val = safe_float(bs_row.iloc[0].get('total_assets'))
                             total_equity_val = safe_float(bs_row.iloc[0].get('total_hldr_eqy_exc_min_int'))
 
@@ -349,7 +350,7 @@ def sync_financial_income(source: TushareDataSource, max_workers: int = 8) -> in
 
                     new_rec = StockFinancial(
                         ts_code=ts_code,
-                        end_date=str(ed),
+                        end_date=safe_date(ed),
                         ann_date=ann_date,
                         total_assets=total_assets_val,
                         total_equity=total_equity_val,
@@ -430,7 +431,7 @@ def sync_northbound(source: TushareDataSource, start_date: str, end_date: str,
     db = SessionLocal()
     try:
         existing_dates = set(
-            r[0].strftime('%Y%m%d') if isinstance(r[0], date) else str(r[0])
+            r[0]
             for r in db.execute(text(
                 "SELECT DISTINCT trade_date FROM stock_northbound"
             )).fetchall()
@@ -442,7 +443,7 @@ def sync_northbound(source: TushareDataSource, start_date: str, end_date: str,
     db = SessionLocal()
     try:
         trade_dates = [
-            r[0].strftime('%Y%m%d') if isinstance(r[0], date) else str(r[0])
+            r[0] if isinstance(r[0], date) else safe_date(r[0])
             for r in db.execute(text(
                 "SELECT cal_date FROM trading_calendar WHERE is_open = true "
                 "AND cal_date >= :s AND cal_date <= :e ORDER BY cal_date"
@@ -456,10 +457,11 @@ def sync_northbound(source: TushareDataSource, start_date: str, end_date: str,
 
     total = 0
 
-    def fetch_one(td: str) -> int:
+    def fetch_one(td: date) -> int:
         db2 = SessionLocal()
         try:
-            df = source._pro.hsgt_top10(trade_date=td)
+            td_str = td.strftime('%Y%m%d')
+            df = source._pro.hsgt_top10(trade_date=td_str)
             if df is None or df.empty:
                 return 0
 
@@ -536,7 +538,7 @@ def sync_money_flow(source: TushareDataSource, start_date: str, end_date: str,
             from app.models.market import StockMoneyFlow
             new_records = []
             for _, row in df.iterrows():
-                td = str(row.get('trade_date', ''))
+                td = safe_date(row.get('trade_date'))
                 new_records.append(StockMoneyFlow(
                     ts_code=ts_code,
                     trade_date=td,
@@ -592,7 +594,7 @@ def sync_margin(source: TushareDataSource, start_date: str, end_date: str,
     db = SessionLocal()
     try:
         existing_dates = set(
-            r[0].strftime('%Y%m%d') if isinstance(r[0], date) else str(r[0])
+            r[0]
             for r in db.execute(text(
                 "SELECT DISTINCT trade_date FROM stock_margin"
             )).fetchall()
@@ -603,7 +605,7 @@ def sync_margin(source: TushareDataSource, start_date: str, end_date: str,
     db = SessionLocal()
     try:
         trade_dates = [
-            r[0].strftime('%Y%m%d') if isinstance(r[0], date) else str(r[0])
+            r[0] if isinstance(r[0], date) else safe_date(r[0])
             for r in db.execute(text(
                 "SELECT cal_date FROM trading_calendar WHERE is_open = true "
                 "AND cal_date >= :s AND cal_date <= :e ORDER BY cal_date"
@@ -617,10 +619,11 @@ def sync_margin(source: TushareDataSource, start_date: str, end_date: str,
 
     total = 0
 
-    def fetch_one(td: str) -> int:
+    def fetch_one(td: date) -> int:
         db2 = SessionLocal()
         try:
-            df = source._pro.margin(trade_date=td)
+            td_str = td.strftime('%Y%m%d')
+            df = source._pro.margin(trade_date=td_str)
             if df is None or df.empty:
                 return 0
 

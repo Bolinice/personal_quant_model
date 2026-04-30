@@ -184,7 +184,7 @@ def run_daily_factor_calc(self, trade_date: str | None = None):
                 db.query(StockNorthbound)
                 .filter(
                     StockNorthbound.ts_code.in_(ts_codes),
-                    StockNorthbound.trade_date == calc_date.strftime("%Y%m%d"),
+                    StockNorthbound.trade_date == calc_date,
                 )
                 .all()
             )
@@ -210,7 +210,7 @@ def run_daily_factor_calc(self, trade_date: str | None = None):
                 db.query(StockMoneyFlow)
                 .filter(
                     StockMoneyFlow.ts_code.in_(ts_codes),
-                    StockMoneyFlow.trade_date == calc_date.strftime("%Y%m%d"),
+                    StockMoneyFlow.trade_date == calc_date,
                 )
                 .all()
             )
@@ -236,7 +236,7 @@ def run_daily_factor_calc(self, trade_date: str | None = None):
                 db.query(StockMargin)
                 .filter(
                     StockMargin.ts_code.in_(ts_codes),
-                    StockMargin.trade_date == calc_date.strftime("%Y%m%d"),
+                    StockMargin.trade_date == calc_date,
                 )
                 .all()
             )

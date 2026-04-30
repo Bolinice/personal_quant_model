@@ -323,14 +323,22 @@ def create_factor_analysis(factor_id: int, analysis_data: FactorAnalysisCreate, 
 
 @with_db
 def calculate_factor_values(factor_id: int, trade_date: str, securities: list, db: Session = None):
-    """示例因子计算函数，实际实现需要根据因子表达式计算"""
-    # 这里应该是实际的因子计算逻辑
-    # 示例：计算一个简单的动量因子
+    """因子计算入口 — 委托给FactorEngine执行实际计算"""
+    from app.core.factor_engine import FactorEngine
+
+    engine = FactorEngine(db)
+    result_df = engine.calc_single_factor(factor_id, trade_date)
+    if result_df is None or result_df.empty:
+        return []
+
     values = []
-    for security in securities:
-        # 简单的20日收益率计算
-        value = np.random.normal(0, 1)  # 模拟计算结果
-        values.append(FactorValueCreate(security_id=security["id"], value=value))
+    for _, row in result_df.iterrows():
+        values.append(
+            FactorValueCreate(
+                security_id=row.get("security_id", row.get("ts_code", "")),
+                value=float(row.get("value", 0)),
+            )
+        )
     return create_factor_values(factor_id, trade_date, values, db=db)
 
 

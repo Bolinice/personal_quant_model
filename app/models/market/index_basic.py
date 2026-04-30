@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Date, DateTime, Float, Integer, String
+from sqlalchemy import Column, Date, DateTime, Integer, Numeric, String
 from sqlalchemy.sql import func
 
 from app.db.base_class import Base
@@ -16,7 +16,7 @@ class IndexBasic(Base):
     publisher = Column(String(50))
     category = Column(String(20))
     base_date = Column(Date)
-    base_point = Column(Float)
+    base_point = Column(Numeric(20, 4))
     list_date = Column(Date)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

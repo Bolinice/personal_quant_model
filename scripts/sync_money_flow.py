@@ -9,6 +9,8 @@ import time
 import pandas as pd
 from datetime import datetime, timedelta
 from sqlalchemy import text
+from scripts.script_utils import safe_date
+
 from app.db.base import SessionLocal
 from app.models.market.stock_money_flow import StockMoneyFlow
 from app.data_sources.tushare_source import TushareDataSource
@@ -52,7 +54,7 @@ def sync_money_flow_tushare(ts_code: str, start_date: str, end_date: str,
 
         new_records = []
         for _, row in df.iterrows():
-            trade_date = row.get('trade_date', '')
+            trade_date = safe_date(row.get('trade_date'))
             if trade_date in existing_dates:
                 continue
             new_records.append(StockMoneyFlow(
@@ -94,7 +96,7 @@ def sync_money_flow_akshare(ts_code: str) -> int:
             try:
                 d = str(row.get('日期', ''))
                 if d and len(d) >= 10:
-                    dates_in_df.append(d.replace('-', ''))
+                    dates_in_df.append(safe_date(d))
             except Exception:
                 continue
 
@@ -112,7 +114,7 @@ def sync_money_flow_akshare(ts_code: str) -> int:
                 d = str(row.get('日期', ''))
                 if not d or len(d) < 10:
                     continue
-                trade_date = d.replace('-', '')
+                trade_date = safe_date(d)
             except Exception:
                 continue
 

@@ -11,7 +11,7 @@ class PortfolioBase(BaseModel):
 
     model_id: int
     trade_date: date
-    portfolio_version: int = 1
+    portfolio_version: str = "1"
     target_exposure: float | None = None
     total_weight: float | None = None
 
@@ -23,7 +23,7 @@ class PortfolioCreate(PortfolioBase):
 class PortfolioUpdate(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    portfolio_version: int | None = None
+    portfolio_version: str | None = None
     target_exposure: float | None = None
     total_weight: float | None = None
 
@@ -38,10 +38,8 @@ class PortfolioPositionBase(BaseModel):
 
     portfolio_id: int
     security_id: str
-    weight: float
-    shares: int | None = None
     target_weight: float | None = None
-    actual_weight: float | None = None
+    score: float | None = None
 
 
 class PortfolioPositionCreate(PortfolioPositionBase):
@@ -55,12 +53,12 @@ class PortfolioPositionOut(PortfolioPositionBase):
 class RebalanceRecordBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    portfolio_id: int
+    model_id: int
     trade_date: date
     rebalance_type: str | None = None
     buy_list: Any | None = None
     sell_list: Any | None = None
-    turnover: float | None = None
+    total_turnover: float | None = None
 
 
 class RebalanceRecordCreate(RebalanceRecordBase):
@@ -78,7 +76,7 @@ class TimingSignalBase(BaseModel):
     trade_date: date
     signal_type: str | None = None
     signal_value: float | None = None
-    position_ratio: float | None = None
+    target_exposure: float | None = None
 
 
 class TimingSignalCreate(TimingSignalBase):

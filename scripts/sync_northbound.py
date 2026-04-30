@@ -9,6 +9,8 @@ import time
 import pandas as pd
 from datetime import datetime, timedelta
 from sqlalchemy import text
+from scripts.script_utils import safe_date
+
 from app.db.base import SessionLocal
 from app.models.market.stock_northbound import StockNorthbound
 from app.data_sources.tushare_source import TushareDataSource
@@ -35,7 +37,7 @@ def format_ts_code(code: str) -> str:
 
 def sync_northbound_holding():
     """同步北向持股数据（AKShare 东方财富）"""
-    trade_date = datetime.now().strftime('%Y%m%d')
+    trade_date = datetime.now().date()
     print(f"同步北向持股数据 {trade_date}")
 
     try:
@@ -130,7 +132,7 @@ def sync_northbound_trade(days: int = 30):
                 # 检查是否已存在
                 existing = set(r[0] for r in db.execute(text(
                     "SELECT ts_code FROM stock_northbound WHERE trade_date = :d"
-                ), {"d": td}).fetchall())
+                ), {"d": safe_date(td)}).fetchall())
 
                 new_records = []
                 for _, row in df.iterrows():
@@ -140,7 +142,7 @@ def sync_northbound_trade(days: int = 30):
 
                     new_records.append(StockNorthbound(
                         ts_code=ts_code,
-                        trade_date=td,
+                        trade_date=safe_date(td),
                         north_net_buy=safe_float(row.get('net_amount')),
                         north_buy=safe_float(row.get('buy')),
                         north_sell=safe_float(row.get('sell')),

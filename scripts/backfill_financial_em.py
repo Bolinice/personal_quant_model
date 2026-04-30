@@ -18,6 +18,7 @@ import pandas as pd
 from sqlalchemy import text
 from app.db.base import SessionLocal
 from app.models.market.stock_financial import StockFinancial
+from scripts.script_utils import safe_date
 
 
 BATCH_SIZE = 50
@@ -50,7 +51,7 @@ def backfill_stock_em(ts_code: str) -> int:
         bs_map = {}
         if bs_df is not None and not bs_df.empty:
             for _, row in bs_df.iterrows():
-                ed = str(row.get('REPORT_DATE', row.get('报告期', '')))[:10].replace('-', '')
+                ed = safe_date(row.get('REPORT_DATE', row.get('报告期', '')))
                 if not ed:
                     continue
                 bs_map[ed] = {
@@ -68,7 +69,7 @@ def backfill_stock_em(ts_code: str) -> int:
         inc_map = {}
         if inc_df is not None and not inc_df.empty:
             for _, row in inc_df.iterrows():
-                ed = str(row.get('REPORT_DATE', row.get('报告期', '')))[:10].replace('-', '')
+                ed = safe_date(row.get('REPORT_DATE', row.get('报告期', '')))
                 if not ed:
                     continue
                 inc_map[ed] = {
@@ -86,7 +87,7 @@ def backfill_stock_em(ts_code: str) -> int:
         cf_map = {}
         if cf_df is not None and not cf_df.empty:
             for _, row in cf_df.iterrows():
-                ed = str(row.get('REPORT_DATE', row.get('报告期', '')))[:10].replace('-', '')
+                ed = safe_date(row.get('REPORT_DATE', row.get('报告期', '')))
                 if not ed:
                     continue
                 cf_map[ed] = {
@@ -97,7 +98,7 @@ def backfill_stock_em(ts_code: str) -> int:
         records = db.query(StockFinancial).filter(StockFinancial.ts_code == ts_code).all()
         updated = 0
         for rec in records:
-            ed = str(rec.end_date).replace('-', '')[:8]
+            ed = rec.end_date
             changed = False
 
             if ed in bs_map:

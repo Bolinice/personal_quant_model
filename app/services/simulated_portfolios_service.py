@@ -107,9 +107,9 @@ def calculate_simulated_portfolio_nav(portfolio_id: int, trade_date: str, db: Se
     if not positions:
         return None
 
-    # 获取行情数据计算净值（简化示例）
-    # 这里应该根据持仓和行情数据计算净值
-    nav = portfolio.initial_capital * (1 + np.random.normal(0, 0.01))  # 模拟净值变化
+    # 根据持仓市值计算净值
+    total_market_value = sum(p.market_value or 0 for p in positions)
+    nav = total_market_value if total_market_value > 0 else portfolio.initial_capital
 
     # 创建净值记录
     nav_record = SimulatedPortfolioNavCreate(portfolio_id=portfolio_id, trade_date=trade_date, nav=nav)

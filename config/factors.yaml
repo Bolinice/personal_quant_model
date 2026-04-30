@@ -1,31 +1,23 @@
-# 因子模块配置 V2
 factors:
-  # 5模块+1风险模块权重
+  gate:
+    coverage_min: 0.7
+    positive_ic_ratio_min: 0.52
+    rank_ic_mean_min: 0.0
+    single_year_contribution_max: 0.5
   module_weights:
+    expectation: 0.3
+    flow_confirm: 0.1
     quality_growth: 0.35
-    expectation: 0.30
     residual_momentum: 0.25
-    flow_confirm: 0.10
     risk_penalty_lambda: 0.35
-
-  # 模块状态机阈值
+  preprocess:
+    coverage_threshold: 0.7
+    mad_threshold: 3.0
+    neutralize_method: industry_market_cap
+    zscore_method: standard
   state_machine:
     active_to_watch_ic_threshold: 0.02
-    watch_to_degraded_ic_threshold: 0.0
+    consecutive_periods: 4
     degraded_to_disabled_ic_threshold: 0.0
     watch_to_active_ic_threshold: 0.03
-    consecutive_periods: 4
-
-  # 预处理参数
-  preprocess:
-    mad_threshold: 3.0
-    coverage_threshold: 0.70
-    zscore_method: standard
-    neutralize_method: industry_market_cap
-
-  # 因子上线闸门
-  gate:
-    coverage_min: 0.70
-    rank_ic_mean_min: 0.0
-    positive_ic_ratio_min: 0.52
-    single_year_contribution_max: 0.50
+    watch_to_degraded_ic_threshold: 0.0

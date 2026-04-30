@@ -1,0 +1,49 @@
+{
+  "strategy_params": {
+    "universe": "hs300",
+    "rebalance_frequency": "monthly",
+    "top_n": 30,
+    "weight_method": "equal"
+  },
+  "factor_params": {
+    "quality_growth": {
+      "enabled": true,
+      "weight": 0.25,
+      "factors": ["roe", "roa", "yoy_revenue", "yoy_net_profit"]
+    },
+    "expectation_revision": {
+      "enabled": true,
+      "weight": 0.20,
+      "factors": ["rating_change", "target_price_change"]
+    },
+    "residual_momentum": {
+      "enabled": true,
+      "weight": 0.25,
+      "factors": ["ret_3m_skip1", "ret_6m_skip1", "ret_12m_skip1"]
+    },
+    "money_flow": {
+      "enabled": true,
+      "weight": 0.20,
+      "factors": ["northbound_flow", "main_flow"]
+    },
+    "risk_penalty": {
+      "enabled": true,
+      "weight": 0.10,
+      "factors": ["volatility_penalty", "liquidity_penalty"]
+    }
+  },
+  "backtest_params": {
+    "start_date": "2020-01-01",
+    "end_date": "2023-12-31",
+    "initial_capital": 10000000,
+    "commission_rate": 0.0003,
+    "slippage_rate": 0.001,
+    "min_holding_period": 5
+  },
+  "risk_params": {
+    "max_position_size": 0.10,
+    "max_sector_weight": 0.30,
+    "max_turnover": 2.0,
+    "stop_loss": -0.15
+  }
+}

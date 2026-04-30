@@ -1,0 +1,340 @@
+{
+  "version": "20260501_020446",
+  "timestamp": "2026-05-01T02:04:46.388888",
+  "author": "test",
+  "description": "更新 backtest.costs.slippage_rate",
+  "config_data": {
+    "environment": "development",
+    "log_level": "INFO",
+    "log_path": "/data/logs/",
+    "data_path": "/data/",
+    "snapshot_path": "/data/snapshots/",
+    "analysis_db_path": "/data/analysis.duckdb",
+    "api_host": "0.0.0.0",
+    "api_port": 8000,
+    "celery_broker_url": "redis://localhost:6379/1",
+    "celery_result_backend": "redis://localhost:6379/2",
+    "worker_concurrency": 8,
+    "universe": {
+      "benchmarks": [
+        "CSI300",
+        "CSI500",
+        "CSI1000",
+        "CSI800"
+      ],
+      "core": {
+        "exclude_blacklist": true,
+        "exclude_delist": true,
+        "exclude_limit_up_down": true,
+        "exclude_risk_events": true,
+        "exclude_st": true,
+        "exclude_suspended": true,
+        "liquidity_pct": 0.8,
+        "min_daily_amount": 80000000,
+        "min_list_days": 180,
+        "min_market_cap": 8000000000,
+        "min_price": 3.0
+      },
+      "extended": {
+        "exclude_blacklist": true,
+        "exclude_delist": true,
+        "exclude_limit_up_down": true,
+        "exclude_risk_events": true,
+        "exclude_st": true,
+        "exclude_suspended": true,
+        "liquidity_pct": 0.7,
+        "min_daily_amount": 50000000,
+        "min_list_days": 120,
+        "min_market_cap": 0,
+        "min_price": 2.0
+      }
+    },
+    "factors": {
+      "gate": {
+        "coverage_min": 0.7,
+        "positive_ic_ratio_min": 0.52,
+        "rank_ic_mean_min": 0.0,
+        "single_year_contribution_max": 0.5
+      },
+      "module_weights": {
+        "expectation": 0.3,
+        "flow_confirm": 0.1,
+        "quality_growth": 0.35,
+        "residual_momentum": 0.25,
+        "risk_penalty_lambda": 0.35
+      },
+      "preprocess": {
+        "coverage_threshold": 0.7,
+        "mad_threshold": 3.0,
+        "neutralize_method": "industry_market_cap",
+        "zscore_method": "standard"
+      },
+      "state_machine": {
+        "active_to_watch_ic_threshold": 0.02,
+        "consecutive_periods": 4,
+        "degraded_to_disabled_ic_threshold": 0.0,
+        "watch_to_active_ic_threshold": 0.03,
+        "watch_to_degraded_ic_threshold": 0.0
+      }
+    },
+    "labels": {
+      "auxiliary": {
+        "horizons": [
+          5,
+          10,
+          20,
+          60
+        ]
+      },
+      "main": {
+        "benchmark": "CSI800",
+        "horizon": 20,
+        "type": "excess_return"
+      },
+      "standardization": {
+        "linear_model": "zscore",
+        "tree_model": "raw_winsorized"
+      },
+      "winsorize": {
+        "lower_pct": 0.01,
+        "upper_pct": 0.99
+      }
+    },
+    "model": {
+      "fusion_weights": {
+        "lightgbm": 0.45,
+        "ridge": 0.25,
+        "rule": 0.3
+      },
+      "lightgbm": {
+        "colsample_bytree": 0.8,
+        "learning_rate": 0.03,
+        "max_depth": 4,
+        "min_child_samples": 200,
+        "num_leaves": 31,
+        "reg_alpha": 0.1,
+        "reg_lambda": 1.0,
+        "subsample": 0.8
+      },
+      "ridge": {
+        "alpha": 3.0
+      },
+      "shrinkage": {
+        "base_ratio": 0.7,
+        "max_weight": 0.45,
+        "min_weight": 0.1
+      },
+      "walk_forward": {
+        "gap_days": 21,
+        "step_months": 1,
+        "test_window_months": 12,
+        "train_window_months": 36
+      }
+    },
+    "timing": {
+      "drawdown_protection": {
+        "level1": 0.05,
+        "level2": 0.08,
+        "level3": 0.12
+      },
+      "position_tiers": {
+        "negative": 0.3,
+        "neutral": 0.6,
+        "positive": 0.8,
+        "strong_positive": 1.0
+      },
+      "recovery_threshold": 0.03,
+      "signals": {
+        "breadth": 1.0,
+        "drawdown": 1.0,
+        "northbound": 1.0,
+        "trend": 1.0,
+        "volatility": 1.0
+      }
+    },
+    "portfolio": {
+      "industry_constraints": {
+        "max_deviation": 0.05,
+        "max_single_industry": 0.2
+      },
+      "liquidity_discount": {
+        "insufficient": 0.6,
+        "marginal": 0.85,
+        "normal": 1.0
+      },
+      "lot_size": 100,
+      "mode": "production",
+      "rebalance_buffer": {
+        "buy_top": 50,
+        "hold_top": 75,
+        "min_weight_pct": 0.2
+      },
+      "risk_discount": {
+        "extreme": 0.0,
+        "high": 0.6,
+        "low": 1.0,
+        "medium": 0.85
+      },
+      "tier_multipliers": {
+        "tier1": {
+          "multiplier": 1.5,
+          "range": [
+            1,
+            10
+          ]
+        },
+        "tier2": {
+          "multiplier": 1.2,
+          "range": [
+            11,
+            30
+          ]
+        },
+        "tier3": {
+          "multiplier": 1.0,
+          "range": [
+            31,
+            60
+          ]
+        }
+      },
+      "top_n": 60
+    },
+    "risk": {
+      "blacklist": {
+        "delist_organizing": true,
+        "major_investigation": true,
+        "severe_audit_non_standard": true,
+        "st": true
+      },
+      "extreme_scenarios": {
+        "index_crash_plus_breadth_collapse": {
+          "action": "reduce_to_30_pct",
+          "breadth_threshold": 0.3,
+          "index_drop_pct": 3
+        },
+        "northbound_outflow_plus_high_vol": {
+          "action": "reduce_to_30_pct",
+          "outflow_threshold": 5000000000,
+          "vol_percentile": 75
+        },
+        "vix_spike": {
+          "action": "reduce_to_60_pct",
+          "percentile": 95
+        }
+      },
+      "penalty_rules": {
+        "cashflow_quality": {
+          "threshold": 0.5,
+          "weight": 0.1
+        },
+        "earnings_warning": {
+          "weight": 0.15
+        },
+        "goodwill_ratio": {
+          "threshold": 0.5,
+          "weight": 0.15
+        },
+        "inquiry_frequency": {
+          "weight": 0.2,
+          "window_days": 60
+        },
+        "pledge_ratio": {
+          "threshold": 0.5,
+          "weight": 0.1
+        },
+        "reduction_density": {
+          "threshold": 0.01,
+          "weight": 0.1,
+          "window_days": 30
+        }
+      },
+      "portfolio_risk": {
+        "crowding_threshold": 0.4,
+        "max_drawdown": 0.15,
+        "max_industry_deviation": 0.05,
+        "max_portfolio_vol": 0.25,
+        "max_single_position": 0.03,
+        "max_turnover": 8.0
+      }
+    },
+    "backtest": {
+      "costs": {
+        "commission_rate": 0.00025,
+        "slippage_rate": 0.0006,
+        "stamp_tax_rate": 0.001,
+        "transfer_fee_rate": 1e-05
+      },
+      "robustness": {
+        "industry_constraint_variants": [
+          0.03,
+          0.05,
+          0.08
+        ],
+        "rebalance_frequency_variants": [
+          "weekly",
+          "biweekly",
+          "monthly"
+        ],
+        "single_stock_max_variants": [
+          0.02,
+          0.03,
+          0.05
+        ],
+        "stock_pool_threshold_perturbation": 0.2,
+        "weight_perturbation_pct": 5
+      },
+      "stress": {
+        "commission_multiplier": [
+          2,
+          3
+        ],
+        "execution_delay": [
+          1,
+          2
+        ],
+        "slippage_multiplier": [
+          2,
+          3
+        ]
+      }
+    },
+    "monitoring": {
+      "alert_thresholds": {
+        "coverage_min": 0.5,
+        "ic_mean_min": 0.02,
+        "ic_t_stat_min": 2.0,
+        "ir_min": 0.5,
+        "ks_p_value_min": 0.05,
+        "module_correlation_max": 0.85,
+        "psi_max": 0.25
+      },
+      "auto_response": {
+        "coverage_cliff": {
+          "action": "pause_factor",
+          "threshold_pct": 20
+        },
+        "data_anomaly": {
+          "action": "halt_signal_production",
+          "pit_failure_rate_pct": 5
+        },
+        "factor_failure": {
+          "action": "reduce_weight",
+          "degraded_to_disabled": "8_weeks",
+          "watch_to_degraded": "4_weeks"
+        },
+        "risk_threshold_breach": {
+          "action": "reduce_position"
+        }
+      },
+      "health_check_interval_minutes": 5,
+      "notification": {
+        "alert_retention_days": 180,
+        "methods": [
+          "websocket",
+          "email"
+        ]
+      }
+    }
+  }
+}

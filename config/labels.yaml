@@ -1,21 +1,17 @@
-# 标签配置 V2
 labels:
-  # 主标签
-  main:
-    horizon: 20
-    benchmark: CSI800
-    type: excess_return
-
-  # 辅标签
   auxiliary:
-    horizons: [5, 10, 20, 60]
-
-  # 截尾参数
-  winsorize:
-    lower_pct: 0.01
-    upper_pct: 0.99
-
-  # 标签标准化
+    horizons:
+    - 5
+    - 10
+    - 20
+    - 60
+  main:
+    benchmark: CSI800
+    horizon: 20
+    type: excess_return
   standardization:
     linear_model: zscore
     tree_model: raw_winsorized
+  winsorize:
+    lower_pct: 0.01
+    upper_pct: 0.99

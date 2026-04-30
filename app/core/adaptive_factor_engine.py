@@ -662,3 +662,322 @@ class AdaptiveFactorEngine:
         )
 
         return self.factor_profiles
+
+    # ==================== 8. IC衰减监控与预警 ====================
+
+    def monitor_ic_decay(
+        self, ic_history: pd.DataFrame, lookback_short: int = 20, lookback_long: int = 60, alert_threshold: float = 0.3
+    ) -> dict[str, Any]:
+        """
+        IC衰减监控与预警
+
+        对比短期IC与长期IC，识别衰减趋势并生成预警
+
+        Args:
+            ic_history: IC历史数据
+            lookback_short: 短期回看窗口（默认20天）
+            lookback_long: 长期回看窗口（默认60天）
+            alert_threshold: 预警阈值（短期IC相对长期IC的衰减比例）
+
+        Returns:
+            监控报告字典
+        """
+        if ic_history.empty:
+            return {"factors": {}, "alerts": []}
+
+        report = {"factors": {}, "alerts": [], "summary": {}}
+
+        for factor_code in ic_history["factor_code"].unique():
+            f_ic = ic_history[ic_history["factor_code"] == factor_code]["ic"]
+
+            if len(f_ic) < lookback_short:
+                continue
+
+            # 计算短期和长期IC
+            recent_ic = f_ic.tail(lookback_short)
+            long_ic = f_ic.tail(lookback_long) if len(f_ic) >= lookback_long else f_ic
+
+            short_ic_mean = recent_ic.mean()
+            long_ic_mean = long_ic.mean()
+            short_ic_std = recent_ic.std()
+            long_ic_std = long_ic.std()
+
+            # 计算ICIR
+            short_icir = short_ic_mean / short_ic_std if short_ic_std > 0 else 0
+            long_icir = long_ic_mean / long_ic_std if long_ic_std > 0 else 0
+
+            # 计算衰减率
+            if abs(long_ic_mean) > 0.001:
+                decay_rate = (long_ic_mean - short_ic_mean) / abs(long_ic_mean)
+            else:
+                decay_rate = 0
+
+            # IC趋势（线性回归斜率）
+            if len(recent_ic) >= 10:
+                t = np.arange(len(recent_ic))
+                slope, _ = np.polyfit(t, recent_ic.values, 1)
+                trend = "下降" if slope < -0.0001 else ("上升" if slope > 0.0001 else "平稳")
+            else:
+                slope = 0
+                trend = "未知"
+
+            # 因子衰减分析
+            decay_analysis = self.analyze_factor_decay(f_ic)
+
+            factor_report = {
+                "short_ic_mean": round(short_ic_mean, 4),
+                "long_ic_mean": round(long_ic_mean, 4),
+                "short_icir": round(short_icir, 4),
+                "long_icir": round(long_icir, 4),
+                "decay_rate": round(decay_rate, 4),
+                "trend": trend,
+                "trend_slope": round(slope, 6),
+                "half_life": decay_analysis.get("half_life", np.nan),
+                "is_decaying": decay_analysis.get("is_decaying", False),
+            }
+
+            report["factors"][factor_code] = factor_report
+
+            # 生成预警
+            alerts = []
+
+            # 预警1：IC显著衰减
+            if decay_rate > alert_threshold:
+                alerts.append(
+                    {
+                        "level": "warning",
+                        "type": "ic_decay",
+                        "message": f"因子 {factor_code} IC衰减 {decay_rate:.1%}",
+                        "detail": f"长期IC={long_ic_mean:.4f}, 短期IC={short_ic_mean:.4f}",
+                    }
+                )
+
+            # 预警2：ICIR大幅下降
+            if abs(long_icir) > 0.5 and abs(short_icir) < 0.3:
+                alerts.append(
+                    {
+                        "level": "warning",
+                        "type": "icir_drop",
+                        "message": f"因子 {factor_code} ICIR大幅下降",
+                        "detail": f"长期ICIR={long_icir:.2f}, 短期ICIR={short_icir:.2f}",
+                    }
+                )
+
+            # 预警3：IC方向反转
+            if long_ic_mean * short_ic_mean < 0 and abs(short_ic_mean) > 0.01:
+                alerts.append(
+                    {
+                        "level": "critical",
+                        "type": "ic_reversal",
+                        "message": f"因子 {factor_code} IC方向反转",
+                        "detail": f"长期IC={long_ic_mean:.4f}, 短期IC={short_ic_mean:.4f}",
+                    }
+                )
+
+            # 预警4：持续衰减
+            if decay_analysis.get("is_decaying") and decay_analysis.get("half_life", np.inf) < 40:
+                alerts.append(
+                    {
+                        "level": "critical",
+                        "type": "rapid_decay",
+                        "message": f"因子 {factor_code} 快速衰减",
+                        "detail": f"半衰期={decay_analysis.get('half_life'):.1f}天",
+                    }
+                )
+
+            if alerts:
+                report["alerts"].extend(alerts)
+
+        # 汇总统计
+        if report["factors"]:
+            all_decay_rates = [f["decay_rate"] for f in report["factors"].values()]
+            all_short_icir = [f["short_icir"] for f in report["factors"].values()]
+
+            report["summary"] = {
+                "n_factors": len(report["factors"]),
+                "n_alerts": len(report["alerts"]),
+                "avg_decay_rate": round(np.mean(all_decay_rates), 4),
+                "max_decay_rate": round(np.max(all_decay_rates), 4),
+                "avg_short_icir": round(np.mean(all_short_icir), 4),
+                "n_decaying": sum(1 for f in report["factors"].values() if f["is_decaying"]),
+            }
+
+        logger.info(
+            "IC decay monitoring completed",
+            extra={
+                "n_factors": report["summary"].get("n_factors", 0),
+                "n_alerts": report["summary"].get("n_alerts", 0),
+                "n_decaying": report["summary"].get("n_decaying", 0),
+            },
+        )
+
+        return report
+
+    def generate_factor_health_report(self, ic_history: pd.DataFrame, lookback: int = 60) -> dict[str, Any]:
+        """
+        生成因子健康度报告
+
+        综合评估所有因子的健康状况
+
+        Args:
+            ic_history: IC历史数据
+            lookback: 回看窗口
+
+        Returns:
+            健康度报告
+        """
+        if ic_history.empty:
+            return {"factors": {}, "overall_health": "unknown"}
+
+        report = {"factors": {}, "health_scores": {}}
+
+        for factor_code in ic_history["factor_code"].unique():
+            f_ic = ic_history[ic_history["factor_code"] == factor_code]["ic"]
+
+            if len(f_ic) < 10:
+                continue
+
+            recent_ic = f_ic.tail(lookback)
+
+            # 计算健康度指标
+            ic_mean = recent_ic.mean()
+            ic_std = recent_ic.std()
+            icir = ic_mean / ic_std if ic_std > 0 else 0
+            ic_positive_rate = (recent_ic > 0).mean()
+            ic_stability = 1 - (recent_ic.rolling(10).std().mean() / (abs(ic_mean) + 0.01))
+
+            # 综合健康度评分 (0-100)
+            health_score = 0
+
+            # 1. ICIR贡献 (40分)
+            if abs(icir) >= 1.0:
+                health_score += 40
+            elif abs(icir) >= 0.5:
+                health_score += 20 + 20 * (abs(icir) - 0.5) / 0.5
+            elif abs(icir) >= 0.3:
+                health_score += 10 + 10 * (abs(icir) - 0.3) / 0.2
+            else:
+                health_score += 10 * abs(icir) / 0.3
+
+            # 2. IC胜率贡献 (30分)
+            health_score += 30 * max(0, (ic_positive_rate - 0.5) / 0.5)
+
+            # 3. IC稳定性贡献 (20分)
+            health_score += 20 * max(0, min(1, ic_stability))
+
+            # 4. IC绝对值贡献 (10分)
+            health_score += 10 * min(1, abs(ic_mean) / 0.05)
+
+            health_score = min(100, max(0, health_score))
+
+            # 健康等级
+            if health_score >= 80:
+                health_level = "优秀"
+            elif health_score >= 60:
+                health_level = "良好"
+            elif health_score >= 40:
+                health_level = "一般"
+            elif health_score >= 20:
+                health_level = "较差"
+            else:
+                health_level = "失效"
+
+            factor_report = {
+                "health_score": round(health_score, 1),
+                "health_level": health_level,
+                "ic_mean": round(ic_mean, 4),
+                "icir": round(icir, 4),
+                "ic_positive_rate": round(ic_positive_rate, 4),
+                "ic_stability": round(ic_stability, 4),
+            }
+
+            report["factors"][factor_code] = factor_report
+            report["health_scores"][factor_code] = health_score
+
+        # 整体健康度
+        if report["health_scores"]:
+            avg_health = np.mean(list(report["health_scores"].values()))
+            if avg_health >= 70:
+                overall_health = "优秀"
+            elif avg_health >= 50:
+                overall_health = "良好"
+            elif avg_health >= 30:
+                overall_health = "一般"
+            else:
+                overall_health = "较差"
+
+            report["overall_health"] = overall_health
+            report["avg_health_score"] = round(avg_health, 1)
+
+            # 排序：按健康度从高到低
+            report["top_factors"] = sorted(
+                report["health_scores"].items(), key=lambda x: -x[1]
+            )[:10]
+            report["bottom_factors"] = sorted(
+                report["health_scores"].items(), key=lambda x: x[1]
+            )[:10]
+
+        logger.info(
+            "Factor health report generated",
+            extra={
+                "n_factors": len(report["factors"]),
+                "overall_health": report.get("overall_health", "unknown"),
+                "avg_health_score": report.get("avg_health_score", 0),
+            },
+        )
+
+        return report
+
+    def get_factor_recommendations(self, ic_history: pd.DataFrame, lookback: int = 60) -> dict[str, list[str]]:
+        """
+        生成因子使用建议
+
+        基于因子健康度和状态，给出使用建议
+
+        Args:
+            ic_history: IC历史数据
+            lookback: 回看窗口
+
+        Returns:
+            建议字典 {action: [factor_codes]}
+        """
+        health_report = self.generate_factor_health_report(ic_history, lookback)
+        decay_report = self.monitor_ic_decay(ic_history, lookback_short=20, lookback_long=lookback)
+
+        recommendations = {
+            "keep": [],  # 保持使用
+            "monitor": [],  # 密切监控
+            "reduce": [],  # 降低权重
+            "remove": [],  # 建议移除
+            "investigate": [],  # 需要调查
+        }
+
+        for factor_code, health in health_report["factors"].items():
+            health_score = health["health_score"]
+            decay_info = decay_report["factors"].get(factor_code, {})
+            decay_rate = decay_info.get("decay_rate", 0)
+            is_decaying = decay_info.get("is_decaying", False)
+
+            # 决策逻辑
+            if health_score >= 70 and decay_rate < 0.2:
+                recommendations["keep"].append(factor_code)
+            elif health_score >= 50 and decay_rate < 0.3:
+                recommendations["monitor"].append(factor_code)
+            elif health_score >= 30 or (health_score >= 40 and not is_decaying):
+                recommendations["reduce"].append(factor_code)
+            elif health_score < 30 and is_decaying:
+                recommendations["remove"].append(factor_code)
+            else:
+                recommendations["investigate"].append(factor_code)
+
+        logger.info(
+            "Factor recommendations generated",
+            extra={
+                "keep": len(recommendations["keep"]),
+                "monitor": len(recommendations["monitor"]),
+                "reduce": len(recommendations["reduce"]),
+                "remove": len(recommendations["remove"]),
+            },
+        )
+
+        return recommendations

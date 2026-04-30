@@ -1,36 +1,30 @@
-# 股票池参数 V2
 universe:
-  # 核心池参数
+  benchmarks:
+  - CSI300
+  - CSI500
+  - CSI1000
+  - CSI800
   core:
-    min_list_days: 180
-    min_daily_amount: 80000000   # 8000万
-    min_market_cap: 8000000000  # 80亿
-    min_price: 3.0
-    liquidity_pct: 0.80
+    exclude_blacklist: true
+    exclude_delist: true
+    exclude_limit_up_down: true
+    exclude_risk_events: true
     exclude_st: true
     exclude_suspended: true
-    exclude_delist: true
-    exclude_risk_events: true
-    exclude_blacklist: true
-    exclude_limit_up_down: true
-
-  # 扩展池参数
+    liquidity_pct: 0.8
+    min_daily_amount: 80000000
+    min_list_days: 180
+    min_market_cap: 8000000000
+    min_price: 3.0
   extended:
+    exclude_blacklist: true
+    exclude_delist: true
+    exclude_limit_up_down: true
+    exclude_risk_events: true
+    exclude_st: true
+    exclude_suspended: true
+    liquidity_pct: 0.7
+    min_daily_amount: 50000000
     min_list_days: 120
-    min_daily_amount: 50000000   # 5000万
     min_market_cap: 0
     min_price: 2.0
-    liquidity_pct: 0.70
-    exclude_st: true
-    exclude_suspended: true
-    exclude_delist: true
-    exclude_risk_events: true
-    exclude_blacklist: true
-    exclude_limit_up_down: true
-
-  # 基准指数
-  benchmarks:
-    - CSI300
-    - CSI500
-    - CSI1000
-    - CSI800

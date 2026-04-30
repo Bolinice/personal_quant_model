@@ -79,6 +79,10 @@ app.add_middleware(ComplianceMiddleware)
 # 注册API路由
 app.include_router(api_router, prefix="/api/v1")
 
+# 注册配置中心API
+from app.api.config_api import router as config_router
+app.include_router(config_router)
+
 
 @app.get("/")
 async def root():

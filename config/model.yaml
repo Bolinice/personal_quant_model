@@ -1,34 +1,25 @@
-# 模型配置 V2
 model:
-  # ML参数
-  ridge:
-    alpha: 3.0
-
+  fusion_weights:
+    lightgbm: 0.45
+    ridge: 0.25
+    rule: 0.3
   lightgbm:
+    colsample_bytree: 0.8
     learning_rate: 0.03
     max_depth: 4
-    num_leaves: 31
     min_child_samples: 200
-    subsample: 0.8
-    colsample_bytree: 0.8
+    num_leaves: 31
     reg_alpha: 0.1
     reg_lambda: 1.0
-
-  # 三路融合权重
-  fusion_weights:
-    rule: 0.30
-    ridge: 0.25
-    lightgbm: 0.45
-
-  # 动态权重收缩
+    subsample: 0.8
+  ridge:
+    alpha: 3.0
   shrinkage:
-    base_ratio: 0.70
-    min_weight: 0.10
+    base_ratio: 0.7
     max_weight: 0.45
-
-  # Walk-Forward参数
+    min_weight: 0.1
   walk_forward:
-    train_window_months: 36
-    test_window_months: 12
-    step_months: 1
     gap_days: 21
+    step_months: 1
+    test_window_months: 12
+    train_window_months: 36

@@ -37,6 +37,7 @@ from app.core.factor_preprocess import FactorPreprocessor
 from app.core.labels import LabelBuilder
 from app.core.model_scorer import MultiFactorScorer
 from app.core.model_trainer import ModelTrainer
+from app.core.performance import get_monitor, timer
 from app.core.pit_guard import PITGuardMixin
 from app.core.portfolio_builder import PortfolioBuilder
 from app.core.portfolio_optimizer import PortfolioOptimizer
@@ -205,6 +206,11 @@ class DailyPipeline:
             self.results.append(result)
 
         logger.info("========== 日终流水线完成 %s ==========", trade_date)
+
+        # 打印性能监控汇总
+        monitor = get_monitor()
+        monitor.print_summary(top_n=30)
+
         return self.results
 
     # ──────────────────────────────────────────────
@@ -346,27 +352,23 @@ class DailyPipeline:
         if ctx.price_df is None or ctx.price_df.empty:
             raise ValueError("Step4: 无行情数据，无法计算因子")
 
-        # 4a. 因子计算
-        ctx.factor_df = self.factor_calculator.calculate_all(
-            price_df=ctx.price_df,
+        # 4a. 因子计算 + 预处理 (calc_all_factors内部已包含预处理: 缺失值→去极值→中性化→标准化)
+        # 注意: calc_all_factors已经包含完整的预处理流程，无需再次调用preprocess_dataframe
+        ctx.factor_df = self.factor_calculator.calc_all_factors(
             financial_df=ctx.financial_df,
-            moneyflow_df=ctx.moneyflow_df,
-            index_df=ctx.index_df,
+            price_df=ctx.price_df,
+            money_flow_df=ctx.moneyflow_df,
+            northbound_df=ctx.northflow_df,
             margin_df=ctx.margin_df,
-            northflow_df=ctx.northflow_df,
             trade_date=ctx.trade_date,
-            universe=ctx.universe,
+            industry_col="industry",  # 行业中性化
+            cap_col="circ_market_cap",  # 市值中性化
+            neutralize=True,  # 启用中性化
         )
 
         if ctx.factor_df is not None and not ctx.factor_df.empty:
-            ctx.factor_names = [c for c in ctx.factor_df.columns if c not in ("ts_code", "trade_date")]
-            logger.info("Step4a: 因子计算完成 %d 因子 x %d 股票", len(ctx.factor_names), len(ctx.factor_df))
-
-            # 4b. 因子预处理: 缺失值→去极值(MAD)→标准化(Z-score)→中性化
-            ctx.factor_df = self.factor_preprocessor.preprocess_dataframe(
-                ctx.factor_df, factor_columns=ctx.factor_names
-            )
-            logger.info("Step4b: 因子预处理完成")
+            ctx.factor_names = [c for c in ctx.factor_df.columns if c not in ("security_id", "industry", "circ_market_cap")]
+            logger.info("Step4: 因子计算+预处理完成 %d 因子 x %d 股票", len(ctx.factor_names), len(ctx.factor_df))
         else:
             logger.warning("Step4: 因子计算结果为空")
 

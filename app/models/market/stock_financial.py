@@ -72,4 +72,6 @@ class StockFinancial(Base):
     __table_args__ = (
         UniqueConstraint("ts_code", "ann_date", "end_date", name="uq_financial_code_ann_end"),
         Index("ix_financial_ann_date", "ann_date"),
+        Index("ix_financial_code_ann", "ts_code", "ann_date"),
+        Index("ix_financial_code_end", "ts_code", "end_date"),
     )

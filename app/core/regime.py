@@ -235,38 +235,31 @@ class RegimeDetector:
             trend_score = 0.0  # 震荡
 
         # 波动率评分 (带迟滞: 防止阈值附近状态抖动)
+        # 状态机设计: 进入阈值 != 退出阈值, 形成迟滞区间避免抖动
         vol_20d = features.get("market_vol_20d", 0.2)
         vol_ratio = features.get("vol_ratio", 1.0)
 
-        if self._prev_vol_score <= 0:
-            # 当前不在防御状态, 检查是否需要进入
-            if vol_20d > self.VOL_HIGH_ENTER or vol_ratio > self.VOL_RATIO_HIGH_ENTER:
-                vol_score = -1.0  # 高波动 → 防御
-            elif vol_20d < self.VOL_LOW_ENTER and vol_ratio < self.VOL_RATIO_LOW_ENTER:
-                vol_score = 1.0  # 低波动 → 进攻
-            else:
-                vol_score = 0.0
-        else:
-            # 当前在防御状态, 检查是否可以退出
+        # 状态机逻辑: 根据当前状态(_prev_vol_score)和新观测值决定下一状态
+        if self._prev_vol_score < 0:
+            # 当前在防御状态(-1), 检查是否可以退出
             if vol_20d < self.VOL_HIGH_EXIT and vol_ratio < self.VOL_RATIO_HIGH_EXIT:
-                vol_score = 0.0  # 退出防御
+                vol_score = 0.0  # 退出防御 → 中性
             else:
                 vol_score = -1.0  # 维持防御
-
-        if self._prev_vol_score >= 0:
-            # 当前不在进攻状态, 检查是否需要进入
-            if vol_20d < self.VOL_LOW_ENTER and vol_ratio < self.VOL_RATIO_LOW_ENTER:
-                vol_score = 1.0  # 低波动 → 进攻
-            elif vol_20d > self.VOL_HIGH_ENTER or vol_ratio > self.VOL_RATIO_HIGH_ENTER:
-                vol_score = -1.0  # 高波动 → 防御
-            else:
-                vol_score = 0.0
-        else:
-            # 当前在进攻状态, 检查是否可以退出
+        elif self._prev_vol_score > 0:
+            # 当前在进攻状态(+1), 检查是否可以退出
             if vol_20d > self.VOL_LOW_EXIT or vol_ratio > self.VOL_RATIO_LOW_EXIT:
-                vol_score = 0.0  # 退出进攻
+                vol_score = 0.0  # 退出进攻 → 中性
             else:
                 vol_score = 1.0  # 维持进攻
+        else:
+            # 当前在中性状态(0), 检查是否需要进入防御或进攻
+            if vol_20d > self.VOL_HIGH_ENTER or vol_ratio > self.VOL_RATIO_HIGH_ENTER:
+                vol_score = -1.0  # 高波动 → 进入防御
+            elif vol_20d < self.VOL_LOW_ENTER and vol_ratio < self.VOL_RATIO_LOW_ENTER:
+                vol_score = 1.0  # 低波动 → 进入进攻
+            else:
+                vol_score = 0.0  # 维持中性
 
         self._prev_vol_score = vol_score
 

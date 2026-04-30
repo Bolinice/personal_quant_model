@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from app.core.factor_preprocess import FactorPreprocessor
+from app.core.performance import timer
 
 if TYPE_CHECKING:
     from datetime import date
@@ -958,13 +959,20 @@ class FactorCalculator:
 
         # 基础因子 (财务因子传入trade_date做PIT过滤)
         # 注意: 仅财务类因子需要PIT过滤，价格/成交量类因子天然无前瞻偏差
-        factor_dfs.append(self.calc_valuation_factors(financial_df, price_df, trade_date=trade_date))
-        factor_dfs.append(self.calc_growth_factors(financial_df, trade_date=trade_date))
-        factor_dfs.append(self.calc_quality_factors(financial_df, trade_date=trade_date))
-        factor_dfs.append(self.calc_momentum_factors(price_df))
-        factor_dfs.append(self.calc_volatility_factors(price_df))
-        factor_dfs.append(self.calc_liquidity_factors(price_df))
-        factor_dfs.append(self.calc_microstructure_factors(price_df))
+        with timer("calc_valuation_factors", log_threshold_ms=100):
+            factor_dfs.append(self.calc_valuation_factors(financial_df, price_df, trade_date=trade_date))
+        with timer("calc_growth_factors", log_threshold_ms=100):
+            factor_dfs.append(self.calc_growth_factors(financial_df, trade_date=trade_date))
+        with timer("calc_quality_factors", log_threshold_ms=100):
+            factor_dfs.append(self.calc_quality_factors(financial_df, trade_date=trade_date))
+        with timer("calc_momentum_factors", log_threshold_ms=100):
+            factor_dfs.append(self.calc_momentum_factors(price_df))
+        with timer("calc_volatility_factors", log_threshold_ms=100):
+            factor_dfs.append(self.calc_volatility_factors(price_df))
+        with timer("calc_liquidity_factors", log_threshold_ms=100):
+            factor_dfs.append(self.calc_liquidity_factors(price_df))
+        with timer("calc_microstructure_factors", log_threshold_ms=100):
+            factor_dfs.append(self.calc_microstructure_factors(price_df))
 
         # 机构级扩展因子
         if northbound_df is not None and not northbound_df.empty:
@@ -1021,28 +1029,32 @@ class FactorCalculator:
                 factor_dfs.append(mg_result)
 
         # 向量化合并
-        merged = self._merge_factor_dfs(factor_dfs)
+        with timer("merge_factor_dfs", log_threshold_ms=100):
+            merged = self._merge_factor_dfs(factor_dfs)
         if merged.empty:
             return merged
 
         # 交互因子 (必须在标准化之前计算，保留原始经济含义)
         # 两个z-score相乘不再具有原始经济含义，所以交互项必须在预处理前计算
-        interaction = self.calc_interaction_factors(merged)
+        with timer("calc_interaction_factors", log_threshold_ms=100):
+            interaction = self.calc_interaction_factors(merged)
         if not interaction.empty and "security_id" in interaction.columns:
             merged = pd.merge(merged, interaction, on="security_id", how="outer")
 
         # 预处理 (包含交互因子)
-        # 流程: 缺失值处理→去极值(MAD)→标准化(Z-score)→中性化(行业/市值)
+        # 流程: 缺失值处理→去极值(MAD)→中性化→标准化→方向统一
         # direction_map确保升序/降序方向一致: 方向=-1的因子在标准化时乘-1
         factor_cols = [c for c in merged.columns if c != "security_id"]
-        return self.preprocessor.preprocess_dataframe(
-            merged,
-            factor_cols,
-            industry_col=industry_col,
-            cap_col=cap_col,
-            neutralize=neutralize,
-            direction_map=FACTOR_DIRECTIONS,
-        )
+        with timer("preprocess_dataframe", log_threshold_ms=200):
+            result = self.preprocessor.preprocess_dataframe(
+                merged,
+                factor_cols,
+                industry_col=industry_col,
+                cap_col=cap_col,
+                neutralize=neutralize,
+                direction_map=FACTOR_DIRECTIONS,
+            )
+        return result
 
     # ==================== 无数据库便捷函数 ====================
 

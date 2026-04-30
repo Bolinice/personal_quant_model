@@ -427,7 +427,12 @@ class ABShareBacktestEngine:
 
         # 计算成交金额和成本
         amount = shares * price
-        cost_detail = self.cost_model.calc_buy_cost(amount)
+        # 提取成交量和波动率用于参与率滑点模型
+        daily_volume = stock_data.get("volume") if stock_data else None
+        volatility = stock_data.get("volatility") if stock_data else None
+        cost_detail = self.cost_model.calc_buy_cost(
+            amount, daily_volume=daily_volume, volatility=volatility
+        )
         total_cost = cost_detail["total_cost"]
 
         if amount + total_cost > state.cash:
@@ -506,7 +511,12 @@ class ABShareBacktestEngine:
             return None
 
         amount = sell_shares * price
-        cost_detail = self.cost_model.calc_sell_cost(amount)
+        # 提取成交量和波动率用于参与率滑点模型
+        daily_volume = stock_data.get("volume") if stock_data else None
+        volatility = stock_data.get("volatility") if stock_data else None
+        cost_detail = self.cost_model.calc_sell_cost(
+            amount, daily_volume=daily_volume, volatility=volatility
+        )
 
         state.cash += amount - cost_detail["total_cost"]
         pos.shares -= sell_shares

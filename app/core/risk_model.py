@@ -52,7 +52,9 @@ class RiskModel:
             returns: 收益率矩阵
             shrinkage_target: 压缩目标 ('identity', 'diagonal', 'single_factor')
         """
-        S = returns.cov().values  # 样本协方差
+        S = returns.cov(ddof=0).values  # 有偏协方差(ddof=0): 与外积x_t*x_t'一致
+        # Ledoit-Wolf公式要求一致的估计器: 外积使用ddof=0(1/T), cov也必须用ddof=0
+        # pandas默认cov(ddof=1)使用无偏估计(1/(T-1)), 与外积不一致, 导致alpha偏小
         n: int = S.shape[0]
         T: int = len(returns)
 

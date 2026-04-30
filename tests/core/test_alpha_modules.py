@@ -168,9 +168,9 @@ class TestRiskPenaltyModule:
         df = _make_factor_df()
         scores = self.module.compute_scores(df)
         assert isinstance(scores, pd.Series)
-        # RiskPenalty uses sigmoid, so scores should be in [0, 1]
-        assert scores.min() >= 0.0
-        assert scores.max() <= 1.0
+        # RiskPenalty uses sigmoid-0.5, so scores should be in [-0.5, 0.5]
+        assert scores.min() >= -0.5
+        assert scores.max() <= 0.5
 
     def test_lambda_value(self):
         assert self.module.LAMBDA == 0.35

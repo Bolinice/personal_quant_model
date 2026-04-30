@@ -709,15 +709,16 @@ class ABShareBacktestEngine:
         # 波动率
         volatility = returns.std() * np.sqrt(252) if len(returns) > 0 else 0
 
-        # 下行波动率
-        neg_returns = returns[returns < 0]
-        downside_vol = neg_returns.std() * np.sqrt(252) if len(neg_returns) > 0 else 0
+        # 下行波动率 (下行偏差: sqrt(mean(min(R,0)^2)), 使用全样本量N)
+        # 注意: 不能用neg_returns.std(), 那是负收益子集的标准差, 会低估下行偏差
+        downside = np.minimum(returns, 0)
+        downside_dev = np.sqrt((downside**2).mean()) * np.sqrt(252) if len(returns) > 0 else 0
 
         # 夏普比率
         sharpe = returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0
 
-        # 索提诺比率
-        sortino = returns.mean() * 252 / downside_vol if downside_vol > 0 else 0
+        # 索提诺比率 (使用下行偏差而非std)
+        sortino = returns.mean() * 252 / downside_dev if downside_dev > 0 else 0
 
         # 卡玛比率
         calmar = annual_return / abs(max_drawdown) if max_drawdown != 0 else 0
@@ -750,7 +751,7 @@ class ABShareBacktestEngine:
             "max_drawdown": round(max_drawdown, 4),
             "max_drawdown_duration": int(max_dd_duration),
             "volatility": round(volatility, 4),
-            "downside_volatility": round(downside_vol, 4),
+            "downside_volatility": round(downside_dev, 4),
             "sharpe": round(sharpe, 2),
             "sortino": round(sortino, 2),
             "calmar": round(calmar, 2),
@@ -951,7 +952,7 @@ class ABShareBacktestEngine:
         }
 
     def deflated_sharpe_ratio(
-        self, sharpe: float, n_trials: int, backtest_length_years: float, skewness: float = 0, kurtosis: float = 3
+        self, sharpe: float, n_trials: int, backtest_length_years: float, skewness: float = 0, kurtosis: float = 0
     ) -> dict[str, Any]:
         """
         通胀夏普比率 (Deflated Sharpe Ratio, DSR)
@@ -963,7 +964,9 @@ class ABShareBacktestEngine:
             n_trials: 测试的策略数量
             backtest_length_years: 回测长度(年)
             skewness: 收益率偏度
-            kurtosis: 收益率峰度
+            kurtosis: 收益率超额峰度(excess kurtosis, 正态分布=0)
+                      注意: pandas .kurtosis() 和 scipy kurtosis(fisher=True) 返回超额峰度
+                      若使用原始峰度(fisher=False), 需减3后传入
         """
         from scipy.stats import norm
 

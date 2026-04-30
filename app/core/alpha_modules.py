@@ -79,7 +79,8 @@ class AlphaModuleBase(ABC):
 
         # 按实际可用权重归一化
         # 因子缺失时归一化: 避免缺失因子导致得分系统性偏低
-        if active_weight > 0 and active_weight < 0.99:
+        # 同时处理权重和>1的情况(配置错误时防止得分膨胀)
+        if active_weight > 0 and abs(active_weight - 1.0) > 0.01:
             scores = scores / active_weight
 
         return scores
@@ -297,8 +298,9 @@ class RiskPenaltyModule(AlphaModuleBase):
 
     def compute_scores(self, df: pd.DataFrame, **kwargs) -> pd.Series:
         """
-        计算风险惩罚得分 P_risk ∈ [0, 1]
+        计算风险惩罚得分 P_risk ∈ [-0.5, 0.5]
         注意: 返回的是风险惩罚分, 需要在外部做 S_final = S_raw - λ * P_risk
+        中心点为0: 平均风险股票惩罚≈0, 仅高风险股票惩罚>0
         """
         scores = pd.Series(0.0, index=df.index)
         active_weight = 0.0
@@ -316,12 +318,14 @@ class RiskPenaltyModule(AlphaModuleBase):
             scores += config["weight"] * processed
             active_weight += config["weight"]
 
-        if active_weight > 0 and active_weight < 0.99:
+        if active_weight > 0 and abs(active_weight - 1.0) > 0.01:
             scores = scores / active_weight
 
         # 将惩罚分映射到 [0, 1] 区间 (sigmoid压缩)
         # sigmoid而非min-max: sigmoid对极端值鲁棒, 不会因单只股票异常值压缩整体分布
-        return 1.0 / (1.0 + np.exp(-scores))
+        # 减0.5使中心点为0: 平均风险股票惩罚≈0, 仅高风险股票惩罚>0
+        # 否则sigmoid(0)=0.5会导致所有股票都有~0.5的系统性惩罚
+        return 1.0 / (1.0 + np.exp(-scores)) - 0.5
 
 
 # ─────────────────────────────────────────────

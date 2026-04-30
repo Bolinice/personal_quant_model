@@ -52,8 +52,19 @@ REGIME_WEIGHT_ADJUSTMENTS = {
 class RegimeDetector:
     """市场状态检测器 - GPT设计7.5节"""
 
+    # 迟滞阈值: 避免波动率在阈值附近反复切换状态(抖动)
+    # 进入防御阈值低于退出防御阈值, 进入进攻阈值高于退出进攻阈值
+    VOL_HIGH_ENTER = 0.30  # 进入防御: 年化波动率>30%
+    VOL_HIGH_EXIT = 0.25  # 退出防御: 年化波动率<25%
+    VOL_LOW_ENTER = 0.15  # 进入进攻: 年化波动率<15%
+    VOL_LOW_EXIT = 0.20  # 退出进攻: 年化波动率>20%
+    VOL_RATIO_HIGH_ENTER = 1.5  # 波动率比>1.5进入防御
+    VOL_RATIO_HIGH_EXIT = 1.3  # 波动率比<1.3退出防御
+    VOL_RATIO_LOW_ENTER = 0.7  # 波动率比<0.7进入进攻
+    VOL_RATIO_LOW_EXIT = 0.9  # 波动率比>0.9退出进攻
+
     def __init__(self):
-        pass
+        self._prev_vol_score = 0.0  # 迟滞状态: 记住上一次的波动率评分
 
     # ==================== 市场状态特征 ====================
 
@@ -90,13 +101,15 @@ class RegimeDetector:
         if len(close) >= 60:
             ma20 = np.mean(close[-20:])
             ma60 = np.mean(close[-60:])
-            features["market_trend_20d"] = (ma20 - close[-1]) / close[-1] if close[-1] > 0 else 0
-            features["market_trend_60d"] = (ma60 - close[-1]) / close[-1] if close[-1] > 0 else 0
-            # MA20 vs MA60 交叉
+            # (close - MA) / close: 正值=上升趋势(close>MA), 负值=下降趋势
+            # 原公式 (MA - close)/close 符号反转, 修正后与直觉一致: 正=涨, 负=跌
+            features["market_trend_20d"] = (close[-1] - ma20) / close[-1] if close[-1] > 0 else 0
+            features["market_trend_60d"] = (close[-1] - ma60) / close[-1] if close[-1] > 0 else 0
+            # MA20 vs MA60 交叉: 正值=金叉(MA20>MA60), 负值=死叉
             features["ma_cross"] = (ma20 - ma60) / ma60 if ma60 > 0 else 0
         elif len(close) >= 20:
             ma20 = np.mean(close[-20:])
-            features["market_trend_20d"] = (ma20 - close[-1]) / close[-1] if close[-1] > 0 else 0
+            features["market_trend_20d"] = (close[-1] - ma20) / close[-1] if close[-1] > 0 else 0
 
         # 2. 市场波动率
         # 年化波动率: 日std * sqrt(252), A股年均约252个交易日
@@ -211,10 +224,9 @@ class RegimeDetector:
 
         # 强趋势: 20d和60d方向一致且幅度大
         # 阈值3%/5%: A股指数日均波动约1-2%, 3%以上斜率意味着持续性趋势
-        # market_trend_20d = (MA20 - close)/close: 上升趋势时close>MA → 趋势值<0
-        # 所以需要取反: 正趋势 = close高于MA = 趋势值<0 → 取反后>0
-        trend_20d_adj = -trend_20d  # 取反: close高于MA表示上升趋势
-        trend_60d_adj = -trend_60d
+        # market_trend_20d = (close - MA20)/close: 正值=上升趋势
+        trend_20d_adj = trend_20d
+        trend_60d_adj = trend_60d
         if abs(trend_20d_adj) > 0.03 and abs(trend_60d_adj) > 0.05:
             trend_score = np.sign(trend_20d_adj) * min(abs(trend_20d_adj) * 10, 1.0)
         elif abs(ma_cross) > 0.02:
@@ -222,18 +234,41 @@ class RegimeDetector:
         else:
             trend_score = 0.0  # 震荡
 
-        # 波动率评分
+        # 波动率评分 (带迟滞: 防止阈值附近状态抖动)
         vol_20d = features.get("market_vol_20d", 0.2)
         vol_ratio = features.get("vol_ratio", 1.0)
 
-        if vol_20d > 0.30 or vol_ratio > 1.5:
-            # 年化30%以上或短期/长期波动率比>1.5: 市场恐慌, 需防御
-            vol_score = -1.0  # 高波动 → 防御
-        elif vol_20d < 0.15 and vol_ratio < 0.7:
-            # 年化15%以下且波动率在收缩: 市场平静, 可进攻
-            vol_score = 1.0  # 低波动 → 进攻
+        if self._prev_vol_score <= 0:
+            # 当前不在防御状态, 检查是否需要进入
+            if vol_20d > self.VOL_HIGH_ENTER or vol_ratio > self.VOL_RATIO_HIGH_ENTER:
+                vol_score = -1.0  # 高波动 → 防御
+            elif vol_20d < self.VOL_LOW_ENTER and vol_ratio < self.VOL_RATIO_LOW_ENTER:
+                vol_score = 1.0  # 低波动 → 进攻
+            else:
+                vol_score = 0.0
         else:
-            vol_score = 0.0
+            # 当前在防御状态, 检查是否可以退出
+            if vol_20d < self.VOL_HIGH_EXIT and vol_ratio < self.VOL_RATIO_HIGH_EXIT:
+                vol_score = 0.0  # 退出防御
+            else:
+                vol_score = -1.0  # 维持防御
+
+        if self._prev_vol_score >= 0:
+            # 当前不在进攻状态, 检查是否需要进入
+            if vol_20d < self.VOL_LOW_ENTER and vol_ratio < self.VOL_RATIO_LOW_ENTER:
+                vol_score = 1.0  # 低波动 → 进攻
+            elif vol_20d > self.VOL_HIGH_ENTER or vol_ratio > self.VOL_RATIO_HIGH_ENTER:
+                vol_score = -1.0  # 高波动 → 防御
+            else:
+                vol_score = 0.0
+        else:
+            # 当前在进攻状态, 检查是否可以退出
+            if vol_20d > self.VOL_LOW_EXIT or vol_ratio > self.VOL_RATIO_LOW_EXIT:
+                vol_score = 0.0  # 退出进攻
+            else:
+                vol_score = 1.0  # 维持进攻
+
+        self._prev_vol_score = vol_score
 
         # 宽度评分
         breadth = features.get("breadth", 0.5)
@@ -274,7 +309,8 @@ class RegimeDetector:
         vol_ratio_val = features.get("vol_ratio", 1.0)
         breadth_val = features.get("breadth", 0.5)
         confidence = min((trend_20d_abs * 10 + abs(vol_ratio_val - 1.0) * 2 + abs(breadth_val - 0.5) * 2) / 3, 1.0)
-        confidence = max(confidence, 0.3)
+        # 不设置信度下限: 让下游系统知道何时regime检测真正不确定
+        # 原max(confidence, 0.3)掩盖了不确定性, 可能导致过度依赖弱信号
 
         logger.info(
             "Regime detected",
@@ -326,18 +362,8 @@ class RegimeDetector:
         Returns:
             {regime: str, confidence: float, features: Dict, weight_adjustments: Dict}
         """
-        regime, _detect_confidence = self.detect(market_data, large_cap_df, small_cap_df)
+        regime, confidence = self.detect(market_data, large_cap_df, small_cap_df)
         features = self.market_features(market_data)
-
-        # 简单置信度: 基于特征的一致性
-        trend_20d = abs(features.get("market_trend_20d", 0))
-        vol_ratio = features.get("vol_ratio", 1.0)
-        breadth = features.get("breadth", 0.5)
-
-        # 特征越偏离中性，置信度越高
-        # 三项特征归一化后取平均: 趋势强度*10(放大至0-1量级) + 波动率偏离 + 宽度偏离
-        confidence = min((trend_20d * 10 + abs(vol_ratio - 1.0) * 2 + abs(breadth - 0.5) * 2) / 3, 1.0)
-        confidence = max(confidence, 0.3)  # 最低30%置信度 — 防止下游完全忽略regime信号
 
         base_weights = {"quality_growth": 0.35, "expectation": 0.30, "residual_momentum": 0.25, "flow_confirm": 0.10}
         adjusted_weights = self.get_weight_adjustments(regime, base_weights)

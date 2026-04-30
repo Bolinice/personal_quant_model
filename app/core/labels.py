@@ -64,8 +64,10 @@ class LabelBuilder:
             # 超额收益而非原始收益: 避免模型学习到市场beta而非选股alpha
             merged = pd.merge(stock_fwd, bench_fwd, on=date_col, how="left", suffixes=("", "_bench"))
             merged["excess_return"] = merged["fwd_return"] - merged["benchmark_fwd_return"]
-            merged["benchmark_fwd_return"] = merged["benchmark_fwd_return"].fillna(0)
-            merged["excess_return"] = merged["excess_return"].fillna(merged["fwd_return"])
+            # 基准缺失时: 超额收益设为0而非原始收益
+            # 原始收益包含市场beta, 用它回退会重新引入市场暴露偏差
+            merged["benchmark_fwd_return"] = merged["benchmark_fwd_return"].fillna(0.0)
+            merged["excess_return"] = merged["excess_return"].fillna(0.0)
         else:
             # 无基准时, 用全市场平均收益作为基准
             # 排除指定股票, 避免被评估股票自身参与基准计算导致循环依赖
@@ -137,7 +139,9 @@ class LabelBuilder:
         merged = pd.merge(merged, industry_avg_df, on=[date_col, industry_col], how="left")
 
         merged["industry_neutral_return"] = merged["fwd_return"] - merged["industry_return"]
-        merged["industry_neutral_return"] = merged["industry_neutral_return"].fillna(merged["fwd_return"])
+        # 无行业归属的股票: 中性收益设为0而非原始收益
+        # 原始收益包含行业beta, 用它回退会重新引入行业暴露偏差
+        merged["industry_neutral_return"] = merged["industry_neutral_return"].fillna(0.0)
 
         return merged
 
@@ -187,7 +191,9 @@ class LabelBuilder:
         for _dt, group in merged.groupby(date_col):
             group = group.copy()  # 避免SettingWithCopyWarning
             valid = group.dropna(subset=["fwd_return", *available_cols])
-            if len(valid) < len(available_cols) + 10:
+            # 样本量阈值: k个风格因子+1个截距, 至少需要3倍参数量+10个额外样本
+            min_samples = max(3 * (len(available_cols) + 1), len(available_cols) + 11)
+            if len(valid) < min_samples:
                 # 样本不足时退回原始收益, 避免回归系数不稳定
                 group["style_adjusted_return"] = group["fwd_return"]
                 result_parts.append(group)
@@ -203,7 +209,8 @@ class LabelBuilder:
                 residuals = y - predicted
                 valid_idx = valid.index
                 group.loc[valid_idx, "style_adjusted_return"] = residuals
-                group["style_adjusted_return"] = group["style_adjusted_return"].fillna(group["fwd_return"])
+                # 无风格暴露的股票: 设为0而非原始收益, 避免重新引入风格暴露
+                group["style_adjusted_return"] = group["style_adjusted_return"].fillna(0.0)
             except np.linalg.LinAlgError:
                 group["style_adjusted_return"] = group["fwd_return"]
 
@@ -283,11 +290,25 @@ class LabelBuilder:
         """
         计算前瞻收益 (向量化: groupby.shift替代逐股票循环)
 
-        fwd_return = close_{t+h} / close_t - 1
+        优先使用复权价格(adj_close/adj_price), 避免除权除息扭曲收益
+        无复权价时回退到close, 但此时标签可能受除权除息影响
+
+        fwd_return = price_{t+h} / price_t - 1
 
         PIT安全: 仅使用trade_date <= 当前日期的数据
         """
-        if price_df.empty or price_col not in price_df.columns:
+        if price_df.empty:
+            return pd.DataFrame()
+
+        # 优先使用复权价: 除权除息会导致原始收盘价跳空, 扭曲前瞻收益
+        # 例如10送10后价格腰斩, 用原始close会显示-50%收益(纯除权, 非真实亏损)
+        actual_price_col = price_col
+        for adj_col in ["adj_close", "adj_price", "close_adj"]:
+            if adj_col in price_df.columns:
+                actual_price_col = adj_col
+                break
+
+        if actual_price_col not in price_df.columns:
             return pd.DataFrame()
 
         df = price_df.copy()
@@ -301,8 +322,8 @@ class LabelBuilder:
 
         # 向量化计算: 按股票分组shift
         grouped = df.groupby(code_col)
-        fwd_price = grouped[price_col].shift(-horizon)
-        df["fwd_return"] = fwd_price / df[price_col] - 1
+        fwd_price = grouped[actual_price_col].shift(-horizon)
+        df["fwd_return"] = fwd_price / df[actual_price_col] - 1
 
         # 清理: 去掉最后horizon个交易日(没有完整前瞻数据)
         # 这是标签构造的关键边界: 未来数据不足的样本必须剔除, 否则引入存活偏差

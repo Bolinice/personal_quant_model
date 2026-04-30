@@ -152,7 +152,7 @@ class EnsembleEngine:
             # IC调整幅度: IC * 0.3 (IC=0.1 → +3%)
             # 系数0.3控制IC对权重的边际影响, 避免短期IC噪声导致权重剧烈漂移
             adjustment = ic * 0.3
-            dynamic_weights[name] = base_w + adjustment
+            dynamic_weights[name] = max(0.0, base_w + adjustment)
 
         return dynamic_weights
 
@@ -201,8 +201,11 @@ class EnsembleEngine:
         count = 0
         for i in range(n):
             for j in range(i + 1, n):
-                total_corr += abs(module_corr.iloc[i, j])
-                count += 1
+                corr_val = module_corr.iloc[i, j]
+                # 仅对正相关收缩(冗余信号); 负相关表示分散化, 不应收缩
+                if corr_val > 0:
+                    total_corr += corr_val
+                    count += 1
 
         avg_corr = total_corr / count if count > 0 else 0.0
 
@@ -220,20 +223,22 @@ class EnsembleEngine:
         """
         Step 5: 归一化 + 权重边界约束
 
-        - 单模块权重 ∈ [min_weight, max_weight]
         - 所有模块权重之和 = 1.0
+        - 单模块权重 ∈ [min_weight, max_weight]
+        - 归一化后再次检查边界, 迭代直到收敛
         """
-        # 边界约束
-        constrained = {}
-        for name, w in weights.items():
-            constrained[name] = max(self.min_weight, min(self.max_weight, w))
-
-        # 归一化
-        total = sum(constrained.values())
+        # 迭代投影: 归一化→裁剪→归一化 直到边界约束满足
+        for _ in range(3):
+            total = sum(weights.values())
+            if total > 0:
+                weights = {k: v / total for k, v in weights.items()}
+            # 边界约束
+            weights = {name: max(self.min_weight, min(self.max_weight, w)) for name, w in weights.items()}
+        # 最终归一化
+        total = sum(weights.values())
         if total > 0:
-            constrained = {k: v / total for k, v in constrained.items()}
-
-        return constrained
+            weights = {k: v / total for k, v in weights.items()}
+        return weights
 
     def fuse(
         self,
@@ -307,7 +312,10 @@ class EnsembleEngine:
 
         # 风险惩罚独立扣分: 不参与加权融合, 避免风险因子与alpha因子互相稀释
         if apply_risk_penalty:
-            risk_penalty = self.compute_risk_penalty(df, **kwargs)
+            if precomputed_risk_penalty is not None:
+                risk_penalty = precomputed_risk_penalty
+            else:
+                risk_penalty = self.compute_risk_penalty(df, **kwargs)
             final_score = raw_score - self.risk_lambda * risk_penalty
             meta["risk_penalty_stats"] = {
                 "mean": float(risk_penalty.mean()),

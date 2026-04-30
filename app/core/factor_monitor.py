@@ -146,6 +146,14 @@ class FactorMonitor:
         bin_edges[0] = -np.inf
         bin_edges[-1] = np.inf
 
+        # 去重: 大量并列值(如因子为0)会导致重复边界, np.histogram会报错
+        # 去重后保留有效分箱
+        unique_edges = np.unique(bin_edges)
+        if len(unique_edges) < 3:
+            return 0.0  # 无法分箱, 分布过于集中
+        bin_edges = unique_edges
+        n_bins = len(bin_edges) - 1
+
         # 计算各bin占比
         ref_counts = np.histogram(reference, bins=bin_edges)[0]
         cur_counts = np.histogram(current, bins=bin_edges)[0]
@@ -154,10 +162,14 @@ class FactorMonitor:
         cur_pct = cur_counts / len(current)
 
         # PSI = Σ (cur_i - ref_i) * ln(cur_i / ref_i)
+        # 对零频箱添加epsilon: 避免log(0), 同时保留分布偏移信息
+        # 零频→非零频(或反之)是重要的分布变化信号, 不应跳过
+        eps = 1e-4
         psi_value = 0.0
         for i in range(n_bins):
-            if ref_pct[i] > 0 and cur_pct[i] > 0:
-                psi_value += (cur_pct[i] - ref_pct[i]) * np.log(cur_pct[i] / ref_pct[i])
+            ref_p = ref_pct[i] if ref_pct[i] > 0 else eps
+            cur_p = cur_pct[i] if cur_pct[i] > 0 else eps
+            psi_value += (cur_p - ref_p) * np.log(cur_p / ref_p)
 
         return psi_value
 

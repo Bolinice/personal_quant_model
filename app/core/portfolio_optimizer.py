@@ -1033,10 +1033,14 @@ class PortfolioOptimizer:
 
     @staticmethod
     def _ensure_positive_definite(matrix: np.ndarray) -> np.ndarray:
-        """确保矩阵正定 (特征值截断: 小于1e-10的特征值置为1e-10，防止数值奇异导致优化失败)"""
+        """确保矩阵正定 (特征值截断: 相对最大特征值5%, 防止数值奇异导致优化失败)"""
         try:
             eigenvalues, eigenvectors = np.linalg.eigh(matrix)
-            eigenvalues = np.maximum(eigenvalues, 1e-10)
+            # 相对阈值: 截断到最大特征值的0.05%, 比绝对1e-10更合理
+            # 绝对1e-10对金融数据(日频方差量级~1e-4)条件数可达1e6, 仍可能导致数值不稳定
+            max_eig = eigenvalues.max()
+            clip_threshold = max(max_eig * 1e-4, 1e-10)
+            eigenvalues = np.maximum(eigenvalues, clip_threshold)
             return eigenvectors @ np.diag(eigenvalues) @ eigenvectors.T
         except np.linalg.LinAlgError:
             return matrix
@@ -1168,7 +1172,11 @@ class PortfolioOptimizer:
             return pd.Series(1.0 / n, index=index)
 
         try:
-            corr = np.corrcoef(cov_matrix) if cov_matrix.ndim == 2 and cov_matrix.shape[0] > 1 else np.eye(n)
+            # 从协方差矩阵正确推导相关矩阵
+            # np.corrcoef(cov_matrix) 会将协方差矩阵行当作数据向量, 产生错误结果
+            # 正确方法: corr_ij = cov_ij / (σ_i * σ_j)
+            vols = np.sqrt(np.diag(cov_matrix))
+            corr = cov_matrix / np.outer(vols, vols) if cov_matrix.ndim == 2 and cov_matrix.shape[0] > 1 else np.eye(n)
             # 距离矩阵: dist = sqrt(0.5*(1-corr))，将相关性映射为距离(完全相关→0，完全不相关→1)
             dist = np.sqrt(0.5 * (1 - corr))
             np.fill_diagonal(dist, 0)

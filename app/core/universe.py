@@ -105,9 +105,13 @@ class UniverseBuilder:
 
         # 2. 上市天数过滤
         # 新股IPO效应: 上市初期定价偏差大、换手率异常、缺乏历史数据, 需冷却期
+        # min_list_days含义为交易日: 1年≈250交易日, 180交易日≈9个月
+        # 自然日近似: 交易日 * (365/250) ≈ 交易日 * 1.46
         if min_list_days > 0 and "list_date" in stock_basic_df.columns:
             list_dates = pd.to_datetime(stock_basic_df.set_index("ts_code")["list_date"], errors="coerce")
-            min_list_date = pd.Timestamp(trade_date) - pd.Timedelta(days=min_list_days)
+            # 将交易日转换为自然日: 交易日/250*365 ≈ 交易日*1.46
+            calendar_days = int(min_list_days * 365 / 250)
+            min_list_date = pd.Timestamp(trade_date) - pd.Timedelta(days=calendar_days)
             too_new = list_dates[list_dates > min_list_date].index
             excluded_reasons["too_new"] = len(too_new)
             candidates -= set(too_new)
@@ -336,12 +340,13 @@ class UniverseBuilder:
 
         # 一字涨停/跌停: open=high=close=low (向量化替代iterrows)
         # 一字板无法成交, 买入即套牢或卖出无法成交, 必须排除
+        # A股价格精度0.01元, 直接用 == 比较 (浮点数来自同一数据源, 精度一致)
         candidate_mask = daily["ts_code"].isin(candidates)
         is_one_price = (
             (daily["open"] > 0)
-            & (abs(daily["open"] - daily["high"]) < 0.01)
-            & (abs(daily["high"] - daily["close"]) < 0.01)
-            & (abs(daily["close"] - daily["low"]) < 0.01)
+            & (daily["open"] == daily["high"])
+            & (daily["high"] == daily["close"])
+            & (daily["close"] == daily["low"])
         )
         limit_stocks = set(daily.loc[candidate_mask & is_one_price, "ts_code"])
 

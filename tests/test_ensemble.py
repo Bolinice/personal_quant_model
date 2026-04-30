@@ -77,10 +77,10 @@ class TestEnsembleSteps:
 
         normalized = engine.step5_normalize(weights)
         assert abs(sum(normalized.values()) - 1.0) < 1e-6
-        # Each weight should be within bounds
+        # Each weight should be within bounds (allow floating-point tolerance)
         for w in normalized.values():
-            assert w >= engine.min_weight
-            assert w <= engine.max_weight
+            assert w >= engine.min_weight - 1e-9
+            assert w <= engine.max_weight + 1e-9
 
 
 class TestEnsembleFullFuse:

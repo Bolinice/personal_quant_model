@@ -134,7 +134,7 @@ class TestAlphaModules:
         assert sum(c["weight"] for c in m.FACTOR_CONFIG.values()) == pytest.approx(1.0)
 
     def test_risk_penalty_module_sigmoid(self):
-        """RiskPenaltyModule使用sigmoid压缩, 返回[0,1]"""
+        """RiskPenaltyModule使用sigmoid压缩, 返回[-0.5, 0.5]"""
         from app.core.alpha_modules import RiskPenaltyModule
 
         m = RiskPenaltyModule()
@@ -153,9 +153,9 @@ class TestAlphaModules:
 
         scores = m.compute_scores(df)
         assert len(scores) == 50
-        # Sigmoid输出应在[0,1]
-        assert (scores >= 0).all()
-        assert (scores <= 1).all()
+        # Sigmoid(x)-0.5输出应在[-0.5, 0.5]
+        assert (scores >= -0.5).all()
+        assert (scores <= 0.5).all()
 
     def test_risk_penalty_lambda(self):
         from app.core.alpha_modules import RiskPenaltyModule
@@ -1209,7 +1209,7 @@ class TestDailyPipeline:
         pipeline._step2_snapshot(ctx)
         assert ctx.snapshot_id is not None
 
-    def test_step5_ensemble(self):
+    def test_step6_ensemble(self):
         from app.core.daily_pipeline import DailyPipeline, PipelineContext
 
         pipeline = DailyPipeline(session=None)
@@ -1258,14 +1258,14 @@ class TestDailyPipeline:
             factor_df=df,
             factor_names=list(df.columns),
         )
-        pipeline._step5_ensemble(ctx)
+        pipeline._step6_ensemble(ctx)
 
-    def test_step6_regime_detection_no_data(self):
+    def test_step5_regime_detection_no_data(self):
         from app.core.daily_pipeline import DailyPipeline, PipelineContext
 
         pipeline = DailyPipeline(session=None)
         ctx = PipelineContext(trade_date=date(2024, 1, 15))
-        pipeline._step6_regime(ctx)
+        pipeline._step5_regime(ctx)
         # 无指数数据时使用默认市场状态
 
     def test_step11_factor_health_check(self):
@@ -1284,20 +1284,20 @@ class TestDailyPipeline:
         pipeline._step12_archive(ctx)
 
     def test_run_regime_before_ensemble(self):
-        """流水线中step6(regime检测)应在step5(融合)之前执行"""
+        """流水线中step5(regime检测)应在step6(融合)之前执行"""
         import inspect
 
         from app.core.daily_pipeline import DailyPipeline
 
         source = inspect.getsource(DailyPipeline.run)
 
-        # step6_regime应出现在step5_ensemble之前
-        step6_pos = source.find("_step6_regime")
-        step5_pos = source.find("_step5_ensemble")
+        # step5_regime应出现在step6_ensemble之前
+        step5_pos = source.find("_step5_regime")
+        step6_pos = source.find("_step6_ensemble")
 
-        assert step6_pos > 0, "_step6_regime not found in run()"
-        assert step5_pos > 0, "_step5_ensemble not found in run()"
-        assert step6_pos > step5_pos, "step6_regime should come after step5_ensemble"
+        assert step5_pos > 0, "_step5_regime not found in run()"
+        assert step6_pos > 0, "_step6_ensemble not found in run()"
+        assert step5_pos < step6_pos, "step5_regime should come before step6_ensemble"
 
     def test_run_basic(self):
         """基本流水线执行 — 无数据库时关键步骤(1,3,4,5,8)会抛异常"""

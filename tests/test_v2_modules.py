@@ -452,12 +452,12 @@ class TestDailyPipeline:
         pipeline._step2_snapshot(ctx)
         assert ctx.snapshot_id is not None
 
-    def test_step6_regime_detection_no_data(self):
+    def test_step5_regime_detection_no_data(self):
         from app.core.daily_pipeline import DailyPipeline, PipelineContext
 
         pipeline = DailyPipeline(session=None)
         ctx = PipelineContext(trade_date=date(2024, 1, 15))
-        pipeline._step6_regime(ctx)
+        pipeline._step5_regime(ctx)
         # 无指数数据时使用默认市场状态
 
     def test_step11_factor_health_check(self):

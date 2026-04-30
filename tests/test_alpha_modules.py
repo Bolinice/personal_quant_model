@@ -151,9 +151,9 @@ class TestAlphaModuleScoring:
 
         penalty = module.compute_scores(df)
         assert len(penalty) == len(df)
-        # Penalty should be in [0, 1] (sigmoid output)
-        assert penalty.min() >= 0
-        assert penalty.max() <= 1
+        # Penalty should be in [-0.5, 0.5] (sigmoid(x) - 0.5)
+        assert penalty.min() >= -0.5
+        assert penalty.max() <= 0.5
 
     def test_missing_factor_columns(self):
         """缺失因子列时应跳过而非报错"""

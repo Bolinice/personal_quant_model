@@ -313,8 +313,8 @@ class TestE2EDailyPipeline:
         from app.core.daily_pipeline import DailyPipeline
 
         source = inspect.getsource(DailyPipeline.run)
-        # step6(regime)应在step5(ensemble)之后
-        assert source.find("_step6_regime") > source.find("_step5_ensemble"), "step6(regime)应在step5(ensemble)之后执行"
+        # step5(regime)应在step6(ensemble)之前
+        assert source.find("_step5_regime") < source.find("_step6_ensemble"), "step5(regime)应在step6(ensemble)之前执行"
         # regime应传递给step6
         assert "regime" in source, "regime应传递给后续步骤"
 
@@ -452,8 +452,8 @@ class TestE2EDataFlowIntegrity:
         final_weights = meta["step5_final_weights"]
         assert abs(sum(final_weights.values()) - 1.0) < 1e-10, "融合权重总和应为1"
         for name, w in final_weights.items():
-            assert w >= 0.10, f"模块{name}权重{w}低于下限0.10"
-            assert w <= 0.45, f"模块{name}权重{w}超过上限0.45"
+            assert w >= 0.10 - 1e-9, f"模块{name}权重{w}低于下限0.10"
+            assert w <= 0.45 + 1e-9, f"模块{name}权重{w}超过上限0.45"
 
     def test_ensemble_to_portfolio(self):
         """融合引擎 → 组合构建: 得分→权重映射不变量"""

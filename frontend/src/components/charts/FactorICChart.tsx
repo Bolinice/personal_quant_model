@@ -1,7 +1,13 @@
 import React from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
 } from 'recharts';
 
 interface FactorICChartProps {
@@ -29,9 +35,7 @@ const FactorICChart: React.FC<FactorICChartProps> = ({ data, height = 300, title
         <ReferenceLine y={0} stroke="#999" />
         <ReferenceLine y={0.03} stroke="#52c41a" strokeDasharray="3 3" label="有效阈值" />
         <Bar dataKey="ic" fill="#1890ff" name="IC" />
-        {data[0]?.rank_ic !== undefined && (
-          <Bar dataKey="rank_ic" fill="#722ed1" name="Rank IC" />
-        )}
+        {data[0]?.rank_ic !== undefined && <Bar dataKey="rank_ic" fill="#722ed1" name="Rank IC" />}
       </BarChart>
     </ResponsiveContainer>
   </div>

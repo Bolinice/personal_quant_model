@@ -1,9 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Card, CardContent, CardHeader, Chip, TextField, Select, MenuItem,
-  FormControl, InputLabel, IconButton, Box, Typography, CircularProgress,
-  TablePagination, Tooltip, Alert, Snackbar,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Card,
+  CardContent,
+  CardHeader,
+  Chip,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  IconButton,
+  Box,
+  Typography,
+  CircularProgress,
+  TablePagination,
+  Tooltip,
+  Alert,
+  Snackbar,
 } from '@mui/material';
 import { Search as SearchIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import client from '../../api/client';
@@ -22,44 +41,59 @@ interface FactorMetadataItem {
 // GROUP_COLORS：为每个因子组分配固定颜色，用于Chip背景色区分
 // 颜色选择遵循直觉：价值(金)=低估值，动量(橙)=趋势，波动率(红)=风险，流动性(青)=交易活跃
 const GROUP_COLORS: Record<string, string> = {
-  'valuation': '#ffc107',
-  'growth': '#4caf50',
-  'quality': '#2196f3',
-  'momentum': '#ff9800',
-  'volatility': '#f44336',
-  'liquidity': '#00bcd4',
-  'northbound': '#9c27b0',
-  'expectation': '#e91e63',
-  'microstructure': '#3f51b5',
-  'policy': '#ff5722',
-  'supply_chain': '#cddc39',
-  'sentiment': '#e91e63',
-  'ashare_specific': '#ffeb3b',
-  'interaction': '#00bcd4',
-  'earnings_quality': '#66bb6a',
-  'smart_money': '#29b6f6',
-  'technical': '#ffa726',
-  'industry_rotation': '#ef5350',
-  'alt_data': '#ffc107',
-  'risk_penalty': '#f44336',
+  valuation: '#ffc107',
+  growth: '#4caf50',
+  quality: '#2196f3',
+  momentum: '#ff9800',
+  volatility: '#f44336',
+  liquidity: '#00bcd4',
+  northbound: '#9c27b0',
+  expectation: '#e91e63',
+  microstructure: '#3f51b5',
+  policy: '#ff5722',
+  supply_chain: '#cddc39',
+  sentiment: '#e91e63',
+  ashare_specific: '#ffeb3b',
+  interaction: '#00bcd4',
+  earnings_quality: '#66bb6a',
+  smart_money: '#29b6f6',
+  technical: '#ffa726',
+  industry_rotation: '#ef5350',
+  alt_data: '#ffc107',
+  risk_penalty: '#f44336',
 };
 
 const GROUP_LABELS: Record<string, string> = {
-  'valuation': '价值', 'growth': '成长', 'quality': '质量',
-  'momentum': '动量', 'volatility': '波动率', 'liquidity': '流动性',
-  'northbound': '北向资金', 'expectation': '分析师预期',
-  'microstructure': '微观结构', 'policy': '政策', 'supply_chain': '供应链',
-  'sentiment': '情绪', 'ashare_specific': 'A股特有', 'interaction': '交互',
-  'earnings_quality': '盈利质量', 'smart_money': '聪明钱',
-  'technical': '技术形态', 'industry_rotation': '行业轮动',
-  'alt_data': '另类数据', 'risk_penalty': '风险惩罚',
+  valuation: '价值',
+  growth: '成长',
+  quality: '质量',
+  momentum: '动量',
+  volatility: '波动率',
+  liquidity: '流动性',
+  northbound: '北向资金',
+  expectation: '分析师预期',
+  microstructure: '微观结构',
+  policy: '政策',
+  supply_chain: '供应链',
+  sentiment: '情绪',
+  ashare_specific: 'A股特有',
+  interaction: '交互',
+  earnings_quality: '盈利质量',
+  smart_money: '聪明钱',
+  technical: '技术形态',
+  industry_rotation: '行业轮动',
+  alt_data: '另类数据',
+  risk_penalty: '风险惩罚',
 };
 
-const STATUS_LABELS: Record<string, { label: string; color: 'success' | 'warning' | 'default' | 'error' }> = {
-  'production': { label: '生产', color: 'success' },
-  'candidate': { label: '候选', color: 'warning' },
-  'experimental': { label: '实验', color: 'default' },
-  'deprecated': { label: '废弃', color: 'error' },
+const STATUS_LABELS: Record<
+  string,
+  { label: string; color: 'success' | 'warning' | 'default' | 'error' }
+> = {
+  production: { label: '生产', color: 'success' },
+  candidate: { label: '候选', color: 'warning' },
+  experimental: { label: '实验', color: 'default' },
+  deprecated: { label: '废弃', color: 'error' },
 };
 
 export default function FactorList() {
@@ -92,20 +126,18 @@ export default function FactorList() {
     fetchFactors();
   }, []);
 
-  const groups = Array.from(new Set(factors.map(f => f.factor_group))).sort();
+  const groups = Array.from(new Set(factors.map((f) => f.factor_group))).sort();
 
-  const filteredFactors = factors.filter(f => {
-    const matchSearch = !searchText
-      || f.factor_name.toLowerCase().includes(searchText.toLowerCase())
-      || (f.description || '').includes(searchText);
+  const filteredFactors = factors.filter((f) => {
+    const matchSearch =
+      !searchText ||
+      f.factor_name.toLowerCase().includes(searchText.toLowerCase()) ||
+      (f.description || '').includes(searchText);
     const matchGroup = !groupFilter || f.factor_group === groupFilter;
     return matchSearch && matchGroup;
   });
 
-  const pagedFactors = filteredFactors.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage,
-  );
+  const pagedFactors = filteredFactors.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   return (
     <Box sx={{ p: 3 }}>
@@ -123,11 +155,16 @@ export default function FactorList() {
                 <Select
                   value={groupFilter}
                   label="因子组筛选"
-                  onChange={e => { setGroupFilter(e.target.value); setPage(0); }}
+                  onChange={(e) => {
+                    setGroupFilter(e.target.value);
+                    setPage(0);
+                  }}
                 >
                   <MenuItem value="">全部</MenuItem>
-                  {groups.map(g => (
-                    <MenuItem key={g} value={g}>{GROUP_LABELS[g] || g}</MenuItem>
+                  {groups.map((g) => (
+                    <MenuItem key={g} value={g}>
+                      {GROUP_LABELS[g] || g}
+                    </MenuItem>
                   ))}
                 </Select>
               </FormControl>
@@ -135,7 +172,10 @@ export default function FactorList() {
                 size="small"
                 placeholder="搜索因子名称/描述"
                 value={searchText}
-                onChange={e => { setSearchText(e.target.value); setPage(0); }}
+                onChange={(e) => {
+                  setSearchText(e.target.value);
+                  setPage(0);
+                }}
                 sx={{ width: 240 }}
                 InputProps={{
                   startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
@@ -177,7 +217,7 @@ export default function FactorList() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  pagedFactors.map(f => (
+                  pagedFactors.map((f) => (
                     <TableRow key={f.factor_name} hover>
                       <TableCell>
                         <code style={{ fontSize: 12 }}>{f.factor_name}</code>
@@ -222,7 +262,10 @@ export default function FactorList() {
             page={page}
             onPageChange={(_, p) => setPage(p)}
             rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={e => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+            onRowsPerPageChange={(e) => {
+              setRowsPerPage(parseInt(e.target.value, 10));
+              setPage(0);
+            }}
             rowsPerPageOptions={[10, 20, 50]}
             labelRowsPerPage="每页行数"
             labelDisplayedRows={({ from, to, count }) => `${from}-${to} / 共 ${count} 个因子`}

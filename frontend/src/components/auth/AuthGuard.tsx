@@ -12,7 +12,15 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#0a0e1a' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh',
+          background: '#0a0e1a',
+        }}
+      >
         <CircularProgress sx={{ color: '#22d3ee' }} />
       </Box>
     );
@@ -30,7 +38,15 @@ export function PublicRoute({ children }: ProtectedRouteProps) {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#0a0e1a' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh',
+          background: '#0a0e1a',
+        }}
+      >
         <CircularProgress sx={{ color: '#22d3ee' }} />
       </Box>
     );
@@ -49,7 +65,15 @@ export function AdminRoute({ children }: ProtectedRouteProps) {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#0a0e1a' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh',
+          background: '#0a0e1a',
+        }}
+      >
         <CircularProgress sx={{ color: '#22d3ee' }} />
       </Box>
     );

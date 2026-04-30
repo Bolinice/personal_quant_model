@@ -10,7 +10,13 @@ interface MetricCardProps {
   delay?: number;
 }
 
-export default function MetricCard({ label, value, color = '#22d3ee', icon, delay = 0 }: MetricCardProps) {
+export default function MetricCard({
+  label,
+  value,
+  color = '#22d3ee',
+  icon,
+  delay = 0,
+}: MetricCardProps) {
   const displayValue = typeof value === 'number' ? value.toLocaleString() : value;
 
   return (
@@ -70,9 +76,7 @@ export default function MetricCard({ label, value, color = '#22d3ee', icon, dela
             </motion.div>
           </Box>
           {icon && (
-            <Box sx={{ color: `${color}66`, '& .MuiSvgIcon-root': { fontSize: 36 } }}>
-              {icon}
-            </Box>
+            <Box sx={{ color: `${color}66`, '& .MuiSvgIcon-root': { fontSize: 36 } }}>{icon}</Box>
           )}
         </Box>
       </Box>

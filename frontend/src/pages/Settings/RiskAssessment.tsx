@@ -1,7 +1,14 @@
 import { useState, useEffect } from 'react';
 import {
-  Box, Typography, Radio, RadioGroup, FormControlLabel,
-  FormControl, Button, Alert, LinearProgress,
+  Box,
+  Typography,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  FormControl,
+  Button,
+  Alert,
+  LinearProgress,
 } from '@mui/material';
 import { PageHeader, GlassPanel } from '@/components/ui';
 import client from '@/api/client';
@@ -21,7 +28,10 @@ interface AssessmentResult {
 }
 
 const levelColors: Record<string, string> = {
-  C1: '#64748b', C2: '#22d3ee', C3: '#f59e0b', C4: '#f43f5e',
+  C1: '#64748b',
+  C2: '#22d3ee',
+  C3: '#f59e0b',
+  C4: '#f43f5e',
 };
 
 export default function RiskAssessment() {
@@ -70,7 +80,13 @@ export default function RiskAssessment() {
         <GlassPanel sx={{ mb: 3, p: 3 }}>
           <Typography sx={{ fontWeight: 600, mb: 1 }}>您当前的风险等级</Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-            <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', color: levelColors[existingResult.level] || '#22d3ee' }}>
+            <Typography
+              sx={{
+                fontWeight: 800,
+                fontSize: '1.5rem',
+                color: levelColors[existingResult.level] || '#22d3ee',
+              }}
+            >
               {existingResult.level_name}
             </Typography>
             <Typography sx={{ color: '#64748b' }}>
@@ -102,8 +118,17 @@ export default function RiskAssessment() {
                     <FormControlLabel
                       key={j}
                       value={j}
-                      control={<Radio size="small" sx={{ color: '#94a3b8', '&.Mui-checked': { color: '#22d3ee' } }} />}
-                      label={<Typography sx={{ color: '#e2e8f0', fontSize: '0.85rem' }}>{opt}</Typography>}
+                      control={
+                        <Radio
+                          size="small"
+                          sx={{ color: '#94a3b8', '&.Mui-checked': { color: '#22d3ee' } }}
+                        />
+                      }
+                      label={
+                        <Typography sx={{ color: '#e2e8f0', fontSize: '0.85rem' }}>
+                          {opt}
+                        </Typography>
+                      }
                     />
                   ))}
                 </RadioGroup>
@@ -118,7 +143,9 @@ export default function RiskAssessment() {
               disabled={!allAnswered || submitting}
               onClick={handleSubmit}
               sx={{
-                py: 1.5, borderRadius: 2, fontWeight: 700,
+                py: 1.5,
+                borderRadius: 2,
+                fontWeight: 700,
                 background: 'linear-gradient(135deg, #22d3ee, #8b5cf6)',
                 '&:hover': { background: 'linear-gradient(135deg, #06b6d4, #7c3aed)' },
               }}
@@ -133,12 +160,15 @@ export default function RiskAssessment() {
                 variant="determinate"
                 value={(Object.keys(answers).length / questions.length) * 100}
                 sx={{
-                  height: 6, borderRadius: 3,
+                  height: 6,
+                  borderRadius: 3,
                   backgroundColor: 'rgba(148,163,184,0.1)',
                   '& .MuiLinearProgress-bar': { backgroundColor: '#22d3ee', borderRadius: 3 },
                 }}
               />
-              <Typography sx={{ color: '#64748b', fontSize: '0.75rem', mt: 0.5, textAlign: 'center' }}>
+              <Typography
+                sx={{ color: '#64748b', fontSize: '0.75rem', mt: 0.5, textAlign: 'center' }}
+              >
                 已完成 {Object.keys(answers).length}/{questions.length} 题
               </Typography>
             </Box>
@@ -148,7 +178,14 @@ export default function RiskAssessment() {
 
       {result && (
         <GlassPanel sx={{ mt: 3, p: 4 }}>
-          <Typography sx={{ fontWeight: 800, fontSize: '1.5rem', mb: 1, color: levelColors[result.level] || '#22d3ee' }}>
+          <Typography
+            sx={{
+              fontWeight: 800,
+              fontSize: '1.5rem',
+              mb: 1,
+              color: levelColors[result.level] || '#22d3ee',
+            }}
+          >
             {result.level_name} ({result.level})
           </Typography>
           <Typography sx={{ color: '#94a3b8', fontSize: '0.85rem', lineHeight: 1.8, mb: 2 }}>

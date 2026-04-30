@@ -1,6 +1,11 @@
 import React from 'react';
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
 } from 'recharts';
 
@@ -20,10 +25,7 @@ const DrawdownChart: React.FC<DrawdownChartProps> = ({ data, height = 250, title
       <AreaChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" />
         <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-        <YAxis
-          tick={{ fontSize: 12 }}
-          tickFormatter={(v: number) => `${(v * 100).toFixed(1)}%`}
-        />
+        <YAxis tick={{ fontSize: 12 }} tickFormatter={(v: number) => `${(v * 100).toFixed(1)}%`} />
         <Tooltip
           formatter={(value: number) => `${(value * 100).toFixed(2)}%`}
           labelFormatter={(label) => `日期: ${label}`}

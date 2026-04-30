@@ -1,8 +1,4 @@
 import React from 'react';
-import {
-  HeatmapSeries, ComposedChart, Rect,
-  ResponsiveContainer,
-} from 'recharts';
 
 interface FactorHeatmapProps {
   data: Array<{
@@ -15,7 +11,7 @@ interface FactorHeatmapProps {
 }
 
 // Recharts doesn't have native heatmap, use a simple grid rendering
-const FactorHeatmap: React.FC<FactorHeatmapProps> = ({ data, height = 300, title }) => {
+const FactorHeatmap: React.FC<FactorHeatmapProps> = ({ data, title }) => {
   if (!data.length) return null;
 
   const factors = [...new Set(data.flatMap((d) => [d.factor1, d.factor2]))];

@@ -1,7 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  Dialog, DialogTitle, DialogContent, DialogActions,
-  Typography, Checkbox, FormControlLabel, Button, Box,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Typography,
+  Checkbox,
+  FormControlLabel,
+  Button,
+  Box,
 } from '@mui/material';
 
 interface ComplianceModalProps {
@@ -25,17 +32,16 @@ const ComplianceModal: React.FC<ComplianceModalProps> = ({
   onClose,
   onConfirm,
 }) => {
-  const [internalVisible, setInternalVisible] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
 
-  useEffect(() => {
-    if (controlledOpen === undefined && autoShow) {
-      const stored = localStorage.getItem(storageKey);
-      if (!stored) {
-        setInternalVisible(true);
-      }
-    }
-  }, [autoShow, storageKey, controlledOpen]);
+  // Initialize visibility based on localStorage
+  const getInitialVisibility = () => {
+    if (controlledOpen !== undefined) return false;
+    if (!autoShow) return false;
+    return !localStorage.getItem(storageKey);
+  };
+
+  const [internalVisible, setInternalVisible] = useState(getInitialVisibility);
 
   const visible = controlledOpen !== undefined ? controlledOpen : internalVisible;
 
@@ -59,9 +65,7 @@ const ComplianceModal: React.FC<ComplianceModalProps> = ({
       maxWidth="sm"
       fullWidth
     >
-      <DialogTitle sx={{ fontWeight: 700 }}>
-        欢迎使用A股多因子增强策略平台
-      </DialogTitle>
+      <DialogTitle sx={{ fontWeight: 700 }}>欢迎使用A股多因子增强策略平台</DialogTitle>
       <DialogContent>
         <Typography sx={{ mb: 2 }}>在使用本平台前，请您知悉：</Typography>
         {COMPLIANCE_POINTS.map((point, idx) => (
@@ -94,7 +98,9 @@ const ComplianceModal: React.FC<ComplianceModalProps> = ({
           disabled={!acknowledged}
           fullWidth
           sx={{
-            py: 1.2, borderRadius: 2, fontWeight: 700,
+            py: 1.2,
+            borderRadius: 2,
+            fontWeight: 700,
             background: 'linear-gradient(135deg, #22d3ee, #8b5cf6)',
             '&:hover': { background: 'linear-gradient(135deg, #06b6d4, #7c3aed)' },
           }}

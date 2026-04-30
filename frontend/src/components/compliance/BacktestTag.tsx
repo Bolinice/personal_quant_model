@@ -6,10 +6,7 @@ interface BacktestTagProps {
   showTooltip?: boolean;
 }
 
-const BacktestTag: React.FC<BacktestTagProps> = ({
-  size = 'small',
-  showTooltip = true,
-}) => {
+const BacktestTag: React.FC<BacktestTagProps> = ({ size = 'small', showTooltip = true }) => {
   const tag = (
     <Chip
       label="回测"

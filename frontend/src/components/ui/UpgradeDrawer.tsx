@@ -31,7 +31,15 @@ const UpgradeDrawer: React.FC<UpgradeDrawerProps> = ({
   currentPlan = '免费版',
   targetPlan = '专业版',
   targetPrice = 299,
-  features = ['全部股票池', '日频调仓', '20个模型', '50次回测/月', 'API 接入', '深度分析', '全格式导出'],
+  features = [
+    '全部股票池',
+    '日频调仓',
+    '20个模型',
+    '50次回测/月',
+    'API 接入',
+    '深度分析',
+    '全格式导出',
+  ],
 }) => {
   const navigate = useNavigate();
 
@@ -148,10 +156,7 @@ const UpgradeDrawer: React.FC<UpgradeDrawerProps> = ({
               textAlign: 'center',
             }}
           >
-            <Typography
-              variant="caption"
-              sx={{ color: '#22d3ee', display: 'block', mb: 0.5 }}
-            >
+            <Typography variant="caption" sx={{ color: '#22d3ee', display: 'block', mb: 0.5 }}>
               目标套餐
             </Typography>
             <Typography
@@ -241,16 +246,10 @@ const UpgradeDrawer: React.FC<UpgradeDrawerProps> = ({
           }}
         >
           <Box sx={{ textAlign: 'center' }}>
-            <Typography
-              variant="body2"
-              sx={{ color: 'rgba(148, 163, 184, 0.4)', mb: 0.5 }}
-            >
+            <Typography variant="body2" sx={{ color: 'rgba(148, 163, 184, 0.4)', mb: 0.5 }}>
               {currentPlan}
             </Typography>
-            <Typography
-              variant="h6"
-              sx={{ color: 'rgba(148, 163, 184, 0.4)', fontWeight: 600 }}
-            >
+            <Typography variant="h6" sx={{ color: 'rgba(148, 163, 184, 0.4)', fontWeight: 600 }}>
               ¥0
               <Typography
                 component="span"
@@ -262,18 +261,12 @@ const UpgradeDrawer: React.FC<UpgradeDrawerProps> = ({
             </Typography>
           </Box>
 
-          <Typography
-            variant="body2"
-            sx={{ color: 'rgba(148, 163, 184, 0.2)' }}
-          >
+          <Typography variant="body2" sx={{ color: 'rgba(148, 163, 184, 0.2)' }}>
             →
           </Typography>
 
           <Box sx={{ textAlign: 'center' }}>
-            <Typography
-              variant="body2"
-              sx={{ color: '#22d3ee', mb: 0.5 }}
-            >
+            <Typography variant="body2" sx={{ color: '#22d3ee', mb: 0.5 }}>
               {targetPlan}
             </Typography>
             <Typography

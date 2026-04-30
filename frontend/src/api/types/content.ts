@@ -2,7 +2,7 @@ export interface ContentSection {
   title: string;
   subtitle?: string;
   body?: string;
-  extra?: Record<string, any>;
+  extra?: Record<string, unknown>;
 }
 
 export interface PageContent {

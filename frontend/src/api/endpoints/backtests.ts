@@ -8,7 +8,8 @@ export const backtestApi = {
 
   create: (data: BacktestCreate) => client.post<Backtest>('/backtests/', data),
 
-  update: (id: number, data: Partial<BacktestCreate>) => client.put<Backtest>(`/backtests/${id}`, data),
+  update: (id: number, data: Partial<BacktestCreate>) =>
+    client.put<Backtest>(`/backtests/${id}`, data),
 
   getResult: (id: number) => client.get<BacktestResult>(`/backtests/${id}/result`),
 
@@ -16,7 +17,9 @@ export const backtestApi = {
     client.post<BacktestResult>(`/backtests/${id}/result`, data),
 
   getTrades: (id: number, page?: number, pageSize?: number) =>
-    client.get<BacktestTrade[]>(`/backtests/${id}/trades`, { params: { page, page_size: pageSize } }),
+    client.get<BacktestTrade[]>(`/backtests/${id}/trades`, {
+      params: { page, page_size: pageSize },
+    }),
 
   run: (id: number) => client.post<Backtest>(`/backtests/${id}/run`),
 

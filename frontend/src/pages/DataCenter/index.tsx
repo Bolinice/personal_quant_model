@@ -7,11 +7,15 @@ export default function DataCenter() {
     <Box>
       <PageHeader title="数据中心" />
       <GlassPanel sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>市场数据概览</Typography>
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          市场数据概览
+        </Typography>
         <Typography sx={{ color: '#64748b' }}>请通过后端脚本同步数据后查看</Typography>
       </GlassPanel>
       <GlassPanel sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>数据源状态</Typography>
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          数据源状态
+        </Typography>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
             <Typography sx={{ color: '#94a3b8' }}>主数据源 (AKShare)</Typography>

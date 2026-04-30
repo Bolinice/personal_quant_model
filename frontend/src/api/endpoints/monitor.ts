@@ -1,5 +1,12 @@
 import client from '../client';
-import type { MonitorFactorHealth, MonitorModelHealth, MonitorAlert, Regime, PortfolioMonitor, LiveTracking } from '../types';
+import type {
+  MonitorFactorHealth,
+  MonitorModelHealth,
+  MonitorAlert,
+  Regime,
+  PortfolioMonitor,
+  LiveTracking,
+} from '../types';
 
 export const monitorApi = {
   getFactorHealth: (params?: { trade_date?: string; factor_group?: string }) =>
@@ -8,8 +15,13 @@ export const monitorApi = {
   getModelHealth: (params?: { model_id?: string; trade_date?: string }) =>
     client.get<MonitorModelHealth[]>('/monitor/model-health', { params }),
 
-  getAlerts: (params?: { severity?: string; type?: string; resolved?: boolean; page?: number; page_size?: number }) =>
-    client.get<MonitorAlert[]>('/monitor/alerts', { params }),
+  getAlerts: (params?: {
+    severity?: string;
+    type?: string;
+    resolved?: boolean;
+    page?: number;
+    page_size?: number;
+  }) => client.get<MonitorAlert[]>('/monitor/alerts', { params }),
 
   resolveAlert: (alertId: number) =>
     client.put<{ alert_id: number; resolved: boolean }>(`/monitor/alerts/${alertId}/resolve`),

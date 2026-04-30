@@ -1,7 +1,5 @@
 import React from 'react';
-import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
-} from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 interface PortfolioWeightChartProps {
   data: Array<{
@@ -13,12 +11,22 @@ interface PortfolioWeightChartProps {
 }
 
 const COLORS = [
-  '#1890ff', '#52c41a', '#faad14', '#722ed1', '#eb2f96',
-  '#13c2c2', '#2f54eb', '#f5222d', '#a0d911', '#fa541c',
+  '#1890ff',
+  '#52c41a',
+  '#faad14',
+  '#722ed1',
+  '#eb2f96',
+  '#13c2c2',
+  '#2f54eb',
+  '#f5222d',
+  '#a0d911',
+  '#fa541c',
 ];
 
 const PortfolioWeightChart: React.FC<PortfolioWeightChartProps> = ({
-  data, height = 350, title,
+  data,
+  height = 350,
+  title,
 }) => (
   <div>
     {title && <h4 style={{ marginBottom: 8 }}>{title}</h4>}

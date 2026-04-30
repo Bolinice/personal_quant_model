@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react';
 import {
-  Box, Grid, Typography, Select, MenuItem, FormControl, InputLabel, TextField,
+  Box,
+  Grid,
+  Typography,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  TextField,
 } from '@mui/material';
 import { motion } from 'framer-motion';
 import { PageHeader, GlassPanel, MetricCard, NeonChip } from '@/components/ui';
@@ -34,9 +41,7 @@ function computeMetrics(perf: ModelPerformance[]) {
     };
   }
 
-  const dailyReturns = perf
-    .map((p) => p.daily_return)
-    .filter((v): v is number => v != null);
+  const dailyReturns = perf.map((p) => p.daily_return).filter((v): v is number => v != null);
 
   const latest = perf[0];
   const annualReturn = latest.cumulative_return ?? null;
@@ -53,17 +58,14 @@ function computeMetrics(perf: ModelPerformance[]) {
   if (dailyReturns.length > 1) {
     const mean = dailyReturns.reduce((s, v) => s + v, 0) / dailyReturns.length;
     const variance =
-      dailyReturns.reduce((s, v) => s + (v - mean) ** 2, 0) /
-      (dailyReturns.length - 1);
+      dailyReturns.reduce((s, v) => s + (v - mean) ** 2, 0) / (dailyReturns.length - 1);
     volatility = Math.sqrt(variance) * Math.sqrt(252);
   }
 
   const positiveCount = dailyReturns.filter((v) => v > 0).length;
   const winRate = dailyReturns.length > 0 ? positiveCount / dailyReturns.length : null;
 
-  const turnoverValues = perf
-    .map((p) => p.turnover)
-    .filter((v): v is number => v != null);
+  const turnoverValues = perf.map((p) => p.turnover).filter((v): v is number => v != null);
   const turnover =
     turnoverValues.length > 0
       ? turnoverValues.reduce((s, v) => s + v, 0) / turnoverValues.length
@@ -87,9 +89,7 @@ export default function ModelBacktests() {
   // Available versions derived from models sharing the same model_code
   const selectedModel = models.find((m) => m.id === selectedModelId) || null;
   const availableVersions = selectedModel
-    ? models
-        .filter((m) => m.model_code === selectedModel.model_code)
-        .map((m) => m.version)
+    ? models.filter((m) => m.model_code === selectedModel.model_code).map((m) => m.version)
     : [];
 
   // Fetch models on mount
@@ -140,7 +140,10 @@ export default function ModelBacktests() {
       <PageHeader title={t.models.backtests} />
 
       {/* ── Model selector bar ─────────────────────────────────── */}
-      <GlassPanel animate={false} sx={{ mb: 3, p: 2, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+      <GlassPanel
+        animate={false}
+        sx={{ mb: 3, p: 2, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}
+      >
         <FilterListIcon sx={{ color: '#64748b', mr: 0.5 }} />
 
         <FormControl size="small" sx={{ minWidth: 200 }}>
@@ -170,9 +173,7 @@ export default function ModelBacktests() {
         </FormControl>
 
         <FormControl size="small" sx={{ minWidth: 120 }}>
-          <InputLabel sx={{ color: '#94a3b8', fontSize: '0.875rem' }}>
-            Version
-          </InputLabel>
+          <InputLabel sx={{ color: '#94a3b8', fontSize: '0.875rem' }}>Version</InputLabel>
           <Select
             value={selectedVersion}
             label="Version"
@@ -197,7 +198,10 @@ export default function ModelBacktests() {
           value={startDate}
           onChange={(e) => setStartDate(e.target.value)}
           InputLabelProps={{ shrink: true, sx: { color: '#94a3b8', fontSize: '0.875rem' } }}
-          sx={{ minWidth: 160, '& .MuiOutlinedInput-root': { fontSize: '0.875rem', color: '#e2e8f0' } }}
+          sx={{
+            minWidth: 160,
+            '& .MuiOutlinedInput-root': { fontSize: '0.875rem', color: '#e2e8f0' },
+          }}
         />
         <Typography sx={{ color: '#475569', alignSelf: 'center' }}>-</Typography>
         <TextField
@@ -206,7 +210,10 @@ export default function ModelBacktests() {
           value={endDate}
           onChange={(e) => setEndDate(e.target.value)}
           InputLabelProps={{ shrink: true, sx: { color: '#94a3b8', fontSize: '0.875rem' } }}
-          sx={{ minWidth: 160, '& .MuiOutlinedInput-root': { fontSize: '0.875rem', color: '#e2e8f0' } }}
+          sx={{
+            minWidth: 160,
+            '& .MuiOutlinedInput-root': { fontSize: '0.875rem', color: '#e2e8f0' },
+          }}
         />
 
         {selectedModel && (

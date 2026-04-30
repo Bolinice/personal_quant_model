@@ -8,11 +8,13 @@ interface GlassTableProps extends TableProps {
 export default function GlassTable({ children, animate = true, ...props }: GlassTableProps) {
   return (
     <motion.div
-      {...(animate ? {
-        initial: { opacity: 0, y: 12 },
-        animate: { opacity: 1, y: 0 },
-        transition: { duration: 0.4, ease: 'easeOut' },
-      } : {})}
+      {...(animate
+        ? {
+            initial: { opacity: 0, y: 12 },
+            animate: { opacity: 1, y: 0 },
+            transition: { duration: 0.4, ease: 'easeOut' },
+          }
+        : {})}
     >
       <Box
         sx={{

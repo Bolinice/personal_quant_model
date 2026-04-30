@@ -7,15 +7,15 @@ export interface FilterConfig<T> {
   };
   filters?: {
     [key: string]: {
-      field: keyof T | ((item: T) => any);
-      match: (itemValue: any, filterValue: any) => boolean;
+      field: keyof T | ((item: T) => unknown);
+      match: (itemValue: unknown, filterValue: unknown) => boolean;
     };
   };
 }
 
 export function useFilters<T>(data: T[], config: FilterConfig<T>) {
   const [search, setSearch] = useState('');
-  const [filters, setFilters] = useState<Record<string, any>>({});
+  const [filters, setFilters] = useState<Record<string, unknown>>({});
 
   const filtered = useMemo(() => {
     let result = data;
@@ -41,9 +41,7 @@ export function useFilters<T>(data: T[], config: FilterConfig<T>) {
 
         result = result.filter((item) => {
           const itemValue =
-            typeof filterDef.field === 'function'
-              ? filterDef.field(item)
-              : item[filterDef.field];
+            typeof filterDef.field === 'function' ? filterDef.field(item) : item[filterDef.field];
           return filterDef.match(itemValue, filterValue);
         });
       });
@@ -52,7 +50,7 @@ export function useFilters<T>(data: T[], config: FilterConfig<T>) {
     return result;
   }, [data, search, filters, config]);
 
-  const setFilter = useCallback((key: string, value: any) => {
+  const setFilter = useCallback((key: string, value: unknown) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }, []);
 

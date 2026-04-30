@@ -1,5 +1,12 @@
 import client from '../client';
-import type { Model, ModelFactorWeight, ModelScore, ModelPerformance, ModelCreate, ModelUpdate } from '../types';
+import type {
+  Model,
+  ModelFactorWeight,
+  ModelScore,
+  ModelPerformance,
+  ModelCreate,
+  ModelUpdate,
+} from '../types';
 
 export const modelApi = {
   list: (params?: Record<string, unknown>) => client.get<Model[]>('/models/', { params }),
@@ -22,10 +29,14 @@ export const modelApi = {
     client.put<ModelFactorWeight[]>(`/models/${modelId}/factor-weights`, weights),
 
   getScores: (modelId: number, tradeDate: string, selectedOnly?: boolean) =>
-    client.get<ModelScore[]>(`/models/${modelId}/scores`, { params: { trade_date: tradeDate, selected_only: selectedOnly } }),
+    client.get<ModelScore[]>(`/models/${modelId}/scores`, {
+      params: { trade_date: tradeDate, selected_only: selectedOnly },
+    }),
 
   calculateScores: (modelId: number, tradeDate: string) =>
-    client.post<ModelScore[]>(`/models/${modelId}/score`, null, { params: { trade_date: tradeDate } }),
+    client.post<ModelScore[]>(`/models/${modelId}/score`, null, {
+      params: { trade_date: tradeDate },
+    }),
 
   getPerformance: (modelId: number, params?: Record<string, unknown>) =>
     client.get<ModelPerformance[]>(`/models/${modelId}/performance`, { params }),

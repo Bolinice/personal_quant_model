@@ -6,17 +6,17 @@ export interface QueryState<T> {
   error: string;
 }
 
-export interface QueryOptions {
+export interface QueryOptions<T = unknown> {
   enabled?: boolean;
   refetchOnMount?: boolean;
-  onSuccess?: (data: any) => void;
+  onSuccess?: (data: T) => void;
   onError?: (error: Error) => void;
 }
 
 export function useQuery<T>(
   queryFn: () => Promise<T>,
-  deps: any[] = [],
-  options: QueryOptions = {}
+  deps: unknown[] = [],
+  options: QueryOptions<T> = {}
 ) {
   const { enabled = true, refetchOnMount = true, onSuccess, onError } = options;
   const [state, setState] = useState<QueryState<T>>({
@@ -41,9 +41,9 @@ export function useQuery<T>(
   }, [enabled, queryFn, onSuccess, onError]);
 
   useEffect(() => {
-    if (refetchOnMount) {
-      execute();
-    }
+    if (!refetchOnMount || !enabled) return;
+    execute();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, execute, refetchOnMount]);
 
   const refetch = useCallback(() => {
@@ -53,8 +53,8 @@ export function useQuery<T>(
   return { ...state, refetch };
 }
 
-export function useQueries<T extends any[]>(
-  queryFns: (() => Promise<any>)[],
+export function useQueries<T extends unknown[]>(
+  queryFns: Array<() => Promise<unknown>>,
   options: QueryOptions = {}
 ) {
   const { enabled = true, onSuccess, onError } = options;
@@ -80,8 +80,9 @@ export function useQueries<T extends any[]>(
   }, [enabled, queryFns, onSuccess, onError]);
 
   useEffect(() => {
+    if (!enabled) return;
     execute();
-  }, [execute]);
+  }, [execute, enabled]);
 
   const refetch = useCallback(() => {
     execute();

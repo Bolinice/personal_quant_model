@@ -1,15 +1,21 @@
 import client from '../client';
-import type { LoginRequest, RegisterRequest, TokenResponse, UserResponse, PasswordChangeRequest, ForgotPasswordRequest, ResetPasswordRequest } from '../types';
+import type {
+  LoginRequest,
+  RegisterRequest,
+  TokenResponse,
+  UserResponse,
+  PasswordChangeRequest,
+  ForgotPasswordRequest,
+  ResetPasswordRequest,
+} from '../types';
 
 export const authApi = {
-  login: (data: LoginRequest) =>
-    client.post<TokenResponse>('/auth/login', data),
+  login: (data: LoginRequest) => client.post<TokenResponse>('/auth/login', data),
 
   register: (data: RegisterRequest) =>
     client.post<TokenResponse & { user: UserResponse }>('/auth/register', data),
 
-  me: () =>
-    client.get<UserResponse>('/auth/me'),
+  me: () => client.get<UserResponse>('/auth/me'),
 
   refresh: (refreshToken: string) =>
     client.post<TokenResponse>('/auth/refresh', { refresh_token: refreshToken }),

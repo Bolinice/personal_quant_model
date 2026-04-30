@@ -1,9 +1,27 @@
 import { useState, useEffect } from 'react';
 import {
-  Box, Card, CardContent, Typography, Button, Chip, List, ListItem, ListItemIcon, ListItemText,
-  CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogActions,
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Button,
+  Chip,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  CircularProgress,
+  Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
-import { Check as CheckIcon, Star as StarIcon, WorkspacePremium as CrownIcon } from '@mui/icons-material';
+import {
+  Check as CheckIcon,
+  Star as StarIcon,
+  WorkspacePremium as CrownIcon,
+} from '@mui/icons-material';
 import { subscriptionApi } from '@/api/endpoints/subscription';
 import type { SubscriptionPlan, CurrentSubscription } from '@/api/types/subscription';
 import { useTranslation } from 'react-i18next';
@@ -84,20 +102,34 @@ export default function SubscriptionPage() {
         {t('subscription.subtitle', '选择适合您的套餐，解锁更多量化能力')}
       </Typography>
 
-      {error && <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>}
+      {error && (
+        <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+          {error}
+        </Alert>
+      )}
 
       {/* 当前订阅状态 */}
       {current && (
-        <Card sx={{
-          mb: 4, background: 'linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.1))',
-          border: '1px solid rgba(99,102,241,0.2)', borderRadius: 3,
-        }}>
-          <CardContent sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Card
+          sx={{
+            mb: 4,
+            background: 'linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.1))',
+            border: '1px solid rgba(99,102,241,0.2)',
+            borderRadius: 3,
+          }}
+        >
+          <CardContent
+            sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+          >
             <Box>
               <Typography variant="body2" sx={{ color: '#94a3b8', mb: 0.5 }}>
                 {t('subscription.currentPlan', '当前套餐')}
               </Typography>
-              <Typography variant="h6" fontWeight={700} sx={{ color: '#e2e8f0', textTransform: 'capitalize' }}>
+              <Typography
+                variant="h6"
+                fontWeight={700}
+                sx={{ color: '#e2e8f0', textTransform: 'capitalize' }}
+              >
                 {current.plan_detail?.display_name || currentPlanName}
               </Typography>
               {current.expires_at && (
@@ -107,7 +139,11 @@ export default function SubscriptionPage() {
               )}
             </Box>
             <Chip
-              label={current.subscription_status === 'active' ? t('subscription.active', '生效中') : t('subscription.inactive', '未激活')}
+              label={
+                current.subscription_status === 'active'
+                  ? t('subscription.active', '生效中')
+                  : t('subscription.inactive', '未激活')
+              }
               color={current.subscription_status === 'active' ? 'success' : 'default'}
               size="small"
             />
@@ -116,34 +152,46 @@ export default function SubscriptionPage() {
       )}
 
       {/* 套餐列表 */}
-      <Box sx={{
-        display: 'grid',
-        gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr 1fr' },
-        gap: 3,
-      }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr 1fr' },
+          gap: 3,
+        }}
+      >
         {plans.map((plan) => {
           const isCurrent = plan.name === currentPlanName;
           const features = plan.features ? plan.features.split(',') : [];
           const color = PLAN_COLORS[plan.name] || '#64748b';
 
           return (
-            <Card key={plan.id} sx={{
-              position: 'relative',
-              background: isCurrent
-                ? `linear-gradient(180deg, rgba(${hexToRgb(color)}, 0.08), rgba(15,23,42,0.95))`
-                : 'rgba(15,23,42,0.6)',
-              border: isCurrent ? `1px solid ${color}` : '1px solid rgba(100,116,139,0.15)',
-              borderRadius: 3,
-              transition: 'all 0.2s',
-              '&:hover': { transform: 'translateY(-4px)', boxShadow: `0 8px 30px rgba(${hexToRgb(color)}, 0.15)` },
-            }}>
+            <Card
+              key={plan.id}
+              sx={{
+                position: 'relative',
+                background: isCurrent
+                  ? `linear-gradient(180deg, rgba(${hexToRgb(color)}, 0.08), rgba(15,23,42,0.95))`
+                  : 'rgba(15,23,42,0.6)',
+                border: isCurrent ? `1px solid ${color}` : '1px solid rgba(100,116,139,0.15)',
+                borderRadius: 3,
+                transition: 'all 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: `0 8px 30px rgba(${hexToRgb(color)}, 0.15)`,
+                },
+              }}
+            >
               {isCurrent && (
                 <Chip
                   label={t('subscription.current', '当前')}
                   size="small"
                   sx={{
-                    position: 'absolute', top: 12, right: 12,
-                    background: color, color: '#fff', fontWeight: 600,
+                    position: 'absolute',
+                    top: 12,
+                    right: 12,
+                    background: color,
+                    color: '#fff',
+                    fontWeight: 600,
                   }}
                 />
               )}
@@ -160,8 +208,14 @@ export default function SubscriptionPage() {
                     ¥{plan.price}
                   </Typography>
                   {plan.price > 0 && (
-                    <Typography variant="body2" sx={{ color: '#64748b', display: 'inline', ml: 0.5 }}>
-                      /{plan.duration_days >= 365 ? t('subscription.year', '年') : t('subscription.month', '月')}
+                    <Typography
+                      variant="body2"
+                      sx={{ color: '#64748b', display: 'inline', ml: 0.5 }}
+                    >
+                      /
+                      {plan.duration_days >= 365
+                        ? t('subscription.year', '年')
+                        : t('subscription.month', '月')}
                     </Typography>
                   )}
                 </Box>
@@ -181,8 +235,18 @@ export default function SubscriptionPage() {
                 </List>
 
                 <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-                  <Chip label={`${plan.max_stocks}${t('subscription.stocks', '只股票')}`} size="small" variant="outlined" sx={{ borderColor: 'rgba(100,116,139,0.3)', color: '#94a3b8' }} />
-                  <Chip label={`${plan.max_strategies}${t('subscription.strategies', '个策略')}`} size="small" variant="outlined" sx={{ borderColor: 'rgba(100,116,139,0.3)', color: '#94a3b8' }} />
+                  <Chip
+                    label={`${plan.max_stocks}${t('subscription.stocks', '只股票')}`}
+                    size="small"
+                    variant="outlined"
+                    sx={{ borderColor: 'rgba(100,116,139,0.3)', color: '#94a3b8' }}
+                  />
+                  <Chip
+                    label={`${plan.max_strategies}${t('subscription.strategies', '个策略')}`}
+                    size="small"
+                    variant="outlined"
+                    sx={{ borderColor: 'rgba(100,116,139,0.3)', color: '#94a3b8' }}
+                  />
                 </Box>
 
                 <Button
@@ -191,13 +255,20 @@ export default function SubscriptionPage() {
                   disabled={isCurrent}
                   onClick={() => setConfirmPlan(plan)}
                   sx={{
-                    borderRadius: 2, py: 1, fontWeight: 600,
+                    borderRadius: 2,
+                    py: 1,
+                    fontWeight: 600,
                     ...(isCurrent
                       ? { borderColor: 'rgba(100,116,139,0.3)', color: '#64748b' }
-                      : { background: color, '&:hover': { background: color, filter: 'brightness(1.1)' } }),
+                      : {
+                          background: color,
+                          '&:hover': { background: color, filter: 'brightness(1.1)' },
+                        }),
                   }}
                 >
-                  {isCurrent ? t('subscription.currentPlan', '当前套餐') : t('subscription.subscribe', '立即订阅')}
+                  {isCurrent
+                    ? t('subscription.currentPlan', '当前套餐')
+                    : t('subscription.subscribe', '立即订阅')}
                 </Button>
               </CardContent>
             </Card>
@@ -206,7 +277,11 @@ export default function SubscriptionPage() {
       </Box>
 
       {/* 确认订阅弹窗 */}
-      <Dialog open={!!confirmPlan} onClose={() => setConfirmPlan(null)} PaperProps={{ sx: { background: '#1e293b', borderRadius: 3 } }}>
+      <Dialog
+        open={!!confirmPlan}
+        onClose={() => setConfirmPlan(null)}
+        PaperProps={{ sx: { background: '#1e293b', borderRadius: 3 } }}
+      >
         <DialogTitle sx={{ color: '#f1f5f9' }}>
           {t('subscription.confirmTitle', '确认订阅')}
         </DialogTitle>
@@ -215,7 +290,10 @@ export default function SubscriptionPage() {
             {t('subscription.confirmMessage', '确认订阅 {name} 套餐？费用 ¥{price}/{period}', {
               name: confirmPlan?.display_name,
               price: confirmPlan?.price,
-              period: confirmPlan && confirmPlan.duration_days >= 365 ? t('subscription.year', '年') : t('subscription.month', '月'),
+              period:
+                confirmPlan && confirmPlan.duration_days >= 365
+                  ? t('subscription.year', '年')
+                  : t('subscription.month', '月'),
             })}
           </Typography>
         </DialogContent>

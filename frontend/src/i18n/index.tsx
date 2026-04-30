@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useState, useCallback, type ReactNode } from 'react';
 import zh, { type TranslationKeys } from './locales/zh';
 import en from './locales/en';
 
@@ -12,7 +12,9 @@ function getInitialLang(): Lang {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved === 'zh' || saved === 'en') return saved;
-  } catch {}
+  } catch {
+    // Ignore localStorage errors
+  }
   return 'zh';
 }
 
@@ -23,11 +25,15 @@ interface LanguageContextValue {
   toggleLang: () => void;
 }
 
-const LanguageContext = createContext<LanguageContextValue>({
+export const LanguageContext = createContext<LanguageContextValue>({
   lang: 'zh',
   t: zh,
-  setLang: () => {},
-  toggleLang: () => {},
+  setLang: () => {
+    // Default no-op
+  },
+  toggleLang: () => {
+    // Default no-op
+  },
 });
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
@@ -35,7 +41,11 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
   const setLang = useCallback((l: Lang) => {
     setLangState(l);
-    try { localStorage.setItem(STORAGE_KEY, l); } catch {}
+    try {
+      localStorage.setItem(STORAGE_KEY, l);
+    } catch {
+      // Ignore localStorage errors
+    }
   }, []);
 
   const toggleLang = useCallback(() => {
@@ -49,10 +59,5 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useT(): TranslationKeys {
-  return useContext(LanguageContext).t;
-}
-
-export function useLang() {
-  return useContext(LanguageContext);
-}
+export { useT, useLang } from './hooks';
+export type { TranslationKeys } from './locales/zh';

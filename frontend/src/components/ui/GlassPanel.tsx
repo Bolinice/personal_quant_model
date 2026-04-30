@@ -7,7 +7,14 @@ interface GlassPanelProps extends BoxProps {
   animate?: boolean;
 }
 
-export default function GlassPanel({ children, glow, glowColor = '#22d3ee', animate = true, sx, ...props }: GlassPanelProps) {
+export default function GlassPanel({
+  children,
+  glow,
+  glowColor = '#22d3ee',
+  animate = true,
+  sx,
+  ...props
+}: GlassPanelProps) {
   const panel = (
     <Box
       sx={{
@@ -32,10 +39,12 @@ export default function GlassPanel({ children, glow, glowColor = '#22d3ee', anim
             pointerEvents: 'none',
           },
         }),
-        '&:hover': glow ? {
-          borderColor: `${glowColor}44`,
-          boxShadow: `0 0 20px ${glowColor}15`,
-        } : {},
+        '&:hover': glow
+          ? {
+              borderColor: `${glowColor}44`,
+              boxShadow: `0 0 20px ${glowColor}15`,
+            }
+          : {},
         ...sx,
       }}
       {...props}

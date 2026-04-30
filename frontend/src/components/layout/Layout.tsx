@@ -1,8 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
-  Box, Typography, IconButton, List, ListItemButton, ListItemText,
-  ListItemIcon, Drawer, Avatar, Menu, MenuItem, Divider, Snackbar, Alert,
+  Box,
+  Typography,
+  IconButton,
+  List,
+  ListItemButton,
+  ListItemText,
+  ListItemIcon,
+  Drawer,
+  Avatar,
+  Menu,
+  MenuItem,
+  Divider,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import CloseIcon from '@mui/icons-material/Close';
@@ -41,15 +53,12 @@ export default function Layout() {
   const location = useLocation();
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [complianceVisible, setComplianceVisible] = useState(false);
   const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
-
-  useEffect(() => {
-    if (!localStorage.getItem('compliance_workbench_shown')) {
-      setComplianceVisible(true);
-    }
-  }, []);
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error';
+  }>({ open: false, message: '', severity: 'success' });
 
   const handleLogout = () => {
     setUserMenuAnchor(null);
@@ -68,12 +77,17 @@ export default function Layout() {
       {/* Logo */}
       <Box sx={{ px: 3, py: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
         <Logo size={28} />
-        <Typography sx={{
-          fontWeight: 700, fontSize: '0.9rem',
-          background: 'linear-gradient(135deg, #22d3ee, #8b5cf6)',
-          backgroundClip: 'text', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-          letterSpacing: '0.04em',
-        }}>
+        <Typography
+          sx={{
+            fontWeight: 700,
+            fontSize: '0.9rem',
+            background: 'linear-gradient(135deg, #22d3ee, #8b5cf6)',
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            letterSpacing: '0.04em',
+          }}
+        >
           QuantPro
         </Typography>
       </Box>
@@ -85,18 +99,32 @@ export default function Layout() {
           return (
             <ListItemButton
               key={item.key}
-              onClick={() => { navigate(item.key); setMobileOpen(false); }}
+              onClick={() => {
+                navigate(item.key);
+                setMobileOpen(false);
+              }}
               sx={{
-                borderRadius: 2, mb: 1, minHeight: 48, px: 2.5,
+                borderRadius: 2,
+                mb: 1,
+                minHeight: 48,
+                px: 2.5,
                 backgroundColor: active ? 'rgba(34, 211, 238, 0.06)' : 'transparent',
                 borderLeft: active ? '2px solid #22d3ee' : '2px solid transparent',
                 '&:hover': {
-                  backgroundColor: active ? 'rgba(34, 211, 238, 0.08)' : 'rgba(148, 163, 184, 0.03)',
+                  backgroundColor: active
+                    ? 'rgba(34, 211, 238, 0.08)'
+                    : 'rgba(148, 163, 184, 0.03)',
                 },
                 transition: 'all 0.2s ease',
               }}
             >
-              <ListItemIcon sx={{ minWidth: 36, color: active ? '#22d3ee' : '#64748b', transition: 'color 0.2s' }}>
+              <ListItemIcon
+                sx={{
+                  minWidth: 36,
+                  color: active ? '#22d3ee' : '#64748b',
+                  transition: 'color 0.2s',
+                }}
+              >
                 {item.icon}
               </ListItemIcon>
               <ListItemText
@@ -119,30 +147,57 @@ export default function Layout() {
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       {/* Desktop sidebar */}
-      <Box sx={{
-        width: SIDEBAR_W, position: 'fixed', left: 0, top: 0, bottom: 0, zIndex: 1200,
-        display: { xs: 'none', md: 'flex' }, flexDirection: 'column',
-        backdropFilter: 'blur(20px)', backgroundColor: 'rgba(3, 7, 18, 0.92)',
-        borderRight: '1px solid rgba(148, 163, 184, 0.06)', overflow: 'auto',
-      }}>
+      <Box
+        sx={{
+          width: SIDEBAR_W,
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          zIndex: 1200,
+          display: { xs: 'none', md: 'flex' },
+          flexDirection: 'column',
+          backdropFilter: 'blur(20px)',
+          backgroundColor: 'rgba(3, 7, 18, 0.92)',
+          borderRight: '1px solid rgba(148, 163, 184, 0.06)',
+          overflow: 'auto',
+        }}
+      >
         {sidebarContent}
       </Box>
 
       {/* Main content area */}
-      <Box sx={{
-        flex: 1, ml: { xs: 0, md: `${SIDEBAR_W}px` },
-        minHeight: '100vh', display: 'flex', flexDirection: 'column', position: 'relative',
-      }}>
+      <Box
+        sx={{
+          flex: 1,
+          ml: { xs: 0, md: `${SIDEBAR_W}px` },
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative',
+        }}
+      >
         {/* Top bar */}
-        <Box sx={{
-          position: 'sticky', top: 0, zIndex: 1100,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          px: 3, py: 1.5,
-          backdropFilter: 'blur(20px)', backgroundColor: 'rgba(10, 14, 26, 0.7)',
-          borderBottom: '1px solid rgba(148, 163, 184, 0.08)',
-        }}>
+        <Box
+          sx={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 1100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            px: 3,
+            py: 1.5,
+            backdropFilter: 'blur(20px)',
+            backgroundColor: 'rgba(10, 14, 26, 0.7)',
+            borderBottom: '1px solid rgba(148, 163, 184, 0.08)',
+          }}
+        >
           {/* Mobile menu button */}
-          <IconButton sx={{ display: { xs: 'flex', md: 'none' }, color: '#e2e8f0' }} onClick={() => setMobileOpen(true)}>
+          <IconButton
+            sx={{ display: { xs: 'flex', md: 'none' }, color: '#e2e8f0' }}
+            onClick={() => setMobileOpen(true)}
+          >
             <MenuIcon />
           </IconButton>
 
@@ -151,8 +206,19 @@ export default function Layout() {
 
           {/* User menu */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <IconButton onClick={(e) => setUserMenuAnchor(e.currentTarget)} sx={{ color: '#94a3b8' }}>
-              <Avatar sx={{ width: 32, height: 32, bgcolor: 'rgba(34, 211, 238, 0.15)', color: '#22d3ee', fontSize: '0.85rem' }}>
+            <IconButton
+              onClick={(e) => setUserMenuAnchor(e.currentTarget)}
+              sx={{ color: '#94a3b8' }}
+            >
+              <Avatar
+                sx={{
+                  width: 32,
+                  height: 32,
+                  bgcolor: 'rgba(34, 211, 238, 0.15)',
+                  color: '#22d3ee',
+                  fontSize: '0.85rem',
+                }}
+              >
                 {user?.username?.charAt(0) || 'U'}
               </Avatar>
               <ExpandMoreIcon sx={{ fontSize: 16 }} />
@@ -163,13 +229,22 @@ export default function Layout() {
               onClose={() => setUserMenuAnchor(null)}
               PaperProps={{ sx: { mt: 1, minWidth: 160 } }}
             >
-              <MenuItem onClick={() => { setUserMenuAnchor(null); navigate('/app/settings'); }}>
-                <ListItemIcon sx={{ color: '#94a3b8' }}><PersonIcon fontSize="small" /></ListItemIcon>
+              <MenuItem
+                onClick={() => {
+                  setUserMenuAnchor(null);
+                  navigate('/app/settings');
+                }}
+              >
+                <ListItemIcon sx={{ color: '#94a3b8' }}>
+                  <PersonIcon fontSize="small" />
+                </ListItemIcon>
                 个人设置
               </MenuItem>
               <Divider />
               <MenuItem onClick={handleLogout}>
-                <ListItemIcon sx={{ color: '#f43f5e' }}><LogoutIcon fontSize="small" /></ListItemIcon>
+                <ListItemIcon sx={{ color: '#f43f5e' }}>
+                  <LogoutIcon fontSize="small" />
+                </ListItemIcon>
                 退出登录
               </MenuItem>
             </Menu>
@@ -177,11 +252,18 @@ export default function Layout() {
         </Box>
 
         {/* Mobile drawer */}
-        <Drawer anchor="left" open={mobileOpen} onClose={() => setMobileOpen(false)}
-          PaperProps={{ sx: { backgroundColor: 'rgba(3,7,18,0.95)', backdropFilter: 'blur(20px)', width: 240 } }}
+        <Drawer
+          anchor="left"
+          open={mobileOpen}
+          onClose={() => setMobileOpen(false)}
+          PaperProps={{
+            sx: { backgroundColor: 'rgba(3,7,18,0.95)', backdropFilter: 'blur(20px)', width: 240 },
+          }}
         >
           <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <IconButton onClick={() => setMobileOpen(false)} sx={{ color: '#e2e8f0' }}><CloseIcon /></IconButton>
+            <IconButton onClick={() => setMobileOpen(false)} sx={{ color: '#e2e8f0' }}>
+              <CloseIcon />
+            </IconButton>
           </Box>
           {sidebarContent}
         </Drawer>
@@ -207,7 +289,10 @@ export default function Layout() {
         onClose={() => setSnackbar({ ...snackbar, open: false })}
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
       >
-        <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+        <Alert
+          severity={snackbar.severity}
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+        >
           {snackbar.message}
         </Alert>
       </Snackbar>

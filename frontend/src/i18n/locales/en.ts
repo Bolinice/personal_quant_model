@@ -218,10 +218,11 @@ const en: TranslationKeys = {
     registerLoading: 'Registering...',
     resetLoading: 'Resetting...',
     sending: 'Sending...',
-    brandSubtitle: 'A-share quant platform powered by multi-factor enhancement, driving decisions with data.',
+    brandSubtitle:
+      'A-share quant platform powered by multi-factor enhancement, driving decisions with data.',
     loginSubtitle: 'Sign in to your account to continue',
     registerSubtitle: 'Create a new account to get started',
-    forgotPasswordSubtitle: 'Enter your email and we\'ll send you a reset link',
+    forgotPasswordSubtitle: "Enter your email and we'll send you a reset link",
     resetPasswordSubtitle: 'Please enter your new password',
     loginFailed: 'Login failed, please check your email and password',
     registerFailed: 'Registration failed, please try again later',

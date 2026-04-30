@@ -1,4 +1,4 @@
-import '@testing-library/jest-dom'
+import '@testing-library/jest-dom';
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
@@ -13,7 +13,7 @@ Object.defineProperty(window, 'matchMedia', {
     removeEventListener: () => {},
     dispatchEvent: () => {},
   }),
-})
+});
 
 // Mock IntersectionObserver
 class MockIntersectionObserver {
@@ -24,7 +24,7 @@ class MockIntersectionObserver {
 Object.defineProperty(window, 'IntersectionObserver', {
   writable: true,
   value: MockIntersectionObserver,
-})
+});
 
 // Mock ResizeObserver
 class MockResizeObserver {
@@ -35,4 +35,4 @@ class MockResizeObserver {
 Object.defineProperty(window, 'ResizeObserver', {
   writable: true,
   value: MockResizeObserver,
-})
+});

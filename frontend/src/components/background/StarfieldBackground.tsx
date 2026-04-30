@@ -1,7 +1,6 @@
 import { useRef, useEffect } from 'react';
 import { Box } from '@mui/material';
 import { useBackground } from './BackgroundContext';
-import type { ConstellationTheme } from './BackgroundContext';
 
 interface Star {
   x: number;
@@ -44,7 +43,14 @@ export default function StarfieldBackground() {
       speed: (Math.random() * 0.005 + 0.002) * theme.twinkleSpeed,
     }));
 
-    let shootingStar: { x: number; y: number; len: number; speed: number; alpha: number; angle: number } | null = null;
+    let shootingStar: {
+      x: number;
+      y: number;
+      len: number;
+      speed: number;
+      alpha: number;
+      angle: number;
+    } | null = null;
 
     const spawnShootingStar = () => {
       shootingStar = {
@@ -81,7 +87,12 @@ export default function StarfieldBackground() {
         ctx.beginPath();
         ctx.moveTo(s.x, s.y);
         ctx.lineTo(s.x - Math.cos(s.angle) * s.len, s.y - Math.sin(s.angle) * s.len);
-        const grad = ctx.createLinearGradient(s.x, s.y, s.x - Math.cos(s.angle) * s.len, s.y - Math.sin(s.angle) * s.len);
+        const grad = ctx.createLinearGradient(
+          s.x,
+          s.y,
+          s.x - Math.cos(s.angle) * s.len,
+          s.y - Math.sin(s.angle) * s.len
+        );
         grad.addColorStop(0, `rgba(${cr}, ${cg}, ${cb}, ${s.alpha})`);
         grad.addColorStop(1, `rgba(${cr}, ${cg}, ${cb}, 0)`);
         ctx.strokeStyle = grad;

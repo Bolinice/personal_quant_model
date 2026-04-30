@@ -50,7 +50,11 @@ client.interceptors.response.use(
 
       // 登录/注册/刷新本身的401不需要重试
       const url = originalRequest.url || '';
-      if (url.includes('/auth/login') || url.includes('/auth/register') || url.includes('/auth/refresh')) {
+      if (
+        url.includes('/auth/login') ||
+        url.includes('/auth/register') ||
+        url.includes('/auth/refresh')
+      ) {
         return Promise.reject(new Error(error.response?.data?.detail || '认证失败'));
       }
 
@@ -86,7 +90,8 @@ client.interceptors.response.use(
       }
     }
 
-    const message = error.response?.data?.detail || error.response?.data?.message || error.message || '请求失败';
+    const message =
+      error.response?.data?.detail || error.response?.data?.message || error.message || '请求失败';
     console.error(`API Error [${status}]:`, message);
     return Promise.reject(new Error(message));
   }

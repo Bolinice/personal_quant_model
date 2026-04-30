@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import {
-  Box, Typography, TextField, Button, Alert, Divider, Snackbar,
-} from '@mui/material';
+import { Box, Typography, TextField, Button, Alert, Divider, Snackbar } from '@mui/material';
 import PersonIcon from '@mui/icons-material/Person';
 import LockIcon from '@mui/icons-material/Lock';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -16,7 +14,11 @@ export default function Profile() {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error';
+  }>({ open: false, message: '', severity: 'success' });
 
   const handleChangePassword = async () => {
     if (newPassword !== confirmPassword) {
@@ -49,24 +51,38 @@ export default function Profile() {
         {/* 用户信息 */}
         <GlassPanel animate={false} sx={{ mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-            <Box sx={{
-              width: 56, height: 56, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #22d3ee 0%, #8b5cf6 100%)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontWeight: 700, fontSize: '1.5rem',
-            }}>
+            <Box
+              sx={{
+                width: 56,
+                height: 56,
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #22d3ee 0%, #8b5cf6 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: '1.5rem',
+              }}
+            >
               {user?.username?.charAt(0)?.toUpperCase() || 'U'}
             </Box>
             <Box>
               <Typography sx={{ fontWeight: 600, color: '#e2e8f0' }}>{user?.username}</Typography>
-              <Typography variant="body2" sx={{ color: '#64748b' }}>{user?.email}</Typography>
+              <Typography variant="body2" sx={{ color: '#64748b' }}>
+                {user?.email}
+              </Typography>
             </Box>
             {user?.is_superuser && <NeonChip label="管理员" size="small" neonColor="amber" />}
           </Box>
           <Divider sx={{ borderColor: 'rgba(148, 163, 184, 0.08)', my: 2 }} />
           <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Typography variant="body2" sx={{ color: '#64748b' }}>注册时间</Typography>
-            <Typography variant="body2" sx={{ color: '#94a3b8' }}>{user?.created_at?.slice(0, 10)}</Typography>
+            <Typography variant="body2" sx={{ color: '#64748b' }}>
+              注册时间
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#94a3b8' }}>
+              {user?.created_at?.slice(0, 10)}
+            </Typography>
           </Box>
         </GlassPanel>
 
@@ -133,8 +149,17 @@ export default function Profile() {
         </GlassPanel>
       </Box>
 
-      <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
-        <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>{snackbar.message}</Alert>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert
+          severity={snackbar.severity}
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+        >
+          {snackbar.message}
+        </Alert>
       </Snackbar>
     </Box>
   );

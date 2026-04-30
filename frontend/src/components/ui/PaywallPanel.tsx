@@ -90,9 +90,13 @@ export default function PaywallPanel({ poolName, price = 199 }: PaywallPanelProp
             background: 'rgba(245, 158, 11, 0.08)',
           }}
         >
-          <Typography sx={{ fontWeight: 700, color: '#f59e0b', fontSize: '2rem', textAlign: 'center' }}>
+          <Typography
+            sx={{ fontWeight: 700, color: '#f59e0b', fontSize: '2rem', textAlign: 'center' }}
+          >
             ¥{price}
-            <Typography component="span" sx={{ fontSize: '0.875rem', color: '#94a3b8', ml: 0.5 }}>/月</Typography>
+            <Typography component="span" sx={{ fontSize: '0.875rem', color: '#94a3b8', ml: 0.5 }}>
+              /月
+            </Typography>
           </Typography>
         </Box>
 

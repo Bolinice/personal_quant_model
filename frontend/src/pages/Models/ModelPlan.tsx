@@ -1,6 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Grid, Typography, Button, Table, TableBody, TableCell, TableHead, TableRow, Chip } from '@mui/material';
+import {
+  Box,
+  Grid,
+  Typography,
+  Button,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Chip,
+} from '@mui/material';
 import { motion } from 'framer-motion';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
@@ -16,8 +27,20 @@ function getUserId(): number {
 }
 
 const COMPARISON = [
-  { feature: '股票池', free: '沪深300/中证500', basic: '沪深300/中证500', pro: '全部股票池', team: '全部股票池' },
-  { feature: '调仓频率', free: '月频', basic: '周频', pro: '日频/周频/月频', team: '日频/周频/月频' },
+  {
+    feature: '股票池',
+    free: '沪深300/中证500',
+    basic: '沪深300/中证500',
+    pro: '全部股票池',
+    team: '全部股票池',
+  },
+  {
+    feature: '调仓频率',
+    free: '月频',
+    basic: '周频',
+    pro: '日频/周频/月频',
+    team: '日频/周频/月频',
+  },
   { feature: '模型数量', free: '2', basic: '5', pro: '20', team: '无限' },
   { feature: '回测次数/月', free: '3', basic: '10', pro: '50', team: '无限' },
   { feature: '数据导出', free: 'CSV', basic: 'CSV/Excel', pro: 'CSV/Excel/JSON', team: '全格式' },
@@ -59,10 +82,7 @@ export default function ModelPlan() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    Promise.all([
-      subscriptionApi.getMySubscriptions(getUserId()),
-      subscriptionApi.listPlans(),
-    ])
+    Promise.all([subscriptionApi.getMySubscriptions(getUserId()), subscriptionApi.listPlans()])
       .then(([subRes, plansRes]) => {
         const planList = plansRes.data as SubscriptionPlan[];
         setPlans(planList);
@@ -116,11 +136,20 @@ export default function ModelPlan() {
 
   // Determine recommended upgrade plan
   const recommendedTier = currentTierIdx < 2 ? 'pro' : currentTierIdx < 3 ? 'team' : null;
-  const recommendedPlan = recommendedTier ? plans.find((p) => p.plan_type === recommendedTier) : null;
+  const recommendedPlan = recommendedTier
+    ? plans.find((p) => p.plan_type === recommendedTier)
+    : null;
 
   const upgradeFeatures: string[] = [];
   if (currentTierIdx < 2) {
-    upgradeFeatures.push('全部股票池', '日频/周频/月频', '20 个模型', '50 次回测/月', 'API 接入', '深度分析');
+    upgradeFeatures.push(
+      '全部股票池',
+      '日频/周频/月频',
+      '20 个模型',
+      '50 次回测/月',
+      'API 接入',
+      '深度分析'
+    );
   } else if (currentTierIdx < 3) {
     upgradeFeatures.push('无限模型', '无限回测', '全格式导出', '团队协作');
   }
@@ -203,13 +232,21 @@ export default function ModelPlan() {
             </Box>
             <Box sx={{ textAlign: 'right' }}>
               <Typography sx={{ fontWeight: 800, fontSize: '2rem', color: '#22d3ee' }}>
-                {currentPlan?.price_yearly ? `¥${currentPlan.price_yearly}` : currentPlan?.price_monthly ? `¥${currentPlan.price_monthly}` : '免费'}
+                {currentPlan?.price_yearly
+                  ? `¥${currentPlan.price_yearly}`
+                  : currentPlan?.price_monthly
+                    ? `¥${currentPlan.price_monthly}`
+                    : '免费'}
               </Typography>
               {currentPlan?.price_yearly && (
-                <Typography variant="body2" sx={{ color: '#94a3b8' }}>/年</Typography>
+                <Typography variant="body2" sx={{ color: '#94a3b8' }}>
+                  /年
+                </Typography>
               )}
               {currentPlan?.price_monthly && !currentPlan?.price_yearly && (
-                <Typography variant="body2" sx={{ color: '#94a3b8' }}>/月</Typography>
+                <Typography variant="body2" sx={{ color: '#94a3b8' }}>
+                  /月
+                </Typography>
               )}
             </Box>
           </GlassPanel>
@@ -243,7 +280,9 @@ export default function ModelPlan() {
                     gap: 1.5,
                     p: 1.5,
                     borderRadius: 2,
-                    backgroundColor: available ? 'rgba(16, 185, 129, 0.06)' : 'rgba(148, 163, 184, 0.04)',
+                    backgroundColor: available
+                      ? 'rgba(16, 185, 129, 0.06)'
+                      : 'rgba(148, 163, 184, 0.04)',
                     border: `1px solid ${available ? 'rgba(16, 185, 129, 0.15)' : 'rgba(148, 163, 184, 0.08)'}`,
                   }}
                 >
@@ -302,7 +341,13 @@ export default function ModelPlan() {
         <GlassTable>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ color: '#94a3b8', fontWeight: 700, borderBottom: '1px solid rgba(148, 163, 184, 0.1)' }}>
+              <TableCell
+                sx={{
+                  color: '#94a3b8',
+                  fontWeight: 700,
+                  borderBottom: '1px solid rgba(148, 163, 184, 0.1)',
+                }}
+              >
                 功能
               </TableCell>
               {['免费版', '基础版', '专业版', '团队版'].map((col, i) => (
@@ -318,7 +363,14 @@ export default function ModelPlan() {
                     }),
                   }}
                 >
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 0.5,
+                    }}
+                  >
                     {col}
                     {i === currentTierIdx && (
                       <NeonChip label={t.models.currentPlan} neonColor="cyan" size="small" />
@@ -345,7 +397,7 @@ export default function ModelPlan() {
                     key={i}
                     align="center"
                     sx={{
-                      color: val === '—' ? '#475569' : (i === currentTierIdx ? '#e2e8f0' : '#94a3b8'),
+                      color: val === '—' ? '#475569' : i === currentTierIdx ? '#e2e8f0' : '#94a3b8',
                       fontWeight: i === currentTierIdx ? 600 : 400,
                       fontSize: '0.85rem',
                       ...(i === currentTierIdx && {
@@ -356,7 +408,9 @@ export default function ModelPlan() {
                     {val === '—' ? (
                       <CancelIcon sx={{ fontSize: 16, color: '#475569' }} />
                     ) : val === '✓' ? (
-                      <CheckCircleIcon sx={{ fontSize: 18, color: i >= currentTierIdx ? '#10b981' : '#475569' }} />
+                      <CheckCircleIcon
+                        sx={{ fontSize: 18, color: i >= currentTierIdx ? '#10b981' : '#475569' }}
+                      />
                     ) : (
                       val
                     )}
@@ -381,7 +435,8 @@ export default function ModelPlan() {
               glowColor="#8b5cf6"
               sx={{
                 p: 3,
-                background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.8), rgba(139, 92, 246, 0.08))',
+                background:
+                  'linear-gradient(135deg, rgba(15, 23, 42, 0.8), rgba(139, 92, 246, 0.08))',
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
@@ -393,14 +448,12 @@ export default function ModelPlan() {
                     color: '#e2e8f0',
                   }}
                 >
-                  {t.models.recommendUpgrade}：{TIER_MAP[recommendedTier!] || recommendedPlan.plan_name}
+                  {t.models.recommendUpgrade}：
+                  {TIER_MAP[recommendedTier!] || recommendedPlan.plan_name}
                 </Typography>
               </Box>
 
-              <Typography
-                variant="body2"
-                sx={{ color: '#94a3b8', mb: 2 }}
-              >
+              <Typography variant="body2" sx={{ color: '#94a3b8', mb: 2 }}>
                 {t.models.unlockFeatures}
               </Typography>
 

@@ -1,8 +1,21 @@
 import { useState, useEffect } from 'react';
 import {
-  Box, Typography, Grid, Table, TableBody, TableCell,
-  TableHead, TableRow, TextField, MenuItem, Button,
-  Dialog, DialogTitle, DialogContent, DialogActions, Chip,
+  Box,
+  Typography,
+  Grid,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  TextField,
+  MenuItem,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Chip,
 } from '@mui/material';
 import { eventsApi } from '@/api';
 import type { Event, RiskFlag } from '@/api';
@@ -16,10 +29,18 @@ const eventTypes = [
   { value: 'regulatory', label: '监管事件' },
 ];
 const severityMap: Record<string, 'red' | 'amber' | 'default'> = {
-  critical: 'red', high: 'red', medium: 'amber', low: 'default', info: 'default',
+  critical: 'red',
+  high: 'red',
+  medium: 'amber',
+  low: 'default',
+  info: 'default',
 };
 const severityLabel: Record<string, string> = {
-  critical: '严重', high: '高', medium: '中', low: '低', info: '信息',
+  critical: '严重',
+  high: '高',
+  medium: '中',
+  low: '低',
+  info: '信息',
 };
 
 export default function EventList() {
@@ -73,10 +94,18 @@ export default function EventList() {
 
       {/* Tab switch */}
       <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-        <Button variant={tab === 'events' ? 'contained' : 'outlined'} size="small" onClick={() => setTab('events')}>
+        <Button
+          variant={tab === 'events' ? 'contained' : 'outlined'}
+          size="small"
+          onClick={() => setTab('events')}
+        >
           事件列表
         </Button>
-        <Button variant={tab === 'risk' ? 'contained' : 'outlined'} size="small" onClick={() => setTab('risk')}>
+        <Button
+          variant={tab === 'risk' ? 'contained' : 'outlined'}
+          size="small"
+          onClick={() => setTab('risk')}
+        >
           风险标签
         </Button>
       </Box>
@@ -86,17 +115,43 @@ export default function EventList() {
           {/* Filters */}
           <GlassPanel animate={false} sx={{ mb: 2, p: 2 }}>
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <TextField select size="small" label="事件类型" value={filterType} onChange={(e) => setFilterType(e.target.value)} sx={{ minWidth: 120 }}>
-                {eventTypes.map((t) => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
+              <TextField
+                select
+                size="small"
+                label="事件类型"
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                sx={{ minWidth: 120 }}
+              >
+                {eventTypes.map((t) => (
+                  <MenuItem key={t.value} value={t.value}>
+                    {t.label}
+                  </MenuItem>
+                ))}
               </TextField>
-              <TextField select size="small" label="严重程度" value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)} sx={{ minWidth: 100 }}>
+              <TextField
+                select
+                size="small"
+                label="严重程度"
+                value={filterSeverity}
+                onChange={(e) => setFilterSeverity(e.target.value)}
+                sx={{ minWidth: 100 }}
+              >
                 <MenuItem value="">全部</MenuItem>
                 <MenuItem value="critical">严重</MenuItem>
                 <MenuItem value="high">高</MenuItem>
                 <MenuItem value="medium">中</MenuItem>
                 <MenuItem value="low">低</MenuItem>
               </TextField>
-              <TextField size="small" type="date" label="日期" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} sx={{ minWidth: 140 }} InputLabelProps={{ shrink: true }} />
+              <TextField
+                size="small"
+                type="date"
+                label="日期"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                sx={{ minWidth: 140 }}
+                InputLabelProps={{ shrink: true }}
+              />
             </Box>
           </GlassPanel>
 
@@ -130,14 +185,31 @@ export default function EventList() {
                         />
                       </TableCell>
                       <TableCell>{e.score != null ? e.score.toFixed(2) : '-'}</TableCell>
-                      <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.title || '-'}</TableCell>
+                      <TableCell
+                        sx={{
+                          maxWidth: 200,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {e.title || '-'}
+                      </TableCell>
                       <TableCell>{e.source || '-'}</TableCell>
                       <TableCell>
-                        <Button size="small" onClick={() => handleViewDetail(e)}>详情</Button>
+                        <Button size="small" onClick={() => handleViewDetail(e)}>
+                          详情
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
-                  {filteredEvents.length === 0 && <TableRow><TableCell colSpan={8} align="center">暂无事件数据</TableCell></TableRow>}
+                  {filteredEvents.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={8} align="center">
+                        暂无事件数据
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </GlassTable>
@@ -169,18 +241,74 @@ export default function EventList() {
                   <TableRow key={i} hover>
                     <TableCell>{r.trade_date}</TableCell>
                     <TableCell>{r.stock_id}</TableCell>
-                    <TableCell><NeonChip label={r.blacklist_flag ? '是' : '否'} size="small" neonColor={r.blacklist_flag ? 'red' : 'green'} /></TableCell>
-                    <TableCell><NeonChip label={r.audit_issue_flag ? '是' : '否'} size="small" neonColor={r.audit_issue_flag ? 'red' : 'green'} /></TableCell>
-                    <TableCell><NeonChip label={r.violation_flag ? '是' : '否'} size="small" neonColor={r.violation_flag ? 'red' : 'green'} /></TableCell>
-                    <TableCell><NeonChip label={r.pledge_high_flag ? '是' : '否'} size="small" neonColor={r.pledge_high_flag ? 'amber' : 'green'} /></TableCell>
-                    <TableCell><NeonChip label={r.goodwill_high_flag ? '是' : '否'} size="small" neonColor={r.goodwill_high_flag ? 'amber' : 'green'} /></TableCell>
-                    <TableCell><NeonChip label={r.earnings_warning_flag ? '是' : '否'} size="small" neonColor={r.earnings_warning_flag ? 'amber' : 'green'} /></TableCell>
-                    <TableCell><NeonChip label={r.reduction_flag ? '是' : '否'} size="small" neonColor={r.reduction_flag ? 'amber' : 'green'} /></TableCell>
-                    <TableCell><NeonChip label={r.cashflow_risk_flag ? '是' : '否'} size="small" neonColor={r.cashflow_risk_flag ? 'red' : 'green'} /></TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{r.risk_penalty_score?.toFixed(2) ?? '-'}</TableCell>
+                    <TableCell>
+                      <NeonChip
+                        label={r.blacklist_flag ? '是' : '否'}
+                        size="small"
+                        neonColor={r.blacklist_flag ? 'red' : 'green'}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <NeonChip
+                        label={r.audit_issue_flag ? '是' : '否'}
+                        size="small"
+                        neonColor={r.audit_issue_flag ? 'red' : 'green'}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <NeonChip
+                        label={r.violation_flag ? '是' : '否'}
+                        size="small"
+                        neonColor={r.violation_flag ? 'red' : 'green'}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <NeonChip
+                        label={r.pledge_high_flag ? '是' : '否'}
+                        size="small"
+                        neonColor={r.pledge_high_flag ? 'amber' : 'green'}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <NeonChip
+                        label={r.goodwill_high_flag ? '是' : '否'}
+                        size="small"
+                        neonColor={r.goodwill_high_flag ? 'amber' : 'green'}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <NeonChip
+                        label={r.earnings_warning_flag ? '是' : '否'}
+                        size="small"
+                        neonColor={r.earnings_warning_flag ? 'amber' : 'green'}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <NeonChip
+                        label={r.reduction_flag ? '是' : '否'}
+                        size="small"
+                        neonColor={r.reduction_flag ? 'amber' : 'green'}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <NeonChip
+                        label={r.cashflow_risk_flag ? '是' : '否'}
+                        size="small"
+                        neonColor={r.cashflow_risk_flag ? 'red' : 'green'}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                      {r.risk_penalty_score?.toFixed(2) ?? '-'}
+                    </TableCell>
                   </TableRow>
                 ))}
-                {riskFlags.length === 0 && <TableRow><TableCell colSpan={11} align="center">暂无风险标签数据</TableCell></TableRow>}
+                {riskFlags.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={11} align="center">
+                      暂无风险标签数据
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </GlassTable>
@@ -193,19 +321,39 @@ export default function EventList() {
         <DialogContent>
           {selectedEvent && (
             <Box sx={{ pt: 1 }}>
-              <Typography variant="subtitle2" sx={{ color: '#64748b' }}>标题</Typography>
+              <Typography variant="subtitle2" sx={{ color: '#64748b' }}>
+                标题
+              </Typography>
               <Typography sx={{ mb: 1 }}>{selectedEvent.title || '-'}</Typography>
-              <Typography variant="subtitle2" sx={{ color: '#64748b' }}>类型</Typography>
-              <Typography sx={{ mb: 1 }}>{selectedEvent.event_type} / {selectedEvent.event_subtype || '-'}</Typography>
-              <Typography variant="subtitle2" sx={{ color: '#64748b' }}>日期</Typography>
+              <Typography variant="subtitle2" sx={{ color: '#64748b' }}>
+                类型
+              </Typography>
+              <Typography sx={{ mb: 1 }}>
+                {selectedEvent.event_type} / {selectedEvent.event_subtype || '-'}
+              </Typography>
+              <Typography variant="subtitle2" sx={{ color: '#64748b' }}>
+                日期
+              </Typography>
               <Typography sx={{ mb: 1 }}>{selectedEvent.event_date}</Typography>
-              <Typography variant="subtitle2" sx={{ color: '#64748b' }}>严重程度</Typography>
-              <Typography sx={{ mb: 1 }}>{severityLabel[selectedEvent.severity || ''] || selectedEvent.severity}</Typography>
-              <Typography variant="subtitle2" sx={{ color: '#64748b' }}>评分</Typography>
+              <Typography variant="subtitle2" sx={{ color: '#64748b' }}>
+                严重程度
+              </Typography>
+              <Typography sx={{ mb: 1 }}>
+                {severityLabel[selectedEvent.severity || ''] || selectedEvent.severity}
+              </Typography>
+              <Typography variant="subtitle2" sx={{ color: '#64748b' }}>
+                评分
+              </Typography>
               <Typography sx={{ mb: 1 }}>{selectedEvent.score ?? '-'}</Typography>
-              <Typography variant="subtitle2" sx={{ color: '#64748b' }}>内容</Typography>
-              <Typography sx={{ mb: 1, whiteSpace: 'pre-wrap' }}>{selectedEvent.content || '-'}</Typography>
-              <Typography variant="subtitle2" sx={{ color: '#64748b' }}>来源</Typography>
+              <Typography variant="subtitle2" sx={{ color: '#64748b' }}>
+                内容
+              </Typography>
+              <Typography sx={{ mb: 1, whiteSpace: 'pre-wrap' }}>
+                {selectedEvent.content || '-'}
+              </Typography>
+              <Typography variant="subtitle2" sx={{ color: '#64748b' }}>
+                来源
+              </Typography>
               <Typography>{selectedEvent.source || '-'}</Typography>
             </Box>
           )}

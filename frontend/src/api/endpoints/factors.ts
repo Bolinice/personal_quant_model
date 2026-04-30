@@ -11,7 +11,9 @@ export const factorApi = {
   update: (id: number, data: FactorUpdate) => client.put<Factor>(`/factors/${id}`, data),
 
   getValues: (id: number, tradeDate: string, securityId?: number) =>
-    client.get<FactorValue[]>(`/factors/${id}/values`, { params: { trade_date: tradeDate, security_id: securityId } }),
+    client.get<FactorValue[]>(`/factors/${id}/values`, {
+      params: { trade_date: tradeDate, security_id: securityId },
+    }),
 
   calculate: (id: number, tradeDate: string) =>
     client.post(`/factors/${id}/calculate`, null, { params: { trade_date: tradeDate } }),
@@ -20,11 +22,17 @@ export const factorApi = {
     client.post(`/factors/${id}/preprocess`, null, { params: { trade_date: tradeDate } }),
 
   icAnalysis: (id: number, startDate: string, endDate: string) =>
-    client.post(`/factors/${id}/ic-analysis`, null, { params: { start_date: startDate, end_date: endDate } }),
+    client.post(`/factors/${id}/ic-analysis`, null, {
+      params: { start_date: startDate, end_date: endDate },
+    }),
 
   groupReturns: (id: number, startDate: string, endDate: string) =>
-    client.post(`/factors/${id}/group-returns`, null, { params: { start_date: startDate, end_date: endDate } }),
+    client.post(`/factors/${id}/group-returns`, null, {
+      params: { start_date: startDate, end_date: endDate },
+    }),
 
   getAnalysis: (id: number, startDate: string, endDate: string) =>
-    client.get<FactorAnalysis[]>(`/factors/${id}/analysis`, { params: { start_date: startDate, end_date: endDate } }),
+    client.get<FactorAnalysis[]>(`/factors/${id}/analysis`, {
+      params: { start_date: startDate, end_date: endDate },
+    }),
 };

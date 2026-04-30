@@ -49,7 +49,9 @@ const PermissionGuard: React.FC<PermissionGuardProps> = ({
         variant="contained"
         href="/app/subscribe"
         sx={{
-          mt: 1, borderRadius: 2, fontWeight: 700,
+          mt: 1,
+          borderRadius: 2,
+          fontWeight: 700,
           background: 'linear-gradient(135deg, #22d3ee, #8b5cf6)',
           '&:hover': { background: 'linear-gradient(135deg, #06b6d4, #7c3aed)' },
         }}

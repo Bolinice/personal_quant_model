@@ -1,7 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
-  Box, Typography, Button, IconButton, Drawer, List, ListItemButton, ListItemText,
+  Box,
+  Typography,
+  Button,
+  IconButton,
+  Drawer,
+  List,
+  ListItemButton,
+  ListItemText,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import CloseIcon from '@mui/icons-material/Close';
@@ -29,7 +36,7 @@ export default function MarketingLayout() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [visibleHash, setVisibleHash] = useState(window.location.hash);
-  const { lang, t, toggleLang } = useLang();
+  const { t, toggleLang } = useLang();
 
   // 监听滚动，根据当前视口位置确定活跃的导航项
   useEffect(() => {
@@ -57,9 +64,9 @@ export default function MarketingLayout() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [location.pathname]);
 
-  // 点击导航时同步 hash
+  // Sync visible hash with location hash
   useEffect(() => {
-    if (location.hash) setVisibleHash(location.hash);
+    setVisibleHash(location.hash);
   }, [location.hash]);
 
   const isActive = (path: string) => {
@@ -90,7 +97,8 @@ export default function MarketingLayout() {
           el?.scrollIntoView({ behavior: 'smooth' });
         }, 100);
       } else {
-        window.location.hash = hash;
+        // Use navigate instead of direct hash modification
+        navigate(hash);
         const el = document.getElementById(path.slice(2));
         el?.scrollIntoView({ behavior: 'smooth' });
       }
@@ -106,17 +114,27 @@ export default function MarketingLayout() {
         component={Link}
         to="/"
         sx={{
-          px: 3, py: 3, display: 'flex', alignItems: 'center', gap: 2,
-          textDecoration: 'none', color: 'inherit',
+          px: 3,
+          py: 3,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+          textDecoration: 'none',
+          color: 'inherit',
         }}
       >
         <Logo size={28} />
-        <Typography sx={{
-          fontWeight: 700, fontSize: '0.9rem',
-          background: 'linear-gradient(135deg, #22d3ee, #8b5cf6)',
-          backgroundClip: 'text', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-          letterSpacing: '0.04em',
-        }}>
+        <Typography
+          sx={{
+            fontWeight: 700,
+            fontSize: '0.9rem',
+            background: 'linear-gradient(135deg, #22d3ee, #8b5cf6)',
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            letterSpacing: '0.04em',
+          }}
+        >
           {t.brand.name}
         </Typography>
       </Box>
@@ -137,12 +155,21 @@ export default function MarketingLayout() {
                 backgroundColor: active ? 'rgba(34, 211, 238, 0.06)' : 'transparent',
                 borderLeft: active ? '2px solid #22d3ee' : '2px solid transparent',
                 '&:hover': {
-                  backgroundColor: active ? 'rgba(34, 211, 238, 0.08)' : 'rgba(148, 163, 184, 0.03)',
+                  backgroundColor: active
+                    ? 'rgba(34, 211, 238, 0.08)'
+                    : 'rgba(148, 163, 184, 0.03)',
                 },
                 transition: 'all 0.2s ease',
               }}
             >
-              <Box sx={{ mr: 2, color: active ? '#22d3ee' : '#64748b', display: 'flex', transition: 'color 0.2s' }}>
+              <Box
+                sx={{
+                  mr: 2,
+                  color: active ? '#22d3ee' : '#64748b',
+                  display: 'flex',
+                  transition: 'color 0.2s',
+                }}
+              >
                 {item.icon}
               </Box>
               <ListItemText
@@ -188,26 +215,40 @@ export default function MarketingLayout() {
       </Box>
 
       {/* 右侧内容区 */}
-      <Box sx={{
-        flex: 1,
-        ml: { xs: 0, md: `${SIDEBAR_W}px` },
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative',
-      }}>
+      <Box
+        sx={{
+          flex: 1,
+          ml: { xs: 0, md: `${SIDEBAR_W}px` },
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative',
+        }}
+      >
         {/* 右上角: 语言切换 + 登录 */}
-        <Box sx={{
-          position: 'absolute', top: 16, right: 24, zIndex: 100,
-          display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 1.5,
-        }}>
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 16,
+            right: 24,
+            zIndex: 100,
+            display: { xs: 'none', md: 'flex' },
+            alignItems: 'center',
+            gap: 1.5,
+          }}
+        >
           <Button
             size="small"
             onClick={toggleLang}
             sx={{
-              color: '#94a3b8', fontSize: '0.8rem', textTransform: 'none',
-              minWidth: 36, px: 1, py: 0.25,
-              border: '1px solid rgba(148,163,184,0.2)', borderRadius: 1,
+              color: '#94a3b8',
+              fontSize: '0.8rem',
+              textTransform: 'none',
+              minWidth: 36,
+              px: 1,
+              py: 0.25,
+              border: '1px solid rgba(148,163,184,0.2)',
+              borderRadius: 1,
               '&:hover': { borderColor: 'rgba(34,211,238,0.4)', color: '#22d3ee' },
             }}
           >
@@ -224,50 +265,92 @@ export default function MarketingLayout() {
         </Box>
 
         {/* 移动端: 顶部栏 */}
-        <Box sx={{
-          display: { xs: 'flex', md: 'none' },
-          position: 'fixed', top: 0, left: 0, right: 0,
-          height: 56, zIndex: 1200,
-          alignItems: 'center', justifyContent: 'space-between', px: 2,
-          backdropFilter: 'blur(20px)',
-          backgroundColor: 'rgba(3, 7, 18, 0.92)',
-          borderBottom: '1px solid rgba(148, 163, 184, 0.08)',
-        }}>
-          <Box component={Link} to="/" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, textDecoration: 'none' }}>
+        <Box
+          sx={{
+            display: { xs: 'flex', md: 'none' },
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 56,
+            zIndex: 1200,
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            px: 2,
+            backdropFilter: 'blur(20px)',
+            backgroundColor: 'rgba(3, 7, 18, 0.92)',
+            borderBottom: '1px solid rgba(148, 163, 184, 0.08)',
+          }}
+        >
+          <Box
+            component={Link}
+            to="/"
+            sx={{ display: 'flex', alignItems: 'center', gap: 1.5, textDecoration: 'none' }}
+          >
             <Logo size={28} />
-            <Typography sx={{
-              fontWeight: 700, fontSize: '0.9rem',
-              background: 'linear-gradient(135deg, #22d3ee, #8b5cf6)',
-              backgroundClip: 'text', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-              letterSpacing: '0.04em',
-            }}>{t.brand.name}</Typography>
+            <Typography
+              sx={{
+                fontWeight: 700,
+                fontSize: '0.9rem',
+                background: 'linear-gradient(135deg, #22d3ee, #8b5cf6)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                letterSpacing: '0.04em',
+              }}
+            >
+              {t.brand.name}
+            </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Button size="small" onClick={toggleLang} sx={{ color: '#94a3b8', fontSize: '0.75rem', minWidth: 28, px: 0.5 }}>
+            <Button
+              size="small"
+              onClick={toggleLang}
+              sx={{ color: '#94a3b8', fontSize: '0.75rem', minWidth: 28, px: 0.5 }}
+            >
               中/EN
             </Button>
-            <Button size="small" onClick={() => navigate('/app')} sx={{ color: '#94a3b8', fontSize: '0.75rem' }}>{t.btn.login}</Button>
+            <Button
+              size="small"
+              onClick={() => navigate('/app')}
+              sx={{ color: '#94a3b8', fontSize: '0.75rem' }}
+            >
+              {t.btn.login}
+            </Button>
             <IconButton sx={{ color: '#e2e8f0' }} onClick={() => setMobileOpen(true)}>
               <MenuIcon />
             </IconButton>
           </Box>
         </Box>
 
-        <Drawer anchor="left" open={mobileOpen} onClose={() => setMobileOpen(false)}
-          PaperProps={{ sx: { backgroundColor: 'rgba(3,7,18,0.95)', backdropFilter: 'blur(20px)', width: 240 } }}
+        <Drawer
+          anchor="left"
+          open={mobileOpen}
+          onClose={() => setMobileOpen(false)}
+          PaperProps={{
+            sx: { backgroundColor: 'rgba(3,7,18,0.95)', backdropFilter: 'blur(20px)', width: 240 },
+          }}
         >
           <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end' }}>
-            <IconButton onClick={() => setMobileOpen(false)} sx={{ color: '#e2e8f0' }}><CloseIcon /></IconButton>
+            <IconButton onClick={() => setMobileOpen(false)} sx={{ color: '#e2e8f0' }}>
+              <CloseIcon />
+            </IconButton>
           </Box>
           {sidebarContent}
         </Drawer>
 
         {/* 页面内容 */}
-        <Box component="main" sx={{
-          flex: 1,
-          pt: { xs: '56px', md: 0 },
-          borderTop: { xs: '1px solid rgba(148, 163, 184, 0.06)', md: '1px solid rgba(148, 163, 184, 0.06)' },
-        }}>
+        <Box
+          component="main"
+          sx={{
+            flex: 1,
+            pt: { xs: '56px', md: 0 },
+            borderTop: {
+              xs: '1px solid rgba(148, 163, 184, 0.06)',
+              md: '1px solid rgba(148, 163, 184, 0.06)',
+            },
+          }}
+        >
           <Outlet />
         </Box>
 

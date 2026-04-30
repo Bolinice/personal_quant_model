@@ -43,31 +43,52 @@ export default function Logo({ size = 36 }: LogoProps) {
         {/* 深空蓝底 — 安静，容纳 */}
         <rect x="0" y="0" width="100" height="100" fill="#0f172a" clipPath="url(#sq42)" />
         {/* 微光: 顶部一丝光，像深空中的星光 */}
-        <rect x="0" y="0" width="100" height="40" fill="white" clipPath="url(#sq42)" opacity="0.03" />
+        <rect
+          x="0"
+          y="0"
+          width="100"
+          height="40"
+          fill="white"
+          clipPath="url(#sq42)"
+          opacity="0.03"
+        />
       </svg>
 
       {/* "42" — 月白 */}
-      <Box sx={{
-        position: 'absolute', inset: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
+      <Box
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
         <Box sx={{ display: 'flex', alignItems: 'baseline', lineHeight: 1 }}>
-          <Typography sx={{
-            fontWeight: 900,
-            fontSize: `${1.25 * s}rem`,
-            color: '#e2e8f0',
-            lineHeight: 1,
-            letterSpacing: '-0.06em',
-          }}>4</Typography>
-          <Typography sx={{
-            fontWeight: 200,
-            fontSize: `${1.15 * s}rem`,
-            color: '#e2e8f0',
-            lineHeight: 1,
-            letterSpacing: '-0.02em',
-            ml: `${-2 * s}px`,
-            mt: `${-0.5 * s}px`,
-          }}>2</Typography>
+          <Typography
+            sx={{
+              fontWeight: 900,
+              fontSize: `${1.25 * s}rem`,
+              color: '#e2e8f0',
+              lineHeight: 1,
+              letterSpacing: '-0.06em',
+            }}
+          >
+            4
+          </Typography>
+          <Typography
+            sx={{
+              fontWeight: 200,
+              fontSize: `${1.15 * s}rem`,
+              color: '#e2e8f0',
+              lineHeight: 1,
+              letterSpacing: '-0.02em',
+              ml: `${-2 * s}px`,
+              mt: `${-0.5 * s}px`,
+            }}
+          >
+            2
+          </Typography>
         </Box>
       </Box>
     </Box>

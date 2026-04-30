@@ -1,6 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Grid, Typography, Button, Chip, LinearProgress, Snackbar, Alert } from '@mui/material';
+import {
+  Box,
+  Grid,
+  Typography,
+  Button,
+  Chip,
+  LinearProgress,
+  Snackbar,
+  Alert,
+} from '@mui/material';
 import { motion } from 'framer-motion';
 import AddIcon from '@mui/icons-material/Add';
 import ViewModuleIcon from '@mui/icons-material/ViewModule';
@@ -28,7 +37,10 @@ function getUserId(): number {
 }
 
 const POOL_NEON: Record<string, 'cyan' | 'purple' | 'green' | 'amber'> = {
-  HS300: 'cyan', ZZ500: 'purple', ZZ1000: 'green', ALL_A: 'amber',
+  HS300: 'cyan',
+  ZZ500: 'purple',
+  ZZ1000: 'green',
+  ALL_A: 'amber',
 };
 
 const fmt = (v: number | null | undefined, pct = false) => {
@@ -64,7 +76,11 @@ interface PlanMetrics {
   modelCount: number;
 }
 
-function getPlanMetrics(plan: SubscriptionPlan | null, models: Model[], pools: StockPool[]): PlanMetrics {
+function getPlanMetrics(
+  plan: SubscriptionPlan | null,
+  models: Model[],
+  pools: StockPool[]
+): PlanMetrics {
   const tier = plan?.plan_tier ?? 0;
   const poolCodes = plan?.stock_pools ?? FALLBACK_PLAN.stock_pools ?? [];
   const freqs = plan?.frequencies ?? FALLBACK_PLAN.frequencies ?? [];
@@ -143,27 +159,84 @@ export default function ModelOverview() {
   const planName = plan?.plan_name || FALLBACK_PLAN.plan_name;
 
   const equityCards = [
-    { label: t.models.availablePools, value: metrics.poolCount, color: '#22d3ee', icon: <Inventory2Icon /> },
-    { label: t.models.availableFreq, value: metrics.freqCount, color: '#8b5cf6', icon: <SpeedIcon /> },
-    { label: t.models.dataPermission, value: metrics.dataPerm, color: '#10b981', icon: <StorageIcon /> },
+    {
+      label: t.models.availablePools,
+      value: metrics.poolCount,
+      color: '#22d3ee',
+      icon: <Inventory2Icon />,
+    },
+    {
+      label: t.models.availableFreq,
+      value: metrics.freqCount,
+      color: '#8b5cf6',
+      icon: <SpeedIcon />,
+    },
+    {
+      label: t.models.dataPermission,
+      value: metrics.dataPerm,
+      color: '#10b981',
+      icon: <StorageIcon />,
+    },
     { label: t.models.apiPermission, value: metrics.apiPerm, color: '#f59e0b', icon: <ApiIcon /> },
-    { label: t.models.collabPermission, value: metrics.collabPerm, color: '#f43f5e', icon: <GroupIcon /> },
-    { label: t.models.modelCount, value: metrics.modelCount, color: '#22d3ee', icon: <ModelTrainingIcon /> },
+    {
+      label: t.models.collabPermission,
+      value: metrics.collabPerm,
+      color: '#f43f5e',
+      icon: <GroupIcon />,
+    },
+    {
+      label: t.models.modelCount,
+      value: metrics.modelCount,
+      color: '#22d3ee',
+      icon: <ModelTrainingIcon />,
+    },
   ];
 
   const usageItems = [
-    { label: t.models.monthlyBacktests, value: 12, max: plan?.plan_tier && plan.plan_tier >= 2 ? 100 : 30 },
+    {
+      label: t.models.monthlyBacktests,
+      value: 12,
+      max: plan?.plan_tier && plan.plan_tier >= 2 ? 100 : 30,
+    },
     { label: t.models.recentModels, value: Math.min(models.length, 5), max: 5 },
-    { label: t.models.recentRebalances, value: 3, max: plan?.plan_tier && plan.plan_tier >= 1 ? 50 : 10 },
-    { label: t.models.recentExports, value: 2, max: plan?.plan_tier && plan.plan_tier >= 2 ? 30 : 5 },
+    {
+      label: t.models.recentRebalances,
+      value: 3,
+      max: plan?.plan_tier && plan.plan_tier >= 1 ? 50 : 10,
+    },
+    {
+      label: t.models.recentExports,
+      value: 2,
+      max: plan?.plan_tier && plan.plan_tier >= 2 ? 30 : 5,
+    },
   ];
 
   const quickActions = [
     { label: t.models.createModel, icon: <AddIcon />, color: '#22d3ee', path: '/app/models' },
-    { label: t.models.viewTemplates, icon: <ViewModuleIcon />, color: '#8b5cf6', path: '/app/models' },
-    { label: t.models.viewBacktests, icon: <AssessmentIcon />, color: '#10b981', path: '/app/backtests' },
-    { label: t.models.dataExport, icon: <FileDownloadIcon />, color: '#f59e0b', path: '/app/models' },
-    { label: t.models.viewUpgrade, icon: <UpgradeIcon />, color: '#f43f5e', path: '/app/subscribe' },
+    {
+      label: t.models.viewTemplates,
+      icon: <ViewModuleIcon />,
+      color: '#8b5cf6',
+      path: '/app/models',
+    },
+    {
+      label: t.models.viewBacktests,
+      icon: <AssessmentIcon />,
+      color: '#10b981',
+      path: '/app/backtests',
+    },
+    {
+      label: t.models.dataExport,
+      icon: <FileDownloadIcon />,
+      color: '#f59e0b',
+      path: '/app/models',
+    },
+    {
+      label: t.models.viewUpgrade,
+      icon: <UpgradeIcon />,
+      color: '#f43f5e',
+      path: '/app/subscribe',
+    },
   ];
 
   if (loading) {
@@ -176,10 +249,7 @@ export default function ModelOverview() {
 
   return (
     <Box>
-      <PageHeader
-        title={t.models.overview}
-        subtitle={t.models.plan}
-      />
+      <PageHeader title={t.models.overview} subtitle={t.models.plan} />
 
       {/* ── Top status bar: plan info ── */}
       <motion.div
@@ -187,7 +257,18 @@ export default function ModelOverview() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <GlassPanel glow glowColor="#22d3ee" sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+        <GlassPanel
+          glow
+          glowColor="#22d3ee"
+          sx={{
+            mb: 3,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 2,
+          }}
+        >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <NeonChip label={t.models.currentPlan} neonColor="cyan" size="small" />
             <Typography sx={{ fontWeight: 700, color: '#e2e8f0', fontSize: '1.1rem' }}>
@@ -195,7 +276,9 @@ export default function ModelOverview() {
             </Typography>
             {subscriptionEnd && (
               <>
-                <Typography sx={{ color: '#64748b', fontSize: '0.85rem' }}>{t.models.expireDate}</Typography>
+                <Typography sx={{ color: '#64748b', fontSize: '0.85rem' }}>
+                  {t.models.expireDate}
+                </Typography>
                 <Typography sx={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>
                   {subscriptionEnd.slice(0, 10)}
                 </Typography>
@@ -243,7 +326,10 @@ export default function ModelOverview() {
         transition={{ duration: 0.4, delay: 0.2 }}
       >
         <GlassPanel sx={{ mb: 3 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600, color: '#e2e8f0', mb: 2, fontSize: '1rem' }}>
+          <Typography
+            variant="h6"
+            sx={{ fontWeight: 600, color: '#e2e8f0', mb: 2, fontSize: '1rem' }}
+          >
             使用情况
           </Typography>
           <Grid container spacing={3}>
@@ -254,7 +340,9 @@ export default function ModelOverview() {
                 <Grid size={{ xs: 12, sm: 6, md: 3 }} key={item.label}>
                   <Box>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                      <Typography sx={{ color: '#94a3b8', fontSize: '0.8rem' }}>{item.label}</Typography>
+                      <Typography sx={{ color: '#94a3b8', fontSize: '0.8rem' }}>
+                        {item.label}
+                      </Typography>
                       <Typography sx={{ color: '#e2e8f0', fontSize: '0.8rem', fontWeight: 600 }}>
                         {item.value}/{item.max}
                       </Typography>
@@ -311,7 +399,14 @@ export default function ModelOverview() {
                 <Box sx={{ color: action.color, '& .MuiSvgIcon-root': { fontSize: 28 } }}>
                   {action.icon}
                 </Box>
-                <Typography sx={{ color: '#e2e8f0', fontSize: '0.85rem', fontWeight: 600, textAlign: 'center' }}>
+                <Typography
+                  sx={{
+                    color: '#e2e8f0',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    textAlign: 'center',
+                  }}
+                >
                   {action.label}
                 </Typography>
               </GlassPanel>
@@ -327,7 +422,9 @@ export default function ModelOverview() {
         transition={{ duration: 0.4, delay: 0.5 }}
       >
         <GlassPanel sx={{ mb: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box
+            sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}
+          >
             <Typography variant="h6" sx={{ fontWeight: 600, color: '#e2e8f0', fontSize: '1rem' }}>
               {t.models.recentModels}
             </Typography>
@@ -390,7 +487,11 @@ export default function ModelOverview() {
                         >
                           {model.model_name}
                         </Typography>
-                        <NeonChip label={poolCode || model.model_type} size="small" neonColor={neonColor} />
+                        <NeonChip
+                          label={poolCode || model.model_type}
+                          size="small"
+                          neonColor={neonColor}
+                        />
                         {model.status === 'active' && (
                           <Chip
                             label={t.models.running}
@@ -408,14 +509,26 @@ export default function ModelOverview() {
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
                         <Box sx={{ textAlign: 'right' }}>
-                          <Typography sx={{ color: '#64748b', fontSize: '0.7rem' }}>{t.models.annualReturn}</Typography>
-                          <Typography sx={{ color: ic != null && ic >= 0 ? '#10b981' : '#f43f5e', fontSize: '0.85rem', fontWeight: 600 }}>
+                          <Typography sx={{ color: '#64748b', fontSize: '0.7rem' }}>
+                            {t.models.annualReturn}
+                          </Typography>
+                          <Typography
+                            sx={{
+                              color: ic != null && ic >= 0 ? '#10b981' : '#f43f5e',
+                              fontSize: '0.85rem',
+                              fontWeight: 600,
+                            }}
+                          >
                             {ic != null ? fmt(ic, true) : '-'}
                           </Typography>
                         </Box>
                         <Box sx={{ textAlign: 'right' }}>
-                          <Typography sx={{ color: '#64748b', fontSize: '0.7rem' }}>{t.models.sharpe}</Typography>
-                          <Typography sx={{ color: '#8b5cf6', fontSize: '0.85rem', fontWeight: 600 }}>
+                          <Typography sx={{ color: '#64748b', fontSize: '0.7rem' }}>
+                            {t.models.sharpe}
+                          </Typography>
+                          <Typography
+                            sx={{ color: '#8b5cf6', fontSize: '0.85rem', fontWeight: 600 }}
+                          >
                             {icIr != null ? fmt(icIr) : '-'}
                           </Typography>
                         </Box>
@@ -445,7 +558,8 @@ export default function ModelOverview() {
             alignItems: 'center',
             flexWrap: 'wrap',
             gap: 2,
-            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(34, 211, 238, 0.05) 100%)',
+            background:
+              'linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(34, 211, 238, 0.05) 100%)',
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -478,8 +592,15 @@ export default function ModelOverview() {
         </GlassPanel>
       </motion.div>
 
-      <Snackbar open={!!error} autoHideDuration={3000} onClose={() => setError('')} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-        <Alert severity="error" onClose={() => setError('')}>{error}</Alert>
+      <Snackbar
+        open={!!error}
+        autoHideDuration={3000}
+        onClose={() => setError('')}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="error" onClose={() => setError('')}>
+          {error}
+        </Alert>
       </Snackbar>
     </Box>
   );

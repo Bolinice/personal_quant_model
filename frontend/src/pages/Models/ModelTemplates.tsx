@@ -1,6 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Grid, Typography, Button, Select, MenuItem, FormControl, InputLabel } from '@mui/material';
+import {
+  Box,
+  Grid,
+  Typography,
+  Button,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+} from '@mui/material';
 import { motion } from 'framer-motion';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import SpeedIcon from '@mui/icons-material/Speed';
@@ -24,10 +33,28 @@ const POOL_NEON: Record<string, 'cyan' | 'purple' | 'green' | 'amber'> = {
   ALL_A: 'amber',
 };
 
-const RISK_CONFIG: Record<string, { label: string; color: string; neon: 'green' | 'amber' | 'red'; icon: React.ReactNode }> = {
-  low: { label: '低风险', color: '#10b981', neon: 'green', icon: <ShieldIcon sx={{ fontSize: 16 }} /> },
-  medium: { label: '中风险', color: '#f59e0b', neon: 'amber', icon: <SpeedIcon sx={{ fontSize: 16 }} /> },
-  high: { label: '高风险', color: '#f43f5e', neon: 'red', icon: <RocketLaunchIcon sx={{ fontSize: 16 }} /> },
+const RISK_CONFIG: Record<
+  string,
+  { label: string; color: string; neon: 'green' | 'amber' | 'red'; icon: React.ReactNode }
+> = {
+  low: {
+    label: '低风险',
+    color: '#10b981',
+    neon: 'green',
+    icon: <ShieldIcon sx={{ fontSize: 16 }} />,
+  },
+  medium: {
+    label: '中风险',
+    color: '#f59e0b',
+    neon: 'amber',
+    icon: <SpeedIcon sx={{ fontSize: 16 }} />,
+  },
+  high: {
+    label: '高风险',
+    color: '#f43f5e',
+    neon: 'red',
+    icon: <RocketLaunchIcon sx={{ fontSize: 16 }} />,
+  },
 };
 
 const FREQ_LABELS: Record<string, string> = {
@@ -174,10 +201,14 @@ export default function ModelTemplates() {
   /* Tag i18n mapping */
   const tagLabel = (tag: string): string => {
     switch (tag) {
-      case 'recommend': return t.models.templateRecommend;
-      case 'beginner': return t.models.templateBeginner;
-      case 'pro': return t.models.templatePro;
-      default: return tag;
+      case 'recommend':
+        return t.models.templateRecommend;
+      case 'beginner':
+        return t.models.templateBeginner;
+      case 'pro':
+        return t.models.templatePro;
+      default:
+        return tag;
     }
   };
 
@@ -186,7 +217,10 @@ export default function ModelTemplates() {
       <PageHeader title={t.models.templates} />
 
       {/* ── Filter toolbar ── */}
-      <GlassPanel animate={false} sx={{ mb: 3, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+      <GlassPanel
+        animate={false}
+        sx={{ mb: 3, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}
+      >
         <FormControl size="small" sx={selectSx}>
           <InputLabel>{t.models.availablePools}</InputLabel>
           <Select
@@ -271,10 +305,7 @@ export default function ModelTemplates() {
                   </Typography>
 
                   {/* Description */}
-                  <Typography
-                    variant="body2"
-                    sx={{ color: '#64748b', lineHeight: 1.6 }}
-                  >
+                  <Typography variant="body2" sx={{ color: '#64748b', lineHeight: 1.6 }}>
                     {tpl.description}
                   </Typography>
 

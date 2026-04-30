@@ -18,26 +18,207 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 
-# TODO: implement execute_backtest in app.core.backtest_engine
+def _build_signal_generator(model_id, holding_count, db):
+    """构建信号生成器 — 返回符合 SignalGenerator 协议的 callable"""
+    from app.models.models import ModelScore
+
+    def signal_generator(universe, trade_date, db=db, model_id=model_id, holding_count=holding_count or 50):
+        scores = (
+            db.query(ModelScore)
+            .filter(
+                ModelScore.model_id == model_id,
+                ModelScore.trade_date == trade_date,
+                ModelScore.security_id.in_(universe),
+            )
+            .order_by(ModelScore.score.desc())
+            .limit(holding_count)
+            .all()
+        )
+        if not scores:
+            return {sec: 0.0 for sec in universe}
+        n = len(scores)
+        selected = {s.security_id: 1.0 / n for s in scores}
+        return {sec: selected.get(sec, 0.0) for sec in universe}
+
+    return signal_generator
+
+
+def _load_price_data(backtest, db):
+    """加载行情数据 → {(ts_code, trade_date): {close, open, pct_chg, volume, amount}}"""
+    from app.models.market import StockDaily
+
+    rows = (
+        db.query(StockDaily)
+        .filter(
+            StockDaily.trade_date >= backtest.start_date,
+            StockDaily.trade_date <= backtest.end_date,
+        )
+        .all()
+    )
+
+    if not rows:
+        return {}
+
+    price_data = {}
+    for r in rows:
+        key = (r.ts_code, r.trade_date)
+        price_data[key] = {
+            "close": float(r.close) if r.close else 0,
+            "open": float(getattr(r, "open", r.close)) if getattr(r, "open", None) else float(r.close),
+            "pct_chg": float(r.pct_chg) if r.pct_chg else 0,
+            "volume": float(getattr(r, "vol", 0)) if getattr(r, "vol", None) else 0,
+            "amount": float(r.amount) if r.amount else 0,
+        }
+    return price_data
+
+
+def _load_trading_days(backtest, db):
+    """加载交易日列表"""
+    from app.models.market import StockDaily
+
+    dates = (
+        db.query(StockDaily.trade_date)
+        .filter(
+            StockDaily.trade_date >= backtest.start_date,
+            StockDaily.trade_date <= backtest.end_date,
+        )
+        .distinct()
+        .order_by(StockDaily.trade_date)
+        .all()
+    )
+    return [d[0] for d in dates]
+
+
+def _load_benchmark_nav(backtest, db):
+    """加载基准净值序列"""
+    from app.models.market import IndexDaily
+
+    benchmark_code = getattr(backtest, "benchmark", "000300") or "000300"
+
+    rows = (
+        db.query(IndexDaily)
+        .filter(
+            IndexDaily.ts_code == benchmark_code,
+            IndexDaily.trade_date >= backtest.start_date,
+            IndexDaily.trade_date <= backtest.end_date,
+        )
+        .order_by(IndexDaily.trade_date)
+        .all()
+    )
+
+    if not rows:
+        return None
+
+    first_close = float(rows[0].close) if rows[0].close else 1.0
+    return {r.trade_date: float(r.close) / first_close for r in rows if r.close}
+
+
 def execute_backtest(backtest, db=None):
-    """执行回测 — 待实现，目前返回空结果"""
+    """执行回测 — 连接 ABShareBacktestEngine.run_backtest()"""
+    from app.core.backtest_engine import ABShareBacktestEngine
+
+    # 加载行情数据
+    price_data = _load_price_data(backtest, db)
+    if not price_data:
+        logger.warning(f"回测 {backtest.id} 无行情数据")
+        return BacktestResultCreate(backtest_id=backtest.id)
+
+    # 加载交易日
+    trading_days = _load_trading_days(backtest, db)
+
+    # 加载基准净值
+    benchmark_nav = _load_benchmark_nav(backtest, db)
+
+    # 构建信号生成器
+    signal_generator = _build_signal_generator(backtest.model_id, backtest.holding_count, db)
+
+    # 构建股票池
+    universe = list({k[0] for k in price_data.keys()})
+    if not universe:
+        return BacktestResultCreate(backtest_id=backtest.id)
+
+    # 执行回测
+    engine = ABShareBacktestEngine(db=db)
+    try:
+        result = engine.run_backtest(
+            signal_generator=signal_generator,
+            universe=universe,
+            start_date=backtest.start_date,
+            end_date=backtest.end_date,
+            rebalance_freq=getattr(backtest, "rebalance_freq", "monthly"),
+            initial_capital=backtest.initial_capital or 1000000.0,
+            trading_days=trading_days,
+            price_data=price_data,
+            benchmark_nav=benchmark_nav,
+        )
+    except Exception as e:
+        logger.error(f"回测执行失败: {e}")
+        return BacktestResultCreate(backtest_id=backtest.id)
+
+    # 映射引擎输出到 BacktestResultCreate
+    metrics = result.get("metrics", {})
     return BacktestResultCreate(
-        total_return=0.0,
-        annual_return=0.0,
-        benchmark_return=0.0,
-        excess_return=0.0,
-        max_drawdown=0.0,
-        sharpe=0.0,
-        calmar=0.0,
-        information_ratio=0.0,
-        turnover_rate=0.0,
+        backtest_id=backtest.id,
+        total_return=metrics.get("total_return"),
+        annual_return=metrics.get("annual_return"),
+        benchmark_return=metrics.get("benchmark_return"),
+        excess_return=metrics.get("excess_return"),
+        annual_excess_return=metrics.get("annual_excess_return"),
+        max_drawdown=metrics.get("max_drawdown"),
+        volatility=metrics.get("volatility"),
+        sharpe=metrics.get("sharpe"),
+        sortino=metrics.get("sortino"),
+        calmar=metrics.get("calmar"),
+        information_ratio=metrics.get("information_ratio"),
+        turnover_rate=metrics.get("turnover_rate"),
+        win_rate=metrics.get("win_rate"),
+        profit_loss_ratio=metrics.get("profit_loss_ratio"),
+        alpha=metrics.get("alpha"),
+        beta=metrics.get("beta"),
+        metrics_json={
+            "nav_history": result.get("nav_history", []),
+            "trade_records": result.get("trade_records", []),
+            "total_trades": result.get("total_trades"),
+            "total_days": result.get("total_days"),
+        },
     )
 
 
-# TODO: implement generate_portfolio
 def generate_portfolio(model_id, current_date, db=None):
-    """生成新组合 — 待实现"""
-    return
+    """生成新组合 — 从 ModelScore 生成等权重组合"""
+    from app.models.models import ModelScore
+
+    model = db.query(Model).filter(Model.id == model_id).first() if db else None
+    if not model:
+        return None
+
+    holding_count = getattr(model, "holding_count", 50) or 50
+
+    # 按score降序取top-N
+    scores = (
+        db.query(ModelScore)
+        .filter(ModelScore.model_id == model_id, ModelScore.trade_date == current_date, ModelScore.is_selected == True)
+        .order_by(ModelScore.score.desc())
+        .limit(holding_count)
+        .all()
+    )
+
+    if not scores:
+        # 降级: 不限is_selected
+        scores = (
+            db.query(ModelScore)
+            .filter(ModelScore.model_id == model_id, ModelScore.trade_date == current_date)
+            .order_by(ModelScore.score.desc())
+            .limit(holding_count)
+            .all()
+        )
+
+    if not scores:
+        return None
+
+    # 等权重分配
+    n = len(scores)
+    return {s.security_id: 1.0 / n for s in scores}
 
 
 def get_stock_price(security_id, current_date, db=None):
@@ -238,32 +419,28 @@ def calculate_rebalance_orders(current_portfolio, new_portfolio, current_date, d
 
 
 def execute_rebalance(orders, current_date, transaction_cost, db):
-    """执行调仓"""
+    """执行调仓 — 实盘交易功能暂不提供，仅记录调仓指令"""
     for order in orders:
         security_id = order["security_id"]
         action = order["action"]
         quantity = order["quantity"]
         price = order["price"]
 
-        if action == "buy":
-            # 检查涨跌停限制
-            if is_limit_up(security_id, current_date, db=db):
-                continue  # 涨停无法买入
+        try:
+            if action == "buy":
+                if is_limit_up(security_id, current_date, db=db):
+                    continue
+                if not has_sufficient_liquidity(security_id, quantity, current_date, db=db):
+                    continue
+                execute_buy_order(security_id, quantity, price, transaction_cost, db=db)
 
-            # 检查流动性
-            if not has_sufficient_liquidity(security_id, quantity, current_date, db=db):
-                continue  # 流动性不足
-
-            # 执行买入
-            execute_buy_order(security_id, quantity, price, transaction_cost, db=db)
-
-        elif action == "sell":
-            # 检查涨跌停限制
-            if is_limit_down(security_id, current_date, db=db):
-                continue  # 跌停无法卖出
-
-            # 执行卖出
-            execute_sell_order(security_id, quantity, price, transaction_cost, db=db)
+            elif action == "sell":
+                if is_limit_down(security_id, current_date, db=db):
+                    continue
+                execute_sell_order(security_id, quantity, price, transaction_cost, db=db)
+        except NotImplementedError:
+            # 实盘交易功能暂不提供，跳过执行但记录指令
+            continue
 
 
 def is_limit_up(security_id, current_date, db):
@@ -305,15 +482,13 @@ def has_sufficient_liquidity(security_id, quantity, current_date, db):
 
 
 def execute_buy_order(security_id, quantity, price, transaction_cost, db):
-    """执行买入订单"""
-    # 这里应该实现实际的买入逻辑
-    # 包括T+1限制、交易费用计算等
+    """执行买入订单 — 实盘交易功能暂不提供"""
+    raise NotImplementedError("实盘交易功能暂不提供")
 
 
 def execute_sell_order(security_id, quantity, price, transaction_cost, db):
-    """执行卖出订单"""
-    # 这里应该实现实际的卖出逻辑
-    # 包括T+1限制、交易费用计算等
+    """执行卖出订单 — 实盘交易功能暂不提供"""
+    raise NotImplementedError("实盘交易功能暂不提供")
 
 
 def record_rebalance(portfolio_id, orders, current_date, transaction_cost, db):

@@ -76,8 +76,7 @@ def update_model_factor_weights(model_id: int, weights: list[ModelFactorWeightCr
 def get_model_scores(model_id: int, trade_date: str, selected_only: bool = False, db: Session = None):
     query = db.query(ModelScore).filter(ModelScore.model_id == model_id, ModelScore.trade_date == trade_date)
     if selected_only:
-        # 这里应该根据模型配置获取选中的股票
-        pass
+        query = query.filter(ModelScore.is_selected == True)
     return query.all()
 
 

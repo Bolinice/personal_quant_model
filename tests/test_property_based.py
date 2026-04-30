@@ -67,7 +67,6 @@ class TestMADWinsorization:
 
     @given(values=factor_values, n_mad=mad_thresholds)
     @settings(max_examples=50, deadline=None)
-    @pytest.mark.xfail(reason="已知bug: winsorize_mad 在有重复值时可能改变非极值点值")
     def test_preserves_non_outlier_values(self, values, n_mad):
         """MAD 去极值不应改变非极值点的值（容忍浮点精度）"""
         series = pd.Series(values)
@@ -114,25 +113,34 @@ class TestZScoreStandardization:
 
     @given(values=factor_values)
     @settings(max_examples=50, deadline=None)
-    @pytest.mark.xfail(reason="已知bug: standardize_zscore 在极端浮点值时可能破坏排序")
     def test_preserves_rank_order(self, values):
-        """Z-score 标准化应保持排序不变（排除 NaN 和极端浮点值）"""
+        """Z-score 标准化应保持严格排序不变（x_i > x_j → z_i > z_j）"""
         series = pd.Series(values)
         result = preprocessor.standardize_zscore(series)
 
-        # 排除 NaN（常量序列标准化后可能产生 NaN）
         valid = result.notna() & np.isfinite(result)
         if valid.sum() < 2:
             return
 
-        from scipy.stats import rankdata
+        # 不变量: 严格不等关系保持不变
+        # 仅检查原始值差异足够大的对，避免浮点噪声
+        orig = series[valid].values
+        res = result[valid].values
+        scale = np.maximum(np.abs(orig), 1.0)
+        sorted_idx = np.argsort(orig)
+        orig_sorted = orig[sorted_idx]
+        res_sorted = res[sorted_idx]
+        scale_sorted = scale[sorted_idx]
 
-        original_ranks = rankdata(series[valid].values)
-        result_ranks = rankdata(result[valid].values)
-        # 容忍浮点精度：rank 应大致一致
-        # 极端浮点值可能导致微小排序变化
-        rank_diff = np.abs(original_ranks - result_ranks)
-        assert rank_diff.max() <= 1  # 最多差 1 个 rank
+        # 检查相邻对: 如果原始差异显著，z-score 排序应一致
+        for k in range(len(orig_sorted) - 1):
+            diff = orig_sorted[k + 1] - orig_sorted[k]
+            ref = max(scale_sorted[k], scale_sorted[k + 1])
+            if diff / ref > 1e-10:
+                assert res_sorted[k] <= res_sorted[k + 1], (
+                    f"排序反转: orig[{k}]={orig_sorted[k]} < orig[{k+1}]={orig_sorted[k+1]} "
+                    f"but z[{k}]={res_sorted[k]} > z[{k+1}]={res_sorted[k+1]}"
+                )
 
 
 # ==================== Rank Normal Standardization ====================

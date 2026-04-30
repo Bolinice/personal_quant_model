@@ -201,17 +201,12 @@ class FactorPreprocessor:
         if s.empty:
             return series
         median = s.median()
-        mad = np.median(np.abs(s - median))
+        mad = np.median(np.abs(s - median)) * 1.4826  # 1.4826使MAD在正态分布下等价于σ
         if mad == 0:
             # MAD=0表示超过50%数据相同，常见于离散型因子(如评级1-5)
-            # 此时MAD法失效，回退到分位数去极值
-            q_low = series.quantile(0.01)
-            q_high = series.quantile(0.99)
-            iqr = q_high - q_low
-            if iqr > 0:
-                return series.clip(q_low - 1.5 * iqr, q_high + 1.5 * iqr)
-            logger.warning("Factor MAD=0 and IQR=0, skipping winsorization")
-            return series
+            # 此时MAD法失效，回退到分位数去极值(1%/99%)
+            # 不用IQR裁剪: IQR阈值(1.5*IQR)比MAD阈值窄，会误伤非极值点
+            return self.winsorize_quantile(series, lower=0.01, upper=0.99)
         upper_bound = median + n_mad * mad
         lower_bound = median - n_mad * mad
         return series.clip(lower_bound, upper_bound)
@@ -313,7 +308,6 @@ class FactorPreprocessor:
         横截面Z-score标准化
         符合ADD 6.3.3节: z_i = (x_i - μ) / σ
         """
-        # 截面Z-score使不同量纲因子可加性组合，是IC加权/组合优化的前提
         mean = series.mean()
         std = series.std()
         if std == 0 or np.isnan(std):
@@ -324,6 +318,15 @@ class FactorPreprocessor:
         """排名标准化: 将因子值转换为排名百分比 [0, 1]"""
         # 排名标准化对异常值天然免疫，适合偏态严重的因子(如市值)
         return series.rank(pct=True)
+
+    def standardize_rank_zscore(self, series: pd.Series) -> pd.Series:
+        """秩Z-score: 先排名再标准化，保序且对极端值鲁棒"""
+        ranked = series.rank(method="average")
+        mean = ranked.mean()
+        std = ranked.std()
+        if std == 0 or np.isnan(std):
+            return ranked - mean
+        return (ranked - mean) / std
 
     def standardize_minmax(self, series: pd.Series, min_val: float = 0, max_val: float = 1) -> pd.Series:
         """Min-Max标准化"""

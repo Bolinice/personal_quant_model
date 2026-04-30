@@ -396,23 +396,146 @@ class MonitorService:
         db: Session,
         trade_date: date | None = None,
     ) -> dict[str, Any]:
-        """组合监控"""
+        """组合监控 — 从DB计算行业/风格暴露、换手率、拥挤度"""
+        from app.models.factors import FactorValue
+        from app.models.market import StockIndustry
+        from app.models.portfolios import Portfolio, PortfolioPosition, RebalanceRecord
+
+        calc_date = trade_date or datetime.now(tz=UTC).date()
+
+        # 查询最新组合
+        portfolio = (
+            db.query(Portfolio)
+            .filter(Portfolio.trade_date <= calc_date)
+            .order_by(Portfolio.trade_date.desc())
+            .first()
+        )
+
+        if not portfolio:
+            return {
+                "trade_date": str(calc_date),
+                "industry_exposure": {},
+                "style_exposure": {},
+                "turnover_rate": 0.0,
+                "crowding_score": 0.0,
+                "note": "无组合数据",
+            }
+
+        # 获取持仓
+        positions = db.query(PortfolioPosition).filter(PortfolioPosition.portfolio_id == portfolio.id).all()
+
+        if not positions:
+            return {
+                "trade_date": str(calc_date),
+                "industry_exposure": {},
+                "style_exposure": {},
+                "turnover_rate": 0.0,
+                "crowding_score": 0.0,
+                "note": "组合无持仓",
+            }
+
+        # 行业暴露: 按行业聚合持仓权重
+        security_ids = [p.security_id for p in positions]
+        weight_map = {p.security_id: (p.target_weight or 0) for p in positions}
+
+        industry_rows = db.query(StockIndustry).filter(StockIndustry.ts_code.in_(security_ids)).all()
+        industry_map = {r.ts_code: r.industry_name or r.industry_code or "其他" for r in industry_rows}
+
+        industry_exposure: dict[str, float] = {}
+        for sec_id, weight in weight_map.items():
+            ind = industry_map.get(sec_id, "其他")
+            industry_exposure[ind] = industry_exposure.get(ind, 0.0) + weight
+
+        # 风格暴露: 查询持仓股票的因子均值
+        style_exposure: dict[str, float] = {}
+        try:
+            factor_rows = (
+                db.query(FactorValue)
+                .filter(
+                    FactorValue.security_id.in_(security_ids),
+                    FactorValue.trade_date == portfolio.trade_date,
+                )
+                .all()
+            )
+            if factor_rows:
+                from app.models.factors import Factor
+
+                factor_ids = list({r.factor_id for r in factor_rows})
+                factor_defs = db.query(Factor).filter(Factor.id.in_(factor_ids)).all()
+                category_map = {f.id: f.category or "other" for f in factor_defs}
+
+                category_scores: dict[str, list[float]] = {}
+                for fv in factor_rows:
+                    cat = category_map.get(fv.factor_id, "other")
+                    w = weight_map.get(fv.security_id, 0)
+                    if fv.value is not None:
+                        category_scores.setdefault(cat, []).append(float(fv.value) * w)
+
+                for cat, scores in category_scores.items():
+                    style_exposure[cat] = round(sum(scores), 4)
+        except Exception:
+            pass
+
+        # 换手率: 查询最近RebalanceRecord
+        turnover_rate = 0.0
+        rebalance = (
+            db.query(RebalanceRecord)
+            .filter(RebalanceRecord.model_id == portfolio.model_id, RebalanceRecord.trade_date <= calc_date)
+            .order_by(RebalanceRecord.trade_date.desc())
+            .first()
+        )
+        if rebalance and rebalance.total_turnover is not None:
+            turnover_rate = float(rebalance.total_turnover)
+
+        # 拥挤度: 统计其他模型同时持有的重叠股票数
+        crowding_score = 0.0
+        try:
+            other_portfolios = (
+                db.query(Portfolio)
+                .filter(Portfolio.model_id != portfolio.model_id, Portfolio.trade_date == portfolio.trade_date)
+                .all()
+            )
+            if other_portfolios:
+                other_ids = {p.id for p in other_portfolios}
+                other_positions = db.query(PortfolioPosition).filter(PortfolioPosition.portfolio_id.in_(other_ids)).all()
+                other_securities = {p.security_id for p in other_positions}
+                overlap = len(set(security_ids) & other_securities)
+                crowding_score = round(overlap / max(len(security_ids), 1), 4)
+        except Exception:
+            pass
+
         return {
-            "trade_date": str(trade_date or datetime.now(tz=UTC).date()),
-            "industry_exposure": {},
-            "style_exposure": {},
-            "turnover_rate": 0.0,
-            "crowding_score": 0.0,
+            "trade_date": str(calc_date),
+            "industry_exposure": industry_exposure,
+            "style_exposure": style_exposure,
+            "turnover_rate": turnover_rate,
+            "crowding_score": crowding_score,
         }
 
     @staticmethod
     def get_live_tracking(db: Session) -> dict[str, Any]:
-        """实盘跟踪"""
+        """实盘跟踪 — 当前不提供实盘交易功能，返回N/A标记和回测参考数据"""
+        from app.models.backtests import Backtest, BacktestResult
+
+        # 查询最近成功的回测作为参考
+        latest_backtest = (
+            db.query(Backtest).filter(Backtest.status == "success").order_by(Backtest.created_at.desc()).first()
+        )
+
+        drawdown_ref = None
+        if latest_backtest:
+            result = (
+                db.query(BacktestResult).filter(BacktestResult.backtest_id == latest_backtest.id).first()
+            )
+            if result and result.max_drawdown is not None:
+                drawdown_ref = float(result.max_drawdown)
+
         return {
-            "execution_deviation": 0.0,
-            "cost_deviation": 0.0,
-            "drawdown": 0.0,
-            "fill_rate": 0.0,
+            "execution_deviation": None,
+            "cost_deviation": None,
+            "drawdown": drawdown_ref,
+            "fill_rate": None,
+            "note": "当前不提供实盘交易功能，drawdown为最近回测参考值（历史回测，不代表未来）",
         }
 
     @staticmethod

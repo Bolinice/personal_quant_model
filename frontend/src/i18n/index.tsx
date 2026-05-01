@@ -6,7 +6,7 @@ export type Lang = 'zh' | 'en';
 
 const STORAGE_KEY = 'lang';
 
-const locales = { zh, en };
+const locales: Record<Lang, TranslationKeys> = { zh, en: en as TranslationKeys };
 
 function getInitialLang(): Lang {
   try {

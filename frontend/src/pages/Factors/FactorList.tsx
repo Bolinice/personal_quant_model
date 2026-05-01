@@ -177,8 +177,10 @@ export default function FactorList() {
                   setPage(0);
                 }}
                 sx={{ width: 240 }}
-                InputProps={{
-                  startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                slotProps={{
+                  input: {
+                    startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                  },
                 }}
               />
               <Tooltip title="刷新">

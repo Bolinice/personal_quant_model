@@ -48,13 +48,15 @@ const UpgradeDrawer: React.FC<UpgradeDrawerProps> = ({
       anchor="right"
       open={open}
       onClose={onClose}
-      PaperProps={{
-        sx: {
-          width: 400,
-          background: 'rgba(10, 14, 26, 0.95)',
-          backdropFilter: 'blur(20px)',
-          borderLeft: '1px solid rgba(148, 163, 184, 0.08)',
-          boxShadow: '-8px 0 32px rgba(0, 0, 0, 0.5)',
+      slotProps={{
+        paper: {
+          sx: {
+            width: 400,
+            background: 'rgba(10, 14, 26, 0.95)',
+            backdropFilter: 'blur(20px)',
+            borderLeft: '1px solid rgba(148, 163, 184, 0.08)',
+            boxShadow: '-8px 0 32px rgba(0, 0, 0, 0.5)',
+          },
         },
       }}
     >
@@ -212,9 +214,11 @@ const UpgradeDrawer: React.FC<UpgradeDrawerProps> = ({
               </ListItemIcon>
               <ListItemText
                 primary={feature}
-                primaryTypographyProps={{
-                  variant: 'body2',
-                  sx: { color: 'rgba(226, 232, 240, 0.85)' },
+                slotProps={{
+                  primary: {
+                    variant: 'body2',
+                    sx: { color: 'rgba(226, 232, 240, 0.85)' },
+                  },
                 }}
               />
             </ListItem>

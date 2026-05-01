@@ -470,11 +470,13 @@ export default function ModelList() {
         anchorEl={menuAnchor}
         open={Boolean(menuAnchor)}
         onClose={handleMenuClose}
-        PaperProps={{
-          sx: {
-            backgroundColor: 'rgba(15, 23, 42, 0.95)',
-            border: '1px solid rgba(148, 163, 184, 0.15)',
-            backdropFilter: 'blur(16px)',
+        slotProps={{
+          paper: {
+            sx: {
+              backgroundColor: 'rgba(15, 23, 42, 0.95)',
+              border: '1px solid rgba(148, 163, 184, 0.15)',
+              backdropFilter: 'blur(16px)',
+            },
           },
         }}
       >

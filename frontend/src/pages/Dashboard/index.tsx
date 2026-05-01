@@ -104,12 +104,12 @@ export default function Dashboard() {
       // 获取因子总数（limit=1只取首条以获取total计数，避免全量拉取）
       factorApi
         .list({ limit: 1 })
-        .then((res) => setFactorCount(res.data.total ?? res.data.length ?? 0))
+        .then((res) => setFactorCount((res.data as any).total ?? res.data.length ?? 0))
         .catch(() => {}),
       // 获取模型总数（同上，limit=1用于计数）
       modelApi
         .list({ limit: 1 })
-        .then((res) => setModelCount(res.data.total ?? res.data.length ?? 0))
+        .then((res) => setModelCount((res.data as any).total ?? res.data.length ?? 0))
         .catch(() => {}),
       // 获取当前市场状态（趋势/震荡/防御/进攻），用于顶部状态卡片和详情面板
       monitorApi

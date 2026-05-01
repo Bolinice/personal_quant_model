@@ -327,8 +327,10 @@ export default function MarketingLayout() {
           anchor="left"
           open={mobileOpen}
           onClose={() => setMobileOpen(false)}
-          PaperProps={{
-            sx: { backgroundColor: 'rgba(3,7,18,0.95)', backdropFilter: 'blur(20px)', width: 240 },
+          slotProps={{
+            paper: {
+              sx: { backgroundColor: 'rgba(3,7,18,0.95)', backdropFilter: 'blur(20px)', width: 240 },
+            },
           }}
         >
           <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end' }}>

@@ -100,7 +100,7 @@ export default function Profile() {
             value={oldPassword}
             onChange={(e) => setOldPassword(e.target.value)}
             sx={{ mb: 2 }}
-            InputProps={{ sx: { borderRadius: 2 } }}
+            slotProps={{ input: { sx: { borderRadius: 2 } } }}
           />
           <TextField
             fullWidth
@@ -109,7 +109,7 @@ export default function Profile() {
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             sx={{ mb: 2 }}
-            InputProps={{ sx: { borderRadius: 2 } }}
+            slotProps={{ input: { sx: { borderRadius: 2 } } }}
           />
           <TextField
             fullWidth
@@ -118,7 +118,7 @@ export default function Profile() {
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             sx={{ mb: 2 }}
-            InputProps={{ sx: { borderRadius: 2 } }}
+            slotProps={{ input: { sx: { borderRadius: 2 } } }}
           />
 
           <Button

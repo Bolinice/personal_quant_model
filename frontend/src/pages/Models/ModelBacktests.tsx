@@ -197,7 +197,9 @@ export default function ModelBacktests() {
           label={t.models.selectPeriod}
           value={startDate}
           onChange={(e) => setStartDate(e.target.value)}
-          InputLabelProps={{ shrink: true, sx: { color: '#94a3b8', fontSize: '0.875rem' } }}
+          slotProps={{
+            inputLabel: { shrink: true, sx: { color: '#94a3b8', fontSize: '0.875rem' } },
+          }}
           sx={{
             minWidth: 160,
             '& .MuiOutlinedInput-root': { fontSize: '0.875rem', color: '#e2e8f0' },
@@ -209,7 +211,9 @@ export default function ModelBacktests() {
           type="date"
           value={endDate}
           onChange={(e) => setEndDate(e.target.value)}
-          InputLabelProps={{ shrink: true, sx: { color: '#94a3b8', fontSize: '0.875rem' } }}
+          slotProps={{
+            inputLabel: { shrink: true, sx: { color: '#94a3b8', fontSize: '0.875rem' } },
+          }}
           sx={{
             minWidth: 160,
             '& .MuiOutlinedInput-root': { fontSize: '0.875rem', color: '#e2e8f0' },

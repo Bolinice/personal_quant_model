@@ -150,7 +150,7 @@ export default function EventList() {
                 value={filterDate}
                 onChange={(e) => setFilterDate(e.target.value)}
                 sx={{ minWidth: 140 }}
-                InputLabelProps={{ shrink: true }}
+                slotProps={{ inputLabel: { shrink: true } }}
               />
             </Box>
           </GlassPanel>

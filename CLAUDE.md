@@ -30,17 +30,21 @@
 - `document/` — 项目文档
 
 ## 文档
+- [README](document/README.md) — 文档导航（快速查找所需文档）⭐
+- [OPTIMIZATION_HISTORY](document/OPTIMIZATION_HISTORY.md) — 优化历程总览（Phase 1-4完整记录）⭐
 - [PRD](document/PRD.md) — 产品需求文档 V2.4
 - [TDD](document/TDD.md) — 技术架构与数据库设计 V2.3
 - [ADD](document/ADD.md) — 算法设计说明书 V1.2
-- [WORKFLOW](document/WORKFLOW.md) — 工作流文档 V1.2（日终流水线、数据流、性能优化、自然语言解读）
+- [WORKFLOW](document/WORKFLOW.md) — 工作流文档 V1.2（日终流水线、数据流、性能优化）
 - [API](document/API.md) — API 接口文档 V1.1
 - [DEPLOYMENT](document/DEPLOYMENT.md) — 部署指南 V1.2
 - [user_guide](document/user_guide.md) — 客户端使用指南 V1.1
-- [PLAN_CODE_OPTIMIZATION](document/PLAN_CODE_OPTIMIZATION.md) — 业务代码优化计划书 V1.0
+- [CONFIG_CENTER](document/CONFIG_CENTER.md) — 配置中心使用文档
+- [FACTOR_ORTHOGONALIZATION_GUIDE](document/FACTOR_ORTHOGONALIZATION_GUIDE.md) — 因子正交化指南
 - [PLAN_COMMERCIALIZATION](document/PLAN_COMMERCIALIZATION.md) — 商业逻辑与合规改造计划书 V1.0
 - [PLAN_UI_UX](document/PLAN_UI_UX.md) — 前台 UI/UX 设计说明书 V1.0
 - [PLAN_COPYWRITING](document/PLAN_COPYWRITING.md) — 首页/定价页/免责声明文案规范 V1.0
+- [archive/](document/archive/) — 历史文档归档（已完成的计划和报告）
 
 ## 开发规范
 - 所有财务数据必须按公告发布日期使用，禁止未来函数

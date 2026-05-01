@@ -61,7 +61,11 @@ const ComplianceModal: React.FC<ComplianceModalProps> = ({
     <Dialog
       open={visible}
       onClose={controlledOpen !== undefined ? handleCancel : undefined}
-      disableEscapeKeyDown={controlledOpen === undefined}
+      slotProps={{
+        backdrop: {
+          onClick: controlledOpen === undefined ? undefined : handleCancel,
+        },
+      }}
       maxWidth="sm"
       fullWidth
     >

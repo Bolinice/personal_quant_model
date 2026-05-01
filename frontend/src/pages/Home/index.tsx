@@ -40,10 +40,10 @@ export default function HomePage() {
         const sections = apiData?.sections;
         const fallback = getContent(lang).home || {};
         setData(
-          sections && Object.keys(sections).length > 0 ? { sections } : { sections: fallback }
+          sections && Object.keys(sections).length > 0 ? { sections } : { sections: fallback as any }
         );
       })
-      .catch(() => setData({ sections: getContent(lang).home || {} }));
+      .catch(() => setData({ sections: getContent(lang).home as any || {} }));
   }, [lang]);
 
   const s = (key: string) => data?.sections?.[key];

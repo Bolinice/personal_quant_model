@@ -71,10 +71,10 @@ export default function PricingPage() {
         const sections = apiData?.sections;
         const fallback = getContent(lang).pricing || {};
         setData(
-          sections && Object.keys(sections).length > 0 ? { sections } : { sections: fallback }
+          sections && Object.keys(sections).length > 0 ? { sections } : { sections: fallback as any }
         );
       })
-      .catch(() => setData({ sections: getContent(lang).pricing || {} }));
+      .catch(() => setData({ sections: getContent(lang).pricing as any || {} }));
 
     // 加载定价数据
     subscriptionApi

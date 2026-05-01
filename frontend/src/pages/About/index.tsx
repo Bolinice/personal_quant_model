@@ -37,10 +37,10 @@ export default function AboutPage() {
         const sections = (apiData as PageData)?.sections;
         const fallback = getContent(lang).about || {};
         setData(
-          sections && Object.keys(sections).length > 0 ? { sections } : { sections: fallback }
+          sections && Object.keys(sections).length > 0 ? { sections } : { sections: fallback as any }
         );
       })
-      .catch(() => setData({ sections: getContent(lang).about || {} }));
+      .catch(() => setData({ sections: getContent(lang).about as any || {} }));
   }, [lang]);
 
   const s = (key: string) => data?.sections?.[key];
@@ -126,7 +126,7 @@ export default function AboutPage() {
             </motion.div>
 
             {/* Tags */}
-            {(s('about_team')?.extra?.tags || []).length > 0 && (
+            {((s('about_team')?.extra as any)?.tags || []).length > 0 && (
               <motion.div {...fadeUp}>
                 <Box
                   sx={{
@@ -138,7 +138,7 @@ export default function AboutPage() {
                     mb: 4,
                   }}
                 >
-                  {s('about_team')?.extra?.tags.map((tag: string) => (
+                  {(s('about_team')?.extra as any)?.tags.map((tag: string) => (
                     <Chip
                       key={tag}
                       label={tag}
@@ -155,7 +155,7 @@ export default function AboutPage() {
             )}
 
             {/* Principles */}
-            {(s('about_team')?.extra?.principles || []).length > 0 && (
+            {((s('about_team')?.extra as any)?.principles || []).length > 0 && (
               <motion.div {...fadeUp}>
                 <Box
                   sx={{
@@ -165,7 +165,7 @@ export default function AboutPage() {
                     mt: 4,
                   }}
                 >
-                  {s('about_team')?.extra?.principles.map((p: string, i: number) => (
+                  {(s('about_team')?.extra as any)?.principles.map((p: string, i: number) => (
                     <Box
                       key={i}
                       sx={{

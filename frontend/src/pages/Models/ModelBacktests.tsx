@@ -157,7 +157,7 @@ export default function ModelBacktests() {
               const id = e.target.value as number | '';
               setSelectedModelId(id);
               const m = models.find((x) => x.id === id);
-              if (m) setSelectedVersion(m.version);
+              if (m) setSelectedVersion(m.version || '');
             }}
             sx={{ fontSize: '0.875rem', color: '#e2e8f0' }}
           >

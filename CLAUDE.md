@@ -3,11 +3,11 @@
 ## 项目概述
 基于 Python + FastAPI 的 A 股中低频量化策略平台，核心能力：多因子选股、指数择时、组合构建、回测验证、模拟组合、商业化交付。
 
-**合规定位**：本平台定位为"量化研究与回测分析工具"，不构成投资建议，不提供个性化证券投资顾问服务，不代客交易。详见 [PLAN_COMMERCIALIZATION](document/PLAN_COMMERCIALIZATION.md)。
+**合规定位**：本平台定位为"量化研究与回测分析工具"，不构成投资建议，不提供个性化证券投资顾问服务，不代客交易。详见 [PLAN_PRODUCT](document/PLAN_PRODUCT.md)。
 
 ## 技术栈
 - 后端：Python 3.11+ / FastAPI / SQLAlchemy 2.x / Celery + Redis
-- 前端：React + TypeScript + Vite + Ant Design
+- 前端：React 19 + TypeScript 6 + Vite 8 + MUI v9
 - 数据源：Tushare / AKShare
 - 数据库：PostgreSQL / Redis
 
@@ -32,19 +32,16 @@
 ## 文档
 - [README](document/README.md) — 文档导航（快速查找所需文档）⭐
 - [OPTIMIZATION_HISTORY](document/OPTIMIZATION_HISTORY.md) — 优化历程总览（Phase 1-4完整记录）⭐
-- [PRD](document/PRD.md) — 产品需求文档 V2.4
-- [TDD](document/TDD.md) — 技术架构与数据库设计 V2.3
-- [ADD](document/ADD.md) — 算法设计说明书 V1.2
-- [WORKFLOW](document/WORKFLOW.md) — 工作流文档 V1.2（日终流水线、数据流、性能优化）
-- [API](document/API.md) — API 接口文档 V1.1
-- [DEPLOYMENT](document/DEPLOYMENT.md) — 部署指南 V1.2
-- [user_guide](document/user_guide.md) — 客户端使用指南 V1.1
-- [CONFIG_CENTER](document/CONFIG_CENTER.md) — 配置中心使用文档
-- [FACTOR_ORTHOGONALIZATION_GUIDE](document/FACTOR_ORTHOGONALIZATION_GUIDE.md) — 因子正交化指南
-- [PLAN_COMMERCIALIZATION](document/PLAN_COMMERCIALIZATION.md) — 商业逻辑与合规改造计划书 V1.0
-- [PLAN_UI_UX](document/PLAN_UI_UX.md) — 前台 UI/UX 设计说明书 V1.0
-- [PLAN_COPYWRITING](document/PLAN_COPYWRITING.md) — 首页/定价页/免责声明文案规范 V1.0
-- [archive/](document/archive/) — 历史文档归档（已完成的计划和报告）
+- [PRD](document/PRD.md) — 产品需求文档 V3.0
+- [TDD](document/TDD.md) — 技术架构与数据库设计 V3.0
+- [ADD](document/ADD.md) — 算法与工作流设计说明书 V3.0（含日终流水线、性能优化、自然语言解读）
+- [API](document/API.md) — API 接口文档 V2.0
+- [DEPLOYMENT](document/DEPLOYMENT.md) — 部署指南 V2.0
+- [user_guide](document/user_guide.md) — 客户端使用指南 V2.0
+- [CONFIG_CENTER](document/CONFIG_CENTER.md) — 配置中心使用文档 V2.0
+- [FACTOR_ORTHOGONALIZATION_GUIDE](document/FACTOR_ORTHOGONALIZATION_GUIDE.md) — 因子正交化指南 V2.0
+- [PLAN_PRODUCT](document/PLAN_PRODUCT.md) — 产品化与合规计划书 V1.0（合规框架/文案规范/UI-UX设计）
+- [archive/](document/archive/) — 历史文档归档（4个2024历史文档）
 
 ## 开发规范
 - 所有财务数据必须按公告发布日期使用，禁止未来函数

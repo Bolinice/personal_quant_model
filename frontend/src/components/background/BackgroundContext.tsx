@@ -160,3 +160,5 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     </BackgroundContext.Provider>
   );
 }
+
+export { useBackground } from './hooks';

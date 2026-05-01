@@ -6,3 +6,5 @@ export { default as NeonChip } from './NeonChip';
 export { default as PageHeader } from './PageHeader';
 export { default as Loading } from './Loading';
 export { default as UpgradeDrawer } from './UpgradeDrawer';
+export { default as PaywallPanel } from './PaywallPanel';
+export { LazyLoadWrapper, PageLoadingFallback, ComponentLoadingFallback } from './LazyLoadWrapper';

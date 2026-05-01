@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { useState, useEffect, useRef, memo, useMemo } from 'react';
 import type { ReactNode } from 'react';
 
 /**
@@ -152,5 +152,3 @@ export const LazyImage = memo(({ src, alt, placeholder, className }: LazyImagePr
 });
 
 LazyImage.displayName = 'LazyImage';
-
-import { useState, useEffect, useRef } from 'react';

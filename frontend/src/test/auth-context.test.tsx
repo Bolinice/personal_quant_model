@@ -5,10 +5,10 @@ import { MemoryRouter } from 'react-router-dom';
 
 // Test component that uses auth context
 function AuthTestComponent() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
   return (
     <div>
-      <span data-testid="loading">{String(isLoading)}</span>
+      <span data-testid="loading">{String(loading)}</span>
       <span data-testid="authenticated">{String(isAuthenticated)}</span>
       <span data-testid="username">{user?.username || 'none'}</span>
     </div>

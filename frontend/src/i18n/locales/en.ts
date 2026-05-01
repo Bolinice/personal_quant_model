@@ -1,6 +1,4 @@
-import type { TranslationKeys } from './zh';
-
-const en: TranslationKeys = {
+const en = {
   // Brand
   brand: {
     name: 'Galaxy Rover',
@@ -268,6 +266,88 @@ const en: TranslationKeys = {
     score: 'Score',
     source: 'Source',
     detail: 'Detail',
+  },
+
+  // Settings
+  settings: {
+    profile: 'Profile Settings',
+    userInfo: 'User Information',
+    admin: 'Admin',
+    registerTime: 'Registration Time',
+    changePassword: 'Change Password',
+    currentPassword: 'Current Password',
+    newPassword: 'New Password',
+    confirmNewPassword: 'Confirm New Password',
+    passwordMismatch: 'Passwords do not match',
+    passwordTooShort: 'Password must be at least 8 characters',
+    passwordChangeSuccess: 'Password changed successfully, please login again',
+    passwordChangeFailed: 'Failed to change password',
+    logoutDelayHint: 'Delay logout to show message',
+    logoutSection: 'Logout',
+    logout: 'Logout',
+    riskAssessment: 'Risk Assessment',
+    currentRiskLevel: 'Your Current Risk Level',
+    score: 'Score',
+    retake: 'Retake Assessment',
+    submit: 'Submit Assessment',
+    submitting: 'Submitting...',
+    completed: 'Completed',
+    questions: 'Questions',
+    assessmentScore: 'Assessment Score',
+    loading: 'Loading...',
+    submitFailed: 'Submission failed',
+    loadFailed: 'Load failed',
+    subscription: 'Subscription & Benefits',
+    subscribeFailed: 'Subscription failed',
+  },
+
+  // Common
+  common: {
+    loading: 'Loading...',
+    loadFailed: 'Load failed',
+    submitFailed: 'Submission failed',
+    success: 'Success',
+    failed: 'Failed',
+    confirm: 'Confirm',
+    cancel: 'Cancel',
+    save: 'Save',
+    delete: 'Delete',
+    edit: 'Edit',
+    view: 'View',
+    search: 'Search',
+    filter: 'Filter',
+    export: 'Export',
+    import: 'Import',
+    refresh: 'Refresh',
+    reset: 'Reset',
+    submit: 'Submit',
+    back: 'Back',
+    next: 'Next',
+    previous: 'Previous',
+    finish: 'Finish',
+    close: 'Close',
+  },
+
+  // Background themes
+  bgTheme: {
+    galaxy: 'Galaxy Rover',
+    taurus: 'Taurus',
+    leo: 'Leo',
+    virgo: 'Virgo',
+    scorpio: 'Scorpio',
+    aquarius: 'Aquarius',
+    pisces: 'Pisces',
+  },
+
+  // Time labels
+  bgTime: {
+    galaxy: 'All Day',
+    taurus: 'Dawn 6-9am',
+    leo: 'Morning 9am-12pm',
+    virgo: 'Afternoon 12-3pm',
+    scorpio: 'Evening 3-6pm',
+    aquarius: 'Night 6-9pm',
+    pisces: 'Late Night 9pm-12am',
   },
 };
 

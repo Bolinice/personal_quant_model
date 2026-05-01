@@ -29,7 +29,7 @@ const FactorICChart: React.FC<FactorICChartProps> = ({ data, height = 300, title
         <XAxis dataKey="date" tick={{ fontSize: 12 }} />
         <YAxis tick={{ fontSize: 12 }} />
         <Tooltip
-          formatter={(value: number) => value.toFixed(4)}
+          formatter={(value: any) => typeof value === 'number' ? value.toFixed(4) : ''}
           labelFormatter={(label) => `日期: ${label}`}
         />
         <ReferenceLine y={0} stroke="#999" />

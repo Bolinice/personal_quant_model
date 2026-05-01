@@ -27,7 +27,7 @@ const DrawdownChart: React.FC<DrawdownChartProps> = ({ data, height = 250, title
         <XAxis dataKey="date" tick={{ fontSize: 12 }} />
         <YAxis tick={{ fontSize: 12 }} tickFormatter={(v: number) => `${(v * 100).toFixed(1)}%`} />
         <Tooltip
-          formatter={(value: number) => `${(value * 100).toFixed(2)}%`}
+          formatter={(value: any) => typeof value === 'number' ? `${(value * 100).toFixed(2)}%` : ''}
           labelFormatter={(label) => `日期: ${label}`}
         />
         <Area

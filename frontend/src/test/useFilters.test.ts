@@ -191,7 +191,7 @@ describe('useFilters', () => {
         filters: {
           idRange: {
             field: (item) => item.id,
-            match: (itemValue, filterValue) => itemValue <= filterValue,
+            match: (itemValue, filterValue) => (itemValue as number) <= (filterValue as number),
           },
         },
       })

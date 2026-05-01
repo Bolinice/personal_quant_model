@@ -30,7 +30,7 @@ const NavChart: React.FC<NavChartProps> = ({ data, height = 400, title }) => (
         <XAxis dataKey="date" tick={{ fontSize: 12 }} />
         <YAxis tick={{ fontSize: 12 }} domain={['auto', 'auto']} />
         <Tooltip
-          formatter={(value: number) => value.toFixed(4)}
+          formatter={(value: any) => typeof value === 'number' ? value.toFixed(4) : ''}
           labelFormatter={(label) => `日期: ${label}`}
         />
         <Legend />

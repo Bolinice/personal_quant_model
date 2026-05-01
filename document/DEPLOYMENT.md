@@ -16,6 +16,31 @@
 | Node.js | 18+（前端构建） |
 | Docker | 20+（可选） |
 
+### 1.1 macOS 特定依赖
+
+**LightGBM 依赖（macOS）**
+
+LightGBM 需要 OpenMP 支持，在 macOS 上需要安装 `libomp`：
+
+```bash
+# 使用 Homebrew 安装
+brew install libomp
+
+# 验证安装
+brew list libomp
+```
+
+如果遇到 `libomp.dylib` 缺失错误，执行：
+
+```bash
+# 重新链接 libomp
+brew reinstall libomp
+
+# 设置环境变量（可选，添加到 ~/.zshrc 或 ~/.bash_profile）
+export LDFLAGS="-L/opt/homebrew/opt/libomp/lib"
+export CPPFLAGS="-I/opt/homebrew/opt/libomp/include"
+```
+
 ---
 
 ## 2. 开发环境部署

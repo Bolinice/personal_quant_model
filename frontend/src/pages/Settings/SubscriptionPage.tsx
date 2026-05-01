@@ -95,7 +95,7 @@ export default function SubscriptionPage() {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h5" fontWeight={700} sx={{ mb: 0.5, color: '#f1f5f9' }}>
+      <Typography variant="h5" sx={{ mb: 0.5, color: '#f1f5f9', fontWeight: 700 }}>
         {t('subscription.title', '套餐与权益')}
       </Typography>
       <Typography variant="body2" sx={{ mb: 4, color: '#64748b' }}>
@@ -127,8 +127,7 @@ export default function SubscriptionPage() {
               </Typography>
               <Typography
                 variant="h6"
-                fontWeight={700}
-                sx={{ color: '#e2e8f0', textTransform: 'capitalize' }}
+                sx={{ color: '#e2e8f0', textTransform: 'capitalize', fontWeight: 700 }}
               >
                 {current.plan_detail?.display_name || currentPlanName}
               </Typography>
@@ -198,13 +197,13 @@ export default function SubscriptionPage() {
               <CardContent sx={{ p: 3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                   {PLAN_ICONS[plan.name]}
-                  <Typography variant="h6" fontWeight={700} sx={{ color: '#f1f5f9' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#f1f5f9' }}>
                     {plan.display_name}
                   </Typography>
                 </Box>
 
                 <Box sx={{ mb: 2 }}>
-                  <Typography variant="h3" fontWeight={800} sx={{ color, display: 'inline' }}>
+                  <Typography variant="h3" sx={{ fontWeight: 800, color, display: 'inline' }}>
                     ¥{plan.price}
                   </Typography>
                   {plan.price > 0 && (
@@ -228,7 +227,9 @@ export default function SubscriptionPage() {
                       </ListItemIcon>
                       <ListItemText
                         primary={f.trim()}
-                        primaryTypographyProps={{ variant: 'body2', color: '#cbd5e1' }}
+                        slotProps={{
+                          primary: { variant: 'body2', sx: { color: '#cbd5e1' } },
+                        }}
                       />
                     </ListItem>
                   ))}
@@ -280,7 +281,7 @@ export default function SubscriptionPage() {
       <Dialog
         open={!!confirmPlan}
         onClose={() => setConfirmPlan(null)}
-        PaperProps={{ sx: { background: '#1e293b', borderRadius: 3 } }}
+        slotProps={{ paper: { sx: { background: '#1e293b', borderRadius: 3 } } }}
       >
         <DialogTitle sx={{ color: '#f1f5f9' }}>
           {t('subscription.confirmTitle', '确认订阅')}

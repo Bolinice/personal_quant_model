@@ -18,14 +18,14 @@ export const defaultContent = {
     },
     brand: {
       title: '不是制造市场噪音，而是建立研究秩序',
-      subtitle: null,
+      subtitle: undefined,
       body: 'A股市场充满风格切换、资金博弈与情绪扰动。短期热点可以吸引注意力，但很难构成长期优势。真正有价值的，不只是某一次判断，而是能够持续产生高质量判断的研究框架。\n\n我们将数据工程、因子研究、模型评分、组合优化与风险控制整合为一体，让研究不再停留在分散的脚本、零散的表格和单次回测中，而成为一套可以持续运行、持续复盘、持续升级的系统能力。',
-      extra: null,
+      extra: undefined,
     },
     core_values: {
       title: '你获得的不只是结果，而是一整套量化研究能力',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         cards: [
           {
@@ -51,7 +51,7 @@ export const defaultContent = {
       title: '从数据到组合，一条完整的研究流水线',
       subtitle:
         '平台围绕A股日终研究场景设计，将原始市场数据转化为可使用的组合结论与研究输出。每日收盘后，系统自动完成数据同步、因子计算、模型打分、风险检查与报告生成，让研究工作更高效，也让结果更具连续性与一致性。',
-      body: null,
+      body: undefined,
       extra: {
         modules: [
           {
@@ -114,7 +114,7 @@ export const defaultContent = {
     workflow: {
       title: '让研究每天稳定发生，而不是偶尔灵感闪现',
       subtitle: '平台采用自动化日终流水线机制，将研究工作从手工处理升级为系统运行。',
-      body: null,
+      body: undefined,
       extra: {
         timeline: [
           {
@@ -148,8 +148,8 @@ export const defaultContent = {
     },
     advantages: {
       title: '为什么选择我们',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         cards: [
           {
@@ -181,7 +181,7 @@ export const defaultContent = {
     },
     team: {
       title: '兼具学术训练、工程能力与市场理解的复合型团队',
-      subtitle: null,
+      subtitle: undefined,
       body: '团队核心成员拥有海内外知名院校及国内重点高校背景，具备经济学、管理学、人工智能、数据科学等方向的硕士及以上学历。在学术训练之外，成员曾在头部互联网平台与技术团队从事系统研发、算法工程、数据平台与产品建设工作，兼具数理研究能力、工程实现能力与产品化落地经验。\n\n我们长期关注中国资本市场中的系统化投资方法，强调以数据质量为研究起点，以统计显著性为方法约束，以风险控制为组合底线。',
       extra: {
         tags: [
@@ -195,8 +195,8 @@ export const defaultContent = {
     },
     audience: {
       title: '适合哪些用户',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         cards: [
           {
@@ -218,7 +218,7 @@ export const defaultContent = {
       title: '从标准订阅到机构合作，选择适合你的研究方案',
       subtitle:
         '我们提供面向不同使用场景的产品方案，包括个人版、专业版、团队版与机构版。你可以根据股票池范围、调仓频率、数据权限与协作需求，选择最适合自己的订阅方式。',
-      body: null,
+      body: undefined,
       extra: {
         plans: [
           {
@@ -243,9 +243,9 @@ export const defaultContent = {
     },
     risk_disclaimer: {
       title: '风险提示',
-      subtitle: null,
+      subtitle: undefined,
       body: '本平台提供的内容基于历史数据、统计模型与组合分析结果，用于量化研究与信息辅助，不构成任何投资建议、收益承诺或代客理财安排。证券市场存在波动风险，历史表现不代表未来结果。用户应结合自身风险承受能力、交易经验与投资目标独立判断。',
-      extra: null,
+      extra: undefined,
     },
     cta: {
       title: '在不确定的市场里，建立更有结构感的研究能力',
@@ -263,11 +263,11 @@ export const defaultContent = {
       subtitle:
         '围绕不同股票池范围、调仓频率、数据权限与协作需求，提供从个人研究到机构合作的多层次订阅方案。',
       body: '无论你是个人投资者、职业交易者，还是小型研究团队与机构客户，都可以找到适合自己的研究配置。',
-      extra: null,
+      extra: undefined,
     },
     pricing_philosophy: {
       title: '选择与你的研究深度相匹配的方案',
-      subtitle: null,
+      subtitle: undefined,
       body: '我们的产品定价基于四个核心维度设计：',
       extra: {
         dimensions: [
@@ -292,8 +292,8 @@ export const defaultContent = {
     },
     pricing_plans: {
       title: '标准订阅方案',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         plans: [
           {
@@ -393,8 +393,8 @@ export const defaultContent = {
     },
     pricing_comparison: {
       title: '方案对比',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         headers: ['版本', '股票池', '调仓频率', '核心权益', '价格'],
         rows: [
@@ -427,7 +427,7 @@ export const defaultContent = {
     pricing_matrix: {
       title: '单模型订阅价格',
       subtitle: '如果你希望按单个股票池与单一调仓频率购买，也可选择单模型订阅方式。',
-      body: null,
+      body: undefined,
       extra: {
         yearly: {
           pools: ['沪深300', '中证500', '中证1000', '全A'],
@@ -454,8 +454,8 @@ export const defaultContent = {
     },
     upgrade_packages: {
       title: '可选升级项',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         packages: [
           {
@@ -486,8 +486,8 @@ export const defaultContent = {
     },
     combo_discounts: {
       title: '组合购买优惠',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         rules: [
           {
@@ -527,8 +527,8 @@ export const defaultContent = {
     },
     audience_selector: {
       title: '不知道选哪个版本？',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         options: [
           {
@@ -556,8 +556,8 @@ export const defaultContent = {
     },
     faq: {
       title: '常见问题',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         items: [
           {
@@ -589,15 +589,15 @@ export const defaultContent = {
     },
     risk_disclaimer: {
       title: '风险提示',
-      subtitle: null,
+      subtitle: undefined,
       body: '本平台展示内容基于历史数据、统计分析与模型计算结果，仅供研究参考。证券市场存在波动风险，历史表现不代表未来结果。本服务不构成投资建议、收益承诺或代客理财安排。请用户根据自身风险承受能力独立判断。',
-      extra: null,
+      extra: undefined,
     },
     cta: {
       title: '选择适合你的研究方案',
       subtitle:
         '如果你希望进一步了解股票池权限、调仓频率、API能力或机构合作方式，欢迎联系我们获取更详细的方案说明。',
-      body: null,
+      body: undefined,
       extra: {
         buttons: ['申请试用', '联系销售', '获取机构报价'],
       },
@@ -606,13 +606,13 @@ export const defaultContent = {
   about: {
     about_story: {
       title: '我们为什么做这件事',
-      subtitle: null,
+      subtitle: undefined,
       body: '在大多数人眼里，投资是一种判断；在我们看来，投资首先是一种秩序的建立。\n\nA股市场充满速度、情绪与噪音。热点轮动、风格切换、信息不对称与群体情绪，让很多决策看起来像是经验，本质上却只是随机波动中的短暂幸运。\n\n我们相信，真正值得长期依赖的，不应只是感觉，而应是一套可以被验证、被复盘、被迭代的研究体系。\n\n因此，我们选择从最底层开始构建：从数据质量，到因子预处理；从模型评分，到组合优化；从市场信号，到风险约束；从一次回测，到每日持续运行的自动化研究流水线。\n\n这不是一套追求表面复杂度的系统。我们更在意的是：它是否足够严谨，是否足够稳定，是否足够克制，是否经得起时间与市场环境变化的检验。\n\n我们的工作并不是制造确定性的幻觉，而是在不确定的市场里，为决策提供更高质量的结构。\n\n因为在长期主义视角下，真正稀缺的，不是一个单点结论，而是持续产出高质量判断的能力。',
-      extra: null,
+      extra: undefined,
     },
     about_team: {
       title: '兼具学术训练、工程能力与市场理解的复合型团队',
-      subtitle: null,
+      subtitle: undefined,
       body: '我们是一支专注于中国资本市场系统化研究的复合型团队，长期致力于将经济学框架、数理统计方法、人工智能技术与工程化系统能力结合起来，打造面向A股市场的量化研究与组合分析平台。\n\n团队核心成员拥有海内外知名院校及国内重点高校背景，具备经济学、管理学、人工智能、数据科学等方向的硕士及以上学历。在学术训练之外，成员曾在头部互联网平台与技术团队从事数据系统、算法平台、研究工具与产品架构相关工作，因此不仅理解模型，也理解如何让模型以稳定、高效、可扩展的方式运行。\n\n我们相信，真正长期有效的量化能力，并不来自对市场情绪的夸张解读，而来自对数据质量、研究方法、风险约束与执行细节的持续打磨。',
       extra: {
         tags: [
@@ -633,8 +633,8 @@ export const defaultContent = {
     },
     team_advantages: {
       title: '团队优势',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         advantages: [
           {
@@ -664,7 +664,7 @@ export const defaultContent = {
       title: '在不确定的市场里，提供更有结构感的研究能力',
       subtitle:
         '如果你正在寻找一套更严谨、更稳定、也更适合中国市场的量化研究框架，欢迎进一步了解我们的产品方案。',
-      body: null,
+      body: undefined,
       extra: {
         buttons: ['申请试用', '预约演示', '联系顾问'],
       },

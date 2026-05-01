@@ -25,8 +25,8 @@ export interface ConstellationTheme {
 export const CONSTELLATION_THEMES: ConstellationTheme[] = [
   {
     id: 'galaxy',
-    name: '银河漫游',
-    timeLabel: '全天候',
+    name: 'bgTheme.galaxy',
+    timeLabel: 'bgTime.galaxy',
     icon: '🌌',
     bgColor: '#030712',
     starColor: [200, 220, 255],
@@ -38,8 +38,8 @@ export const CONSTELLATION_THEMES: ConstellationTheme[] = [
   },
   {
     id: 'taurus',
-    name: '金牛座',
-    timeLabel: '清晨 6-9时',
+    name: 'bgTheme.taurus',
+    timeLabel: 'bgTime.taurus',
     icon: '♉',
     bgColor: '#0a0a1a',
     starColor: [255, 200, 140],
@@ -51,8 +51,8 @@ export const CONSTELLATION_THEMES: ConstellationTheme[] = [
   },
   {
     id: 'leo',
-    name: '狮子座',
-    timeLabel: '上午 9-12时',
+    name: 'bgTheme.leo',
+    timeLabel: 'bgTime.leo',
     icon: '♌',
     bgColor: '#0d0a18',
     starColor: [255, 180, 100],
@@ -64,8 +64,8 @@ export const CONSTELLATION_THEMES: ConstellationTheme[] = [
   },
   {
     id: 'virgo',
-    name: '室女座',
-    timeLabel: '午后 12-15时',
+    name: 'bgTheme.virgo',
+    timeLabel: 'bgTime.virgo',
     icon: '♍',
     bgColor: '#080e1a',
     starColor: [180, 210, 255],
@@ -77,8 +77,8 @@ export const CONSTELLATION_THEMES: ConstellationTheme[] = [
   },
   {
     id: 'scorpio',
-    name: '天蝎座',
-    timeLabel: '傍晚 15-18时',
+    name: 'bgTheme.scorpio',
+    timeLabel: 'bgTime.scorpio',
     icon: '♏',
     bgColor: '#0f0810',
     starColor: [255, 140, 160],
@@ -90,8 +90,8 @@ export const CONSTELLATION_THEMES: ConstellationTheme[] = [
   },
   {
     id: 'aquarius',
-    name: '水瓶座',
-    timeLabel: '夜间 18-21时',
+    name: 'bgTheme.aquarius',
+    timeLabel: 'bgTime.aquarius',
     icon: '♒',
     bgColor: '#050a14',
     starColor: [120, 200, 255],
@@ -103,8 +103,8 @@ export const CONSTELLATION_THEMES: ConstellationTheme[] = [
   },
   {
     id: 'pisces',
-    name: '双鱼座',
-    timeLabel: '深夜 21-24时',
+    name: 'bgTheme.pisces',
+    timeLabel: 'bgTime.pisces',
     icon: '♓',
     bgColor: '#06060f',
     starColor: [160, 180, 255],

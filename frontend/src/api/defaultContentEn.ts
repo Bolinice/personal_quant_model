@@ -18,14 +18,14 @@ export const defaultContentEn = {
     },
     brand: {
       title: 'Not creating market noise, but establishing research order',
-      subtitle: null,
+      subtitle: undefined,
       body: 'The A-share market is full of style rotations, capital games, and sentiment disruptions. Short-term hot topics may attract attention, but rarely constitute a lasting advantage. What truly matters is not a single judgment, but a research framework that consistently produces high-quality insights.\n\nWe integrate data engineering, factor research, model scoring, portfolio optimization, and risk control into a unified system, ensuring that research no longer remains scattered across scripts, isolated spreadsheets, and one-off backtests, but becomes a systematic capability that can continuously run, review, and upgrade.',
-      extra: null,
+      extra: undefined,
     },
     core_values: {
       title: 'What you gain is not just results, but a complete quantitative research capability',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         cards: [
           {
@@ -51,7 +51,7 @@ export const defaultContentEn = {
       title: 'From data to portfolio, a complete research pipeline',
       subtitle:
         'The platform is designed around A-share end-of-day research scenarios, transforming raw market data into actionable portfolio conclusions and research outputs. After each market close, the system automatically completes data synchronization, factor calculation, model scoring, risk checks, and report generation, making research more efficient and results more consistent and coherent.',
-      body: null,
+      body: undefined,
       extra: {
         modules: [
           {
@@ -115,7 +115,7 @@ export const defaultContentEn = {
       title: 'Making research happen consistently every day, not just when inspiration strikes',
       subtitle:
         'The platform employs an automated end-of-day pipeline mechanism, upgrading research work from manual processing to systematic execution.',
-      body: null,
+      body: undefined,
       extra: {
         timeline: [
           {
@@ -149,8 +149,8 @@ export const defaultContentEn = {
     },
     advantages: {
       title: 'Why Choose Us',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         cards: [
           {
@@ -183,7 +183,7 @@ export const defaultContentEn = {
     team: {
       title:
         'A multi-disciplinary team combining academic training, engineering capability, and market understanding',
-      subtitle: null,
+      subtitle: undefined,
       body: "Core team members hold backgrounds from renowned overseas and top domestic universities, with master's degrees or above in economics, management, artificial intelligence, data science, and related fields. Beyond academic training, members have worked at leading internet platforms and technology teams in systems R&D, algorithm engineering, data platforms, and product development, combining quantitative research capability, engineering implementation skills, and productization experience.\n\nWe maintain a long-term focus on systematic investment methods in China's capital markets, emphasizing data quality as the starting point for research, statistical significance as a methodological constraint, and risk control as the portfolio baseline.",
       extra: {
         tags: [
@@ -197,8 +197,8 @@ export const defaultContentEn = {
     },
     audience: {
       title: 'Who Is This For',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         cards: [
           {
@@ -221,7 +221,7 @@ export const defaultContentEn = {
         'From standard subscriptions to institutional partnerships, choose the research plan that fits you',
       subtitle:
         'We offer product plans for different usage scenarios, including Individual, Professional, Team, and Institutional editions. You can choose the subscription that best fits your needs based on stock pool scope, rebalancing frequency, data access, and collaboration requirements.',
-      body: null,
+      body: undefined,
       extra: {
         plans: [
           {
@@ -246,9 +246,9 @@ export const defaultContentEn = {
     },
     risk_disclaimer: {
       title: 'Risk Disclaimer',
-      subtitle: null,
+      subtitle: undefined,
       body: 'The content provided by this platform is based on historical data, statistical models, and portfolio analysis results, intended for quantitative research and informational assistance only. It does not constitute any investment advice, return guarantees, or discretionary account management arrangements. Securities markets involve volatility risks, and past performance does not guarantee future results. Users should make independent judgments based on their own risk tolerance, trading experience, and investment objectives.',
-      extra: null,
+      extra: undefined,
     },
     cta: {
       title: 'Build more structured research capabilities in an uncertain market',
@@ -266,11 +266,11 @@ export const defaultContentEn = {
       subtitle:
         'Multi-tier subscription plans from individual research to institutional partnerships, based on different stock pool scopes, rebalancing frequencies, data access, and collaboration needs.',
       body: 'Whether you are an individual investor, professional trader, or part of a small research team or institution, you can find the right research configuration.',
-      extra: null,
+      extra: undefined,
     },
     pricing_philosophy: {
       title: 'Choose a plan that matches your research depth',
-      subtitle: null,
+      subtitle: undefined,
       body: 'Our product pricing is designed around four core dimensions:',
       extra: {
         dimensions: [
@@ -295,8 +295,8 @@ export const defaultContentEn = {
     },
     pricing_plans: {
       title: 'Standard Subscription Plans',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         plans: [
           {
@@ -396,8 +396,8 @@ export const defaultContentEn = {
     },
     pricing_comparison: {
       title: 'Plan Comparison',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         headers: ['Edition', 'Stock Pool', 'Rebalancing Frequency', 'Core Benefits', 'Price'],
         rows: [
@@ -443,7 +443,7 @@ export const defaultContentEn = {
       title: 'Single Model Subscription Pricing',
       subtitle:
         'If you prefer to purchase by individual stock pool and single rebalancing frequency, you can also choose the single model subscription option.',
-      body: null,
+      body: undefined,
       extra: {
         yearly: {
           pools: ['CSI 300', 'CSI 500', 'CSI 1000', 'All A-Share'],
@@ -470,8 +470,8 @@ export const defaultContentEn = {
     },
     upgrade_packages: {
       title: 'Optional Upgrade Packages',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         packages: [
           {
@@ -502,8 +502,8 @@ export const defaultContentEn = {
     },
     combo_discounts: {
       title: 'Bundle Purchase Discounts',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         rules: [
           {
@@ -543,8 +543,8 @@ export const defaultContentEn = {
     },
     audience_selector: {
       title: 'Not sure which plan to choose?',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         options: [
           {
@@ -576,8 +576,8 @@ export const defaultContentEn = {
     },
     faq: {
       title: 'Frequently Asked Questions',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         items: [
           {
@@ -609,15 +609,15 @@ export const defaultContentEn = {
     },
     risk_disclaimer: {
       title: 'Risk Disclaimer',
-      subtitle: null,
+      subtitle: undefined,
       body: 'The content displayed on this platform is based on historical data, statistical analysis, and model computation results, and is intended for research reference only. Securities markets involve volatility risks, and past performance does not guarantee future results. This service does not constitute investment advice, return guarantees, or discretionary account management arrangements. Users should make independent judgments based on their own risk tolerance.',
-      extra: null,
+      extra: undefined,
     },
     cta: {
       title: 'Choose the research plan that fits you',
       subtitle:
         'If you would like to learn more about stock pool access, rebalancing frequencies, API capabilities, or institutional partnership options, please contact us for a more detailed plan description.',
-      body: null,
+      body: undefined,
       extra: {
         buttons: ['Request Trial', 'Contact Sales', 'Get Institutional Quote'],
       },
@@ -626,14 +626,14 @@ export const defaultContentEn = {
   about: {
     about_story: {
       title: 'Why We Do This',
-      subtitle: null,
+      subtitle: undefined,
       body: 'To most people, investing is about judgment; to us, investing is first and foremost about establishing order.\n\nThe A-share market is filled with speed, sentiment, and noise. Hot topic rotations, style switches, information asymmetry, and herd behavior make many decisions appear to be based on experience, when they are essentially just brief strokes of luck amid random fluctuations.\n\nWe believe that what is truly worth relying on in the long run should not be just a feeling, but a research system that can be validated, reviewed, and iterated.\n\nTherefore, we chose to build from the ground up: from data quality, to factor preprocessing; from model scoring, to portfolio optimization; from market signals, to risk constraints; from a single backtest, to an automated research pipeline that runs consistently every day.\n\nThis is not a system that pursues superficial complexity. We care more about whether it is rigorous enough, stable enough, disciplined enough, and whether it can withstand the test of time and changing market conditions.\n\nOur work is not about creating the illusion of certainty, but about providing higher-quality structure for decision-making in an uncertain market.\n\nBecause from a long-term perspective, what is truly scarce is not a single-point conclusion, but the capability to consistently produce high-quality judgments.',
-      extra: null,
+      extra: undefined,
     },
     about_team: {
       title:
         'A multi-disciplinary team combining academic training, engineering capability, and market understanding',
-      subtitle: null,
+      subtitle: undefined,
       body: "We are a multi-disciplinary team focused on systematic research in China's capital markets, dedicated to combining economic frameworks, statistical methods, AI technologies, and engineering system capabilities to build a quantitative research and portfolio analysis platform for the A-share market.\n\nCore team members hold backgrounds from renowned overseas and top domestic universities, with master's degrees or above in economics, management, artificial intelligence, data science, and related fields. Beyond academic training, members have worked at leading internet platforms and technology teams on data systems, algorithm platforms, research tools, and product architecture, so they understand not just models, but how to make models run in a stable, efficient, and scalable manner.\n\nWe believe that truly long-term effective quantitative capability does not come from exaggerated interpretations of market sentiment, but from continuous refinement of data quality, research methods, risk constraints, and execution details.",
       extra: {
         tags: [
@@ -654,8 +654,8 @@ export const defaultContentEn = {
     },
     team_advantages: {
       title: 'Team Advantages',
-      subtitle: null,
-      body: null,
+      subtitle: undefined,
+      body: undefined,
       extra: {
         advantages: [
           {
@@ -685,7 +685,7 @@ export const defaultContentEn = {
       title: 'Providing more structured research capabilities in an uncertain market',
       subtitle:
         'If you are looking for a more rigorous, stable, and China-market-adapted quantitative research framework, we welcome you to learn more about our product plans.',
-      body: null,
+      body: undefined,
       extra: {
         buttons: ['Request Trial', 'Schedule Demo', 'Contact Advisor'],
       },

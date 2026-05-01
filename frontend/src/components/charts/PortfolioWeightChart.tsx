@@ -39,14 +39,14 @@ const PortfolioWeightChart: React.FC<PortfolioWeightChartProps> = ({
           cx="50%"
           cy="50%"
           outerRadius={120}
-          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+          label={(entry: any) => `${entry.name}: ${typeof entry.percent === 'number' ? (entry.percent * 100).toFixed(1) : '0.0'}%`}
           labelLine
         >
           {data.map((_, index) => (
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
           ))}
         </Pie>
-        <Tooltip formatter={(value: number) => `${(value * 100).toFixed(2)}%`} />
+        <Tooltip formatter={(value: any) => typeof value === 'number' ? `${(value * 100).toFixed(2)}%` : ''} />
         <Legend />
       </PieChart>
     </ResponsiveContainer>

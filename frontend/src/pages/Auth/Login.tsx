@@ -69,8 +69,7 @@ export default function Login() {
         <Box sx={{ position: 'relative', zIndex: 1 }}>
           <Typography
             variant="h3"
-            fontWeight={800}
-            sx={{ color: '#f8fafc', letterSpacing: '-0.02em', mb: 1 }}
+            sx={{ fontWeight: 800, color: '#f8fafc', letterSpacing: '-0.02em', mb: 1 }}
           >
             Taurus Quant
           </Typography>
@@ -98,12 +97,12 @@ export default function Login() {
         <Box sx={{ width: '100%', maxWidth: 400 }}>
           {/* 移动端品牌标题 */}
           <Box sx={{ display: { xs: 'block', lg: 'none' }, mb: 4 }}>
-            <Typography variant="h5" fontWeight={800} sx={{ color: '#f8fafc' }}>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: '#f8fafc' }}>
               Taurus Quant
             </Typography>
           </Box>
 
-          <Typography variant="h5" fontWeight={700} sx={{ color: '#f1f5f9', mb: 0.5 }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#f1f5f9', mb: 0.5 }}>
             {t('auth.welcomeBack')}
           </Typography>
           <Typography variant="body2" sx={{ color: '#64748b', mb: 4 }}>

@@ -9,8 +9,15 @@
 - risk_calc: 风险计算纯函数（IC、RankIC、波动率、最大回撤等）
 - portfolio_opt: 组合优化纯函数（等权、IC加权、约束优化等）
 - preprocess: 数据预处理纯函数（去极值、标准化、中性化等）
+- cpcv: 组合清洗交叉验证（Combinatorial Purged Cross-Validation）
 """
 
+from app.core.pure.cpcv import (
+    CombinatorialPurgedCV,
+    PurgedKFold,
+    get_embargo_times,
+    get_train_times,
+)
 from app.core.pure.factor_math import (
     calc_amihud_illiquidity,
     calc_bollinger_bands,
@@ -108,6 +115,11 @@ from app.core.pure.risk_calc import (
 )
 
 __all__ = [
+    # cpcv
+    "CombinatorialPurgedCV",
+    "PurgedKFold",
+    "get_embargo_times",
+    "get_train_times",
     # factor_math
     "calc_amihud_illiquidity",
     "calc_bollinger_bands",

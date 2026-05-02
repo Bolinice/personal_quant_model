@@ -40,5 +40,73 @@
       "final_score"
     ],
     "sha256": "f9fe19fb6208e74a"
+  },
+  "risk_model": {
+    "updated_at": "2026-05-02T16:47:00.275542",
+    "rows": 1,
+    "columns": [
+      "sample_cov_trace",
+      "lw_cov_trace",
+      "ewma_cov_trace",
+      "hist_var_95",
+      "hist_var_99",
+      "cvar_95",
+      "cvar_99",
+      "portfolio_vol_sample",
+      "portfolio_vol_lw",
+      "portfolio_vol_ewma"
+    ],
+    "sha256": "85be698544fa681d"
+  },
+  "backtest_metrics": {
+    "updated_at": "2026-05-02T16:47:00.277665",
+    "rows": 1,
+    "columns": [
+      "total_return",
+      "annual_return",
+      "sharpe_ratio",
+      "sortino_ratio",
+      "max_drawdown",
+      "excess_return",
+      "volatility"
+    ],
+    "sha256": "056737ee486b88c7"
+  },
+  "factor_calculation": {
+    "updated_at": "2026-05-02T16:47:00.232451",
+    "rows": 30,
+    "columns": [
+      "ts_code",
+      "momentum_skip",
+      "reversal_1m",
+      "volatility",
+      "turnover_mean",
+      "amihud_illiquidity",
+      "zero_return_ratio",
+      "ep_ttm",
+      "bp",
+      "roe",
+      "roa",
+      "gross_margin",
+      "net_margin",
+      "current_ratio",
+      "revenue_growth",
+      "sloan_accrual",
+      "rsi"
+    ],
+    "sha256": "ca60e79e8a52d2bf"
+  },
+  "end_to_end_pipeline": {
+    "updated_at": "2026-05-02T16:47:00.332267",
+    "rows": 1,
+    "columns": [
+      "n_stocks",
+      "avg_momentum",
+      "avg_volatility",
+      "avg_roe",
+      "portfolio_vol",
+      "var_95"
+    ],
+    "sha256": "9a3002a15b21dc4e"
   }
 }

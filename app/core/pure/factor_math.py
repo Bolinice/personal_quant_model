@@ -382,7 +382,7 @@ def calc_yoy_growth(current: pd.Series, yoy_4q: pd.Series) -> pd.Series:
     Returns:
         同比增长率序列
     """
-    return safe_divide(current - yoy_4q, yoy_4q.abs())
+    return safe_divide(current - yoy_4q, np.abs(yoy_4q))
 
 
 # ==================== 质量因子 ====================

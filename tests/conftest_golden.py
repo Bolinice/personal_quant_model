@@ -33,6 +33,11 @@ GOLDEN_FILES = {
     "factor_values": FIXTURES_DIR / "golden_factor_values.parquet",
     "labels": FIXTURES_DIR / "golden_labels.parquet",
     "ensemble": FIXTURES_DIR / "golden_ensemble.parquet",
+    # 增强版 Golden Master
+    "factor_calculation": FIXTURES_DIR / "golden_factor_calculation.parquet",
+    "risk_model": FIXTURES_DIR / "golden_risk_model.parquet",
+    "backtest_metrics": FIXTURES_DIR / "golden_backtest_metrics.parquet",
+    "end_to_end_pipeline": FIXTURES_DIR / "golden_end_to_end_pipeline.parquet",
 }
 
 

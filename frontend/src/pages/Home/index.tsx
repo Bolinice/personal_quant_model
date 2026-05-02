@@ -63,13 +63,13 @@ export default function HomePage() {
           px: { xs: 4, md: 8 },
         }}
       >
-        {/* 背景光晕: 更大更柔和 */}
+        {/* 背景光晕: 更柔和优雅 */}
         <Box
           sx={{
             position: 'absolute',
             inset: 0,
             background:
-              'radial-gradient(ellipse 80% 60% at 50% 35%, rgba(34,211,238,0.06) 0%, transparent 100%)',
+              'radial-gradient(ellipse 80% 60% at 50% 35%, rgba(59,130,246,0.08) 0%, transparent 100%)',
           }}
         />
         <Box
@@ -77,7 +77,7 @@ export default function HomePage() {
             position: 'absolute',
             inset: 0,
             background:
-              'radial-gradient(ellipse 60% 50% at 60% 70%, rgba(139,92,246,0.04) 0%, transparent 100%)',
+              'radial-gradient(ellipse 60% 50% at 60% 70%, rgba(139,92,246,0.05) 0%, transparent 100%)',
           }}
         />
 

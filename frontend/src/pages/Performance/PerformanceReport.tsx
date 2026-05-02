@@ -1,19 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Box, Typography, Grid, TextField, MenuItem, Button, Snackbar, Alert } from '@mui/material';
 import AssessmentIcon from '@mui/icons-material/Assessment';
-import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
-  Legend,
-} from 'recharts';
+import ReactECharts from 'echarts-for-react';
 import { performanceApi, backtestApi } from '@/api';
 import type { PerformanceAnalysis, PerformanceReport } from '@/api';
 import type { Backtest } from '@/api';
@@ -222,24 +210,26 @@ export default function PerformanceReportPage() {
                 <Typography variant="h6" gutterBottom>
                   行业暴露
                 </Typography>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={industryData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={100}
-                      label={({ name, value }) => `${name}: ${value.toFixed(1)}%`}
-                    >
-                      {industryData.map((_, i) => (
-                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={chartStyle.contentStyle} />
-                  </PieChart>
-                </ResponsiveContainer>
+                <ReactECharts
+                  option={{
+                    tooltip: { trigger: 'item' },
+                    series: [
+                      {
+                        type: 'pie',
+                        radius: '70%',
+                        data: industryData.map((item, i) => ({
+                          name: item.name,
+                          value: item.value,
+                          itemStyle: { color: COLORS[i % COLORS.length] },
+                        })),
+                        label: {
+                          formatter: '{b}: {c}%',
+                        },
+                      },
+                    ],
+                  }}
+                  style={{ height: '300px' }}
+                />
               </GlassPanel>
             </Grid>
           )}
@@ -249,22 +239,33 @@ export default function PerformanceReportPage() {
                 <Typography variant="h6" gutterBottom>
                   风格暴露
                 </Typography>
-                <ResponsiveContainer width="100%" height={300}>
-                  <RadarChart data={styleData} cx="50%" cy="50%" outerRadius={80}>
-                    <PolarGrid stroke="rgba(148,163,184,0.15)" />
-                    <PolarAngleAxis dataKey="name" fontSize={12} tick={{ fill: '#64748b' }} />
-                    <PolarRadiusAxis fontSize={10} tick={{ fill: '#64748b' }} />
-                    <Radar
-                      name="暴露度"
-                      dataKey="value"
-                      stroke="#22d3ee"
-                      fill="#22d3ee"
-                      fillOpacity={0.2}
-                    />
-                    <Legend />
-                    <Tooltip contentStyle={chartStyle.contentStyle} />
-                  </RadarChart>
-                </ResponsiveContainer>
+                <ReactECharts
+                  option={{
+                    tooltip: { trigger: 'item' },
+                    radar: {
+                      indicator: styleData.map((item) => ({ name: item.name, max: 100 })),
+                      splitLine: { lineStyle: { color: 'rgba(148,163,184,0.15)' } },
+                      splitArea: { show: false },
+                      axisLine: { lineStyle: { color: 'rgba(148,163,184,0.15)' } },
+                      axisName: { color: '#64748b', fontSize: 12 },
+                    },
+                    series: [
+                      {
+                        type: 'radar',
+                        data: [
+                          {
+                            value: styleData.map((item) => item.value),
+                            name: '暴露度',
+                            areaStyle: { color: 'rgba(34, 211, 238, 0.2)' },
+                            lineStyle: { color: '#22d3ee' },
+                            itemStyle: { color: '#22d3ee' },
+                          },
+                        ],
+                      },
+                    ],
+                  }}
+                  style={{ height: '300px' }}
+                />
               </GlassPanel>
             </Grid>
           )}

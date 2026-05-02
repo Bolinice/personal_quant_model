@@ -1,5 +1,6 @@
 import { Box, Typography } from '@mui/material';
 import { motion } from 'framer-motion';
+import { tokens } from '../../styles/tokens';
 
 interface MetricCardProps {
   label: string;
@@ -13,7 +14,7 @@ interface MetricCardProps {
 export default function MetricCard({
   label,
   value,
-  color = '#22d3ee',
+  color = tokens.colors.brand.primary,
   icon,
   delay = 0,
 }: MetricCardProps) {
@@ -23,38 +24,70 @@ export default function MetricCard({
     <motion.div
       initial={{ opacity: 0, y: 20, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.5, delay, ease: 'easeOut' }}
+      transition={{ duration: 0.5, delay, ease: [0.4, 0, 0.2, 1] }}
     >
       <Box
         sx={{
-          backdropFilter: 'blur(16px)',
-          backgroundColor: 'rgba(15, 23, 42, 0.6)',
-          border: '1px solid rgba(148, 163, 184, 0.1)',
-          borderRadius: 3,
-          p: 2.5,
+          backdropFilter: tokens.effects.backdropBlur.base,
+          backgroundColor: tokens.colors.surface.card,
+          border: `1px solid ${tokens.colors.border.default}`,
+          borderRadius: tokens.borderRadius.xl,
+          p: 3,
           position: 'relative',
           overflow: 'hidden',
           cursor: 'default',
-          transition: 'all 0.3s ease',
-          '&:hover': {
-            borderColor: `${color}44`,
-            boxShadow: `0 0 24px ${color}18, inset 0 0 24px ${color}08`,
-            transform: 'translateY(-2px)',
-          },
-          '&::after': {
+          transition: `all ${tokens.transitions.duration.base} ${tokens.transitions.easing.default}`,
+
+          // 顶部微妙的渐变线
+          '&::before': {
             content: '""',
             position: 'absolute',
             top: 0,
             left: 0,
             right: 0,
-            height: 2,
-            background: `linear-gradient(90deg, transparent, ${color}88, transparent)`,
+            height: '1px',
+            background: `linear-gradient(90deg, transparent, ${color}40, transparent)`,
+            pointerEvents: 'none',
+          },
+
+          // 悬停效果
+          '&:hover': {
+            backgroundColor: tokens.colors.surface.cardHover,
+            borderColor: `${color}30`,
+            boxShadow: `0 0 20px ${color}10, ${tokens.shadows.md}`,
+            transform: 'translateY(-2px)',
+          },
+
+          // 内部微妙的渐变叠加
+          '&::after': {
+            content: '""',
+            position: 'absolute',
+            inset: 0,
+            background: tokens.colors.gradient.subtle,
+            pointerEvents: 'none',
+            opacity: 0.3,
           },
         }}
       >
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <Box sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          position: 'relative',
+          zIndex: 1,
+        }}>
           <Box>
-            <Typography variant="body2" sx={{ color: '#94a3b8', mb: 0.5, fontSize: '0.8rem' }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: tokens.colors.text.tertiary,
+                mb: 1,
+                fontSize: tokens.typography.fontSize.xs,
+                fontWeight: tokens.typography.fontWeight.medium,
+                textTransform: 'uppercase',
+                letterSpacing: tokens.typography.letterSpacing.wider,
+              }}
+            >
               {label}
             </Typography>
             <motion.div
@@ -65,10 +98,11 @@ export default function MetricCard({
               <Typography
                 variant="h4"
                 sx={{
-                  fontWeight: 700,
+                  fontWeight: tokens.typography.fontWeight.bold,
                   color,
-                  fontFamily: '"Inter", monospace',
-                  letterSpacing: '-0.02em',
+                  fontFamily: tokens.typography.fontFamily.display,
+                  letterSpacing: tokens.typography.letterSpacing.tight,
+                  fontSize: '1.75rem',
                 }}
               >
                 {displayValue}
@@ -76,7 +110,15 @@ export default function MetricCard({
             </motion.div>
           </Box>
           {icon && (
-            <Box sx={{ color: `${color}66`, '& .MuiSvgIcon-root': { fontSize: 36 } }}>{icon}</Box>
+            <Box
+              sx={{
+                color: `${color}50`,
+                opacity: 0.6,
+                '& .MuiSvgIcon-root': { fontSize: 32 }
+              }}
+            >
+              {icon}
+            </Box>
           )}
         </Box>
       </Box>

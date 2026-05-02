@@ -19,6 +19,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import { backtestApi } from '@/api';
 import type { Backtest } from '@/api';
 import { PageHeader, GlassTable, NeonChip } from '@/components/ui';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 
 const statusNeonColor: Record<string, 'default' | 'cyan' | 'green' | 'red' | 'amber'> = {
   pending: 'default',
@@ -37,6 +38,7 @@ const statusLabel: Record<string, string> = {
 
 export default function BacktestList() {
   const navigate = useNavigate();
+  const { requireAuth } = useRequireAuth();
   const [backtests, setBacktests] = useState<Backtest[]>([]);
   const [loading, setLoading] = useState(true);
   const [snackbar, setSnackbar] = useState<{
@@ -61,6 +63,8 @@ export default function BacktestList() {
   }, []);
 
   const handleRun = async (id: number) => {
+    if (!requireAuth()) return;
+
     try {
       await backtestApi.run(id);
       setSnackbar({ open: true, message: '回测已启动', severity: 'success' });
@@ -78,7 +82,7 @@ export default function BacktestList() {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => navigate('/backtests/create')}
+            onClick={() => requireAuth(() => navigate('/backtests/create'))}
           >
             新建回测
           </Button>

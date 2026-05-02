@@ -1,15 +1,5 @@
-import React from 'react';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  ReferenceLine,
-} from 'recharts';
+import React, { useMemo } from 'react';
+import ReactECharts from 'echarts-for-react';
 
 interface NavChartProps {
   data: Array<{
@@ -21,41 +11,99 @@ interface NavChartProps {
   title?: string;
 }
 
-const NavChart: React.FC<NavChartProps> = ({ data, height = 400, title }) => (
-  <div>
-    {title && <h4 style={{ marginBottom: 8 }}>{title}</h4>}
-    <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-        <YAxis tick={{ fontSize: 12 }} domain={['auto', 'auto']} />
-        <Tooltip
-          formatter={(value: any) => typeof value === 'number' ? value.toFixed(4) : ''}
-          labelFormatter={(label) => `日期: ${label}`}
-        />
-        <Legend />
-        <ReferenceLine y={1} stroke="#999" strokeDasharray="3 3" />
-        <Line
-          type="monotone"
-          dataKey="nav"
-          stroke="#1890ff"
-          strokeWidth={2}
-          dot={false}
-          name="策略净值"
-        />
-        {data[0]?.benchmark !== undefined && (
-          <Line
-            type="monotone"
-            dataKey="benchmark"
-            stroke="#52c41a"
-            strokeWidth={1.5}
-            dot={false}
-            name="基准净值"
-          />
-        )}
-      </LineChart>
-    </ResponsiveContainer>
-  </div>
-);
+const NavChart: React.FC<NavChartProps> = ({ data, height = 400, title }) => {
+  const option = useMemo(() => {
+    const dates = data.map(d => d.date);
+    const navValues = data.map(d => d.nav);
+    const hasBenchmark = data[0]?.benchmark !== undefined;
+    const benchmarkValues = hasBenchmark ? data.map(d => d.benchmark) : [];
+
+    const series: any[] = [
+      {
+        name: '策略净值',
+        type: 'line',
+        data: navValues,
+        smooth: false,
+        symbol: 'none',
+        lineStyle: {
+          color: '#1890ff',
+          width: 2,
+        },
+      },
+    ];
+
+    if (hasBenchmark) {
+      series.push({
+        name: '基准净值',
+        type: 'line',
+        data: benchmarkValues,
+        smooth: false,
+        symbol: 'none',
+        lineStyle: {
+          color: '#52c41a',
+          width: 1.5,
+        },
+      });
+    }
+
+    return {
+      title: title ? {
+        text: title,
+        left: 0,
+        textStyle: {
+          fontSize: 16,
+          fontWeight: 'normal',
+        },
+      } : undefined,
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params: any) => {
+          let result = `日期: ${params[0].axisValue}<br/>`;
+          params.forEach((param: any) => {
+            const value = typeof param.value === 'number' ? param.value.toFixed(4) : '';
+            result += `${param.marker}${param.seriesName}: ${value}<br/>`;
+          });
+          return result;
+        },
+      },
+      legend: {
+        data: hasBenchmark ? ['策略净值', '基准净值'] : ['策略净值'],
+        top: title ? 30 : 0,
+      },
+      grid: {
+        left: 60,
+        right: 30,
+        top: title ? 60 : 40,
+        bottom: 50,
+      },
+      xAxis: {
+        type: 'category',
+        data: dates,
+        axisLabel: {
+          fontSize: 12,
+        },
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: {
+          fontSize: 12,
+        },
+      },
+      series,
+      // Reference line at y=1
+      markLine: {
+        silent: true,
+        symbol: 'none',
+        lineStyle: {
+          color: '#999',
+          type: 'dashed',
+        },
+        data: [{ yAxis: 1 }],
+      },
+    };
+  }, [data, title]);
+
+  return <ReactECharts option={option} style={{ height }} />;
+};
 
 export default NavChart;

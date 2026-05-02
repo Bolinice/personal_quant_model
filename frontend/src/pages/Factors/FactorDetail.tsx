@@ -22,17 +22,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CalculateIcon from '@mui/icons-material/Calculate';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-} from 'recharts';
+import ReactECharts from 'echarts-for-react';
 import { factorApi } from '@/api';
 import type { Factor, FactorAnalysis } from '@/api';
 import { PageHeader, GlassPanel, GlassTable, NeonChip } from '@/components/ui';
@@ -234,28 +224,49 @@ export default function FactorDetail() {
         {tab === 0 && (
           <Box sx={{ mt: 2, height: 400 }}>
             {icChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={icChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" />
-                  <XAxis dataKey="date" fontSize={12} tick={{ fill: '#64748b' }} />
-                  <YAxis fontSize={12} tick={{ fill: '#64748b' }} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'rgba(15,23,42,0.9)',
-                      border: '1px solid rgba(148,163,184,0.15)',
-                      borderRadius: 8,
-                    }}
-                  />
-                  <Line type="monotone" dataKey="IC" stroke="#22d3ee" dot={false} strokeWidth={2} />
-                  <Line
-                    type="monotone"
-                    dataKey="RankIC"
-                    stroke="#8b5cf6"
-                    dot={false}
-                    strokeWidth={2}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <ReactECharts
+                option={{
+                  tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(15,23,42,0.9)',
+                    borderColor: 'rgba(148,163,184,0.15)',
+                    textStyle: { color: '#e2e8f0' },
+                  },
+                  legend: {
+                    data: ['IC', 'RankIC'],
+                    textStyle: { color: '#94a3b8' },
+                  },
+                  grid: { left: 50, right: 30, top: 50, bottom: 50 },
+                  xAxis: {
+                    type: 'category',
+                    data: icChartData.map((d) => d.date),
+                    axisLabel: { fontSize: 12, color: '#64748b' },
+                  },
+                  yAxis: {
+                    type: 'value',
+                    axisLabel: { fontSize: 12, color: '#64748b' },
+                  },
+                  series: [
+                    {
+                      name: 'IC',
+                      type: 'line',
+                      data: icChartData.map((d) => d.IC),
+                      smooth: false,
+                      symbol: 'none',
+                      lineStyle: { color: '#22d3ee', width: 2 },
+                    },
+                    {
+                      name: 'RankIC',
+                      type: 'line',
+                      data: icChartData.map((d) => d.RankIC),
+                      smooth: false,
+                      symbol: 'none',
+                      lineStyle: { color: '#8b5cf6', width: 2 },
+                    },
+                  ],
+                }}
+                style={{ height: '100%' }}
+              />
             ) : (
               <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
                 暂无IC分析数据，请先运行IC分析
@@ -267,21 +278,38 @@ export default function FactorDetail() {
         {tab === 1 && (
           <Box sx={{ mt: 2, height: 400 }}>
             {groupReturnData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={groupReturnData.filter((_, i) => i < 10)}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" />
-                  <XAxis dataKey="group" fontSize={12} tick={{ fill: '#64748b' }} />
-                  <YAxis fontSize={12} tick={{ fill: '#64748b' }} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'rgba(15,23,42,0.9)',
-                      border: '1px solid rgba(148,163,184,0.15)',
-                      borderRadius: 8,
-                    }}
-                  />
-                  <Bar dataKey="return" fill="#22d3ee" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <ReactECharts
+                option={{
+                  tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(15,23,42,0.9)',
+                    borderColor: 'rgba(148,163,184,0.15)',
+                    textStyle: { color: '#e2e8f0' },
+                  },
+                  grid: { left: 50, right: 30, top: 30, bottom: 50 },
+                  xAxis: {
+                    type: 'category',
+                    data: groupReturnData.filter((_, i) => i < 10).map((d) => d.group),
+                    axisLabel: { fontSize: 12, color: '#64748b' },
+                  },
+                  yAxis: {
+                    type: 'value',
+                    axisLabel: { fontSize: 12, color: '#64748b' },
+                  },
+                  series: [
+                    {
+                      name: '收益率',
+                      type: 'bar',
+                      data: groupReturnData.filter((_, i) => i < 10).map((d) => d.return),
+                      itemStyle: {
+                        color: '#22d3ee',
+                        borderRadius: [4, 4, 0, 0],
+                      },
+                    },
+                  ],
+                }}
+                style={{ height: '100%' }}
+              />
             ) : (
               <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
                 暂无分组收益数据，请先运行分组收益分析

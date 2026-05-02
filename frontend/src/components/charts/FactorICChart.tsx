@@ -1,14 +1,5 @@
-import React from 'react';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-} from 'recharts';
+import React, { useMemo } from 'react';
+import ReactECharts from 'echarts-for-react';
 
 interface FactorICChartProps {
   data: Array<{
@@ -20,25 +11,109 @@ interface FactorICChartProps {
   title?: string;
 }
 
-const FactorICChart: React.FC<FactorICChartProps> = ({ data, height = 300, title }) => (
-  <div>
-    {title && <h4 style={{ marginBottom: 8 }}>{title}</h4>}
-    <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-        <YAxis tick={{ fontSize: 12 }} />
-        <Tooltip
-          formatter={(value: any) => typeof value === 'number' ? value.toFixed(4) : ''}
-          labelFormatter={(label) => `日期: ${label}`}
-        />
-        <ReferenceLine y={0} stroke="#999" />
-        <ReferenceLine y={0.03} stroke="#52c41a" strokeDasharray="3 3" label="有效阈值" />
-        <Bar dataKey="ic" fill="#1890ff" name="IC" />
-        {data[0]?.rank_ic !== undefined && <Bar dataKey="rank_ic" fill="#722ed1" name="Rank IC" />}
-      </BarChart>
-    </ResponsiveContainer>
-  </div>
-);
+const FactorICChart: React.FC<FactorICChartProps> = ({ data, height = 300, title }) => {
+  const option = useMemo(() => {
+    const dates = data.map(d => d.date);
+    const icValues = data.map(d => d.ic);
+    const hasRankIC = data[0]?.rank_ic !== undefined;
+    const rankICValues = hasRankIC ? data.map(d => d.rank_ic) : [];
+
+    const series: any[] = [
+      {
+        name: 'IC',
+        type: 'bar',
+        data: icValues,
+        itemStyle: {
+          color: '#1890ff',
+        },
+      },
+    ];
+
+    if (hasRankIC) {
+      series.push({
+        name: 'Rank IC',
+        type: 'bar',
+        data: rankICValues,
+        itemStyle: {
+          color: '#722ed1',
+        },
+      });
+    }
+
+    return {
+      title: title ? {
+        text: title,
+        left: 0,
+        textStyle: {
+          fontSize: 16,
+          fontWeight: 'normal',
+        },
+      } : undefined,
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params: any) => {
+          let result = `日期: ${params[0].axisValue}<br/>`;
+          params.forEach((param: any) => {
+            const value = typeof param.value === 'number' ? param.value.toFixed(4) : '';
+            result += `${param.marker}${param.seriesName}: ${value}<br/>`;
+          });
+          return result;
+        },
+      },
+      legend: {
+        data: hasRankIC ? ['IC', 'Rank IC'] : ['IC'],
+        top: title ? 30 : 0,
+      },
+      grid: {
+        left: 60,
+        right: 30,
+        top: title ? 60 : 40,
+        bottom: 50,
+      },
+      xAxis: {
+        type: 'category',
+        data: dates,
+        axisLabel: {
+          fontSize: 12,
+        },
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: {
+          fontSize: 12,
+        },
+      },
+      series,
+      // Reference lines
+      markLine: {
+        silent: true,
+        symbol: 'none',
+        data: [
+          {
+            yAxis: 0,
+            lineStyle: {
+              color: '#999',
+              type: 'solid',
+            },
+          },
+          {
+            yAxis: 0.03,
+            lineStyle: {
+              color: '#52c41a',
+              type: 'dashed',
+            },
+            label: {
+              show: true,
+              position: 'end',
+              formatter: '有效阈值',
+            },
+          },
+        ],
+      },
+    };
+  }, [data, title]);
+
+  return <ReactECharts option={option} style={{ height }} />;
+};
 
 export default FactorICChart;

@@ -16,6 +16,7 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  TablePagination,
   Menu,
   Snackbar,
   Alert,
@@ -80,6 +81,8 @@ export default function ModelList() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [menuModel, setMenuModel] = useState<Model | null>(null);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(12);
 
   useEffect(() => {
     Promise.all([modelApi.list({ limit: 200 }), stockPoolApi.list({ limit: 200 })])
@@ -119,6 +122,17 @@ export default function ModelList() {
     if (statusFilter !== 'all' && m.status !== statusFilter) return false;
     return true;
   });
+
+  const paged = filtered.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
+  const handleChangePage = (_: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
 
   const handleMenuOpen = (e: React.MouseEvent<HTMLElement>, model: Model) => {
     e.stopPropagation();
@@ -240,8 +254,9 @@ export default function ModelList() {
 
       {/* Card view */}
       {viewMode === 'card' && (
-        <Grid container spacing={2.5}>
-          {filtered.map((model, i) => {
+        <>
+          <Grid container spacing={2.5}>
+            {paged.map((model, i) => {
             const pool = inferPool(model.model_code);
             const freq = inferFreq(model.model_code);
             const color = POOL_COLORS[pool] || '#94a3b8';
@@ -378,11 +393,26 @@ export default function ModelList() {
               </Typography>
             </Grid>
           )}
-        </Grid>
+          </Grid>
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+            <TablePagination
+              component="div"
+            count={filtered.length}
+            page={page}
+            onPageChange={handleChangePage}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            rowsPerPageOptions={[6, 12, 24, 48]}
+            labelRowsPerPage="每页行数:"
+            labelDisplayedRows={({ from, to, count }) => `${from}-${to} / ${count}`}
+          />
+        </Box>
+        </>
       )}
 
       {/* Table view */}
       {viewMode === 'table' && (
+        <>
         <GlassPanel animate={false}>
           <GlassTable>
             <Table>
@@ -399,7 +429,7 @@ export default function ModelList() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filtered.map((model) => {
+                {paged.map((model) => {
                   const pool = inferPool(model.model_code);
                   const freq = inferFreq(model.model_code);
                   return (
@@ -463,6 +493,20 @@ export default function ModelList() {
             </Table>
           </GlassTable>
         </GlassPanel>
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+          <TablePagination
+            component="div"
+            count={filtered.length}
+            page={page}
+            onPageChange={handleChangePage}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            rowsPerPageOptions={[10, 20, 50, 100]}
+            labelRowsPerPage="每页行数:"
+            labelDisplayedRows={({ from, to, count }) => `${from}-${to} / ${count}`}
+          />
+        </Box>
+        </>
       )}
 
       {/* Context menu */}

@@ -16,6 +16,7 @@ import {
   DialogContent,
   DialogActions,
   Chip,
+  TablePagination,
 } from '@mui/material';
 import { eventsApi } from '@/api';
 import type { Event, RiskFlag } from '@/api';
@@ -55,6 +56,17 @@ export default function EventList() {
   const [filterType, setFilterType] = useState('');
   const [filterSeverity, setFilterSeverity] = useState('');
   const [filterDate, setFilterDate] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
+
+  const handleChangePage = (_: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
 
   useEffect(() => {
     loadData();
@@ -80,6 +92,8 @@ export default function EventList() {
     if (filterDate && !e.event_date.startsWith(filterDate)) return false;
     return true;
   });
+
+  const pagedEvents = filteredEvents.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   const handleViewDetail = (event: Event) => {
     setSelectedEvent(event);
@@ -172,7 +186,7 @@ export default function EventList() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filteredEvents.map((e) => (
+                  {pagedEvents.map((e) => (
                     <TableRow key={e.id} hover>
                       <TableCell>{e.event_date}</TableCell>
                       <TableCell>{e.event_type}</TableCell>
@@ -203,7 +217,7 @@ export default function EventList() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {filteredEvents.length === 0 && (
+                  {pagedEvents.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={8} align="center">
                         暂无事件数据
@@ -213,6 +227,17 @@ export default function EventList() {
                 </TableBody>
               </Table>
             </GlassTable>
+            <TablePagination
+              component="div"
+              count={filteredEvents.length}
+              page={page}
+              onPageChange={handleChangePage}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={handleChangeRowsPerPage}
+              rowsPerPageOptions={[10, 20, 50, 100]}
+              labelRowsPerPage="每页行数:"
+              labelDisplayedRows={({ from, to, count }) => `${from}-${to} / ${count}`}
+            />
           </GlassPanel>
         </>
       )}

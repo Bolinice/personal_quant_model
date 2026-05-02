@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { OnboardingProvider } from '@/contexts/OnboardingContext';
 import { ProtectedRoute, PublicRoute } from '@/components/auth/AuthGuard';
 import { Layout, MarketingLayout } from '@/components/layout';
 import HomePage from '@/pages/Home';
@@ -76,15 +77,8 @@ function AppRoutes() {
         }
       />
 
-      {/* 需要认证的页面 */}
-      <Route
-        path="/app"
-        element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
-        }
-      >
+      {/* 应用页面 - 可浏览，操作需要认证 */}
+      <Route path="/app" element={<Layout />}>
         <Route index element={<Navigate to="/app/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="factors" element={<FactorList />} />
@@ -95,7 +89,14 @@ function AppRoutes() {
         <Route path="models/plan" element={<ModelPlan />} />
         <Route path="models/:code" element={<ModelDetail />} />
         <Route path="backtests" element={<BacktestList />} />
-        <Route path="backtests/create" element={<BacktestCreate />} />
+        <Route
+          path="backtests/create"
+          element={
+            <ProtectedRoute>
+              <BacktestCreate />
+            </ProtectedRoute>
+          }
+        />
         <Route path="backtests/:id" element={<BacktestResult />} />
         <Route path="timing" element={<TimingList />} />
         <Route path="portfolios" element={<PortfolioList />} />
@@ -104,10 +105,38 @@ function AppRoutes() {
         <Route path="monitor" element={<MonitorDashboard />} />
         <Route path="events" element={<EventList />} />
         <Route path="data" element={<DataCenter />} />
-        <Route path="settings" element={<Profile />} />
-        <Route path="settings/subscription" element={<SubscriptionPage />} />
-        <Route path="settings/risk-assessment" element={<RiskAssessment />} />
-        <Route path="subscribe" element={<Subscribe />} />
+        <Route
+          path="settings"
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="settings/subscription"
+          element={
+            <ProtectedRoute>
+              <SubscriptionPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="settings/risk-assessment"
+          element={
+            <ProtectedRoute>
+              <RiskAssessment />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="subscribe"
+          element={
+            <ProtectedRoute>
+              <Subscribe />
+            </ProtectedRoute>
+          }
+        />
       </Route>
     </Routes>
   );
@@ -116,7 +145,9 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppRoutes />
+      <OnboardingProvider>
+        <AppRoutes />
+      </OnboardingProvider>
     </AuthProvider>
   );
 }

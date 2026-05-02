@@ -24,9 +24,11 @@ import type { Portfolio } from '@/api';
 import { modelApi } from '@/api';
 import type { Model } from '@/api';
 import { PageHeader, GlassPanel, GlassTable, NeonChip } from '@/components/ui';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 
 export default function PortfolioList() {
   const navigate = useNavigate();
+  const { requireAuth } = useRequireAuth();
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [models, setModels] = useState<Model[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
@@ -65,6 +67,8 @@ export default function PortfolioList() {
   }, [selectedModel]);
 
   const handleGenerate = async () => {
+    if (!requireAuth()) return;
+
     try {
       await portfolioApi.generate(Number(genModel), genDate);
       setGenDialog(false);
@@ -80,7 +84,14 @@ export default function PortfolioList() {
       <PageHeader
         title="组合管理"
         actions={
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setGenDialog(true)}>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              if (!requireAuth()) return;
+              setGenDialog(true);
+            }}
+          >
             生成组合
           </Button>
         }

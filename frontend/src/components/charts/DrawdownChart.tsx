@@ -1,13 +1,5 @@
-import React from 'react';
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts';
+import React, { useMemo } from 'react';
+import ReactECharts from 'echarts-for-react';
 
 interface DrawdownChartProps {
   data: Array<{
@@ -18,29 +10,69 @@ interface DrawdownChartProps {
   title?: string;
 }
 
-const DrawdownChart: React.FC<DrawdownChartProps> = ({ data, height = 250, title }) => (
-  <div>
-    {title && <h4 style={{ marginBottom: 8 }}>{title}</h4>}
-    <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-        <YAxis tick={{ fontSize: 12 }} tickFormatter={(v: number) => `${(v * 100).toFixed(1)}%`} />
-        <Tooltip
-          formatter={(value: any) => typeof value === 'number' ? `${(value * 100).toFixed(2)}%` : ''}
-          labelFormatter={(label) => `日期: ${label}`}
-        />
-        <Area
-          type="monotone"
-          dataKey="drawdown"
-          stroke="#ff4d4f"
-          fill="#ff4d4f"
-          fillOpacity={0.3}
-          name="回撤"
-        />
-      </AreaChart>
-    </ResponsiveContainer>
-  </div>
-);
+const DrawdownChart: React.FC<DrawdownChartProps> = ({ data, height = 250, title }) => {
+  const option = useMemo(() => {
+    const dates = data.map(d => d.date);
+    const drawdownValues = data.map(d => d.drawdown);
+
+    return {
+      title: title ? {
+        text: title,
+        left: 0,
+        textStyle: {
+          fontSize: 16,
+          fontWeight: 'normal',
+        },
+      } : undefined,
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params: any) => {
+          const value = typeof params[0].value === 'number'
+            ? `${(params[0].value * 100).toFixed(2)}%`
+            : '';
+          return `日期: ${params[0].axisValue}<br/>${params[0].marker}回撤: ${value}`;
+        },
+      },
+      grid: {
+        left: 60,
+        right: 30,
+        top: title ? 50 : 20,
+        bottom: 50,
+      },
+      xAxis: {
+        type: 'category',
+        data: dates,
+        axisLabel: {
+          fontSize: 12,
+        },
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: {
+          fontSize: 12,
+          formatter: (v: number) => `${(v * 100).toFixed(1)}%`,
+        },
+      },
+      series: [
+        {
+          name: '回撤',
+          type: 'line',
+          data: drawdownValues,
+          smooth: false,
+          symbol: 'none',
+          lineStyle: {
+            color: '#ff4d4f',
+          },
+          areaStyle: {
+            color: '#ff4d4f',
+            opacity: 0.3,
+          },
+        },
+      ],
+    };
+  }, [data, title]);
+
+  return <ReactECharts option={option} style={{ height }} />;
+};
 
 export default DrawdownChart;

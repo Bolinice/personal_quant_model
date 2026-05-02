@@ -37,15 +37,15 @@ import { Logo } from '@/components/ui';
 const SIDEBAR_W = 200;
 
 const NAV_ITEMS = [
-  { key: '/app/dashboard', label: '工作台', icon: <DashboardIcon /> },
-  { key: '/app/factors', label: '因子研究', icon: <FunctionsIcon /> },
-  { key: '/app/models', label: '模型管理', icon: <AssessmentIcon /> },
-  { key: '/app/backtests', label: '策略回测', icon: <BarChartIcon /> },
-  { key: '/app/timing', label: '择时信号', icon: <TimelineIcon /> },
-  { key: '/app/portfolios', label: '组合管理', icon: <AccountBalanceIcon /> },
-  { key: '/app/monitor', label: '监控告警', icon: <MonitorIcon /> },
-  { key: '/app/events', label: '事件中心', icon: <NotificationsIcon /> },
-  { key: '/app/settings', label: '设置', icon: <SettingsIcon /> },
+  { key: '/app/dashboard', label: '工作台', icon: <DashboardIcon />, tourId: 'nav-dashboard' },
+  { key: '/app/factors', label: '因子研究', icon: <FunctionsIcon />, tourId: 'nav-factors' },
+  { key: '/app/models', label: '模型管理', icon: <AssessmentIcon />, tourId: 'nav-models' },
+  { key: '/app/backtests', label: '策略回测', icon: <BarChartIcon />, tourId: 'nav-backtests' },
+  { key: '/app/timing', label: '择时信号', icon: <TimelineIcon />, tourId: 'nav-timing' },
+  { key: '/app/portfolios', label: '组合管理', icon: <AccountBalanceIcon />, tourId: 'nav-portfolios' },
+  { key: '/app/monitor', label: '监控告警', icon: <MonitorIcon />, tourId: 'nav-monitor' },
+  { key: '/app/events', label: '事件中心', icon: <NotificationsIcon />, tourId: 'nav-events' },
+  { key: '/app/settings', label: '设置', icon: <SettingsIcon />, tourId: 'nav-settings' },
 ];
 
 export default function Layout() {
@@ -74,21 +74,33 @@ export default function Layout() {
 
   const sidebarContent = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Logo */}
-      <Box sx={{ px: 3, py: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
+      {/* Logo - 可点击跳转回官网 */}
+      <Box
+        sx={{
+          px: 3,
+          py: 3,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+          cursor: 'pointer',
+          transition: 'opacity 0.2s',
+          '&:hover': { opacity: 0.8 },
+        }}
+        onClick={() => navigate('/')}
+      >
         <Logo size={28} />
         <Typography
           sx={{
             fontWeight: 700,
             fontSize: '0.9rem',
-            background: 'linear-gradient(135deg, #22d3ee, #8b5cf6)',
+            background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
             backgroundClip: 'text',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             letterSpacing: '0.04em',
           }}
         >
-          QuantPro
+          银河漫游
         </Typography>
       </Box>
 
@@ -99,6 +111,7 @@ export default function Layout() {
           return (
             <ListItemButton
               key={item.key}
+              data-tour={item.tourId}
               onClick={() => {
                 navigate(item.key);
                 setMobileOpen(false);

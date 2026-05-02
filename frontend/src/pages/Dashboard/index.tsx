@@ -13,6 +13,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import { factorApi, modelApi, monitorApi } from '@/api';
 import type { Regime, MonitorAlert, MonitorFactorHealth } from '@/api';
 import { PageHeader, GlassPanel, NeonChip, MetricCard } from '@/components/ui';
+import { useOnboarding } from '@/contexts/OnboardingContext';
 
 // regimeLabel：映射后端regime枚举到中文，兼容新旧两种枚举值
 // mean_reverting/range_bound均映射为"震荡"，risk_on/aggressive均映射为"进攻"
@@ -93,6 +94,7 @@ const quickLinks = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { startTour, isTourCompleted } = useOnboarding();
   const [factorCount, setFactorCount] = useState(0);
   const [modelCount, setModelCount] = useState(0);
   const [regime, setRegime] = useState<Regime | null>(null);
@@ -127,7 +129,13 @@ export default function Dashboard() {
         .then((res) => setFactorHealth(res.data))
         .catch(() => {}),
     ]);
-  }, []);
+
+    // 首次访问时启动引导
+    if (!isTourCompleted('dashboard')) {
+      const timer = setTimeout(() => startTour('dashboard'), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [startTour, isTourCompleted]);
 
   const healthyCount = factorHealth.filter((f) => f.health_status === 'healthy').length;
   const warningCount = factorHealth.filter((f) => f.health_status === 'warning').length;
@@ -363,7 +371,7 @@ export default function Dashboard() {
 
         {/* Quick links */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <GlassPanel animate={false} sx={{ height: '100%' }}>
+          <GlassPanel animate={false} sx={{ height: '100%' }} data-tour="quick-links">
             <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
               快捷入口
             </Typography>

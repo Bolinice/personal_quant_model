@@ -16,16 +16,7 @@ import {
 } from '@mui/material';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import SettingsIcon from '@mui/icons-material/Settings';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-} from 'recharts';
+import ReactECharts from 'echarts-for-react';
 import { timingApi } from '@/api';
 import type { TimingSignal, TimingConfig } from '@/api';
 import { modelApi } from '@/api';
@@ -209,28 +200,49 @@ export default function TimingList() {
             </Typography>
             <Box sx={{ height: 350 }}>
               {signalChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={signalChartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" />
-                    <XAxis dataKey="date" fontSize={12} tick={{ fill: '#64748b' }} />
-                    <YAxis fontSize={12} domain={[0, 1]} tick={{ fill: '#64748b' }} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: 'rgba(15,23,42,0.9)',
-                        border: '1px solid rgba(148,163,184,0.15)',
-                        borderRadius: 8,
-                      }}
-                    />
-                    <ReferenceLine y={0.5} stroke="rgba(148,163,184,0.3)" strokeDasharray="3 3" />
-                    <Line
-                      type="stepAfter"
-                      dataKey="exposure"
-                      stroke="#22d3ee"
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                <ReactECharts
+                  option={{
+                    tooltip: {
+                      trigger: 'axis',
+                      backgroundColor: 'rgba(15,23,42,0.9)',
+                      borderColor: 'rgba(148,163,184,0.15)',
+                      borderWidth: 1,
+                      textStyle: { color: '#e2e8f0' },
+                    },
+                    grid: { left: 60, right: 40, top: 40, bottom: 40 },
+                    xAxis: {
+                      type: 'category',
+                      data: signalChartData.map(d => d.date),
+                      axisLabel: { fontSize: 12, color: '#64748b' },
+                      axisLine: { lineStyle: { color: 'rgba(148,163,184,0.1)' } },
+                    },
+                    yAxis: {
+                      type: 'value',
+                      min: 0,
+                      max: 1,
+                      axisLabel: { fontSize: 12, color: '#64748b' },
+                      axisLine: { lineStyle: { color: 'rgba(148,163,184,0.1)' } },
+                      splitLine: { lineStyle: { color: 'rgba(148,163,184,0.1)', type: 'dashed' } },
+                    },
+                    series: [
+                      {
+                        type: 'line',
+                        data: signalChartData.map(d => d.exposure),
+                        step: 'end',
+                        lineStyle: { color: '#22d3ee', width: 2 },
+                        itemStyle: { color: '#22d3ee' },
+                        showSymbol: false,
+                        markLine: {
+                          silent: true,
+                          symbol: 'none',
+                          lineStyle: { color: 'rgba(148,163,184,0.3)', type: 'dashed' },
+                          data: [{ yAxis: 0.5 }],
+                        },
+                      },
+                    ],
+                  }}
+                  style={{ height: '100%', width: '100%' }}
+                />
               ) : (
                 <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
                   暂无信号数据

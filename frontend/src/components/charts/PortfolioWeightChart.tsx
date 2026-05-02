@@ -1,5 +1,5 @@
-import React from 'react';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import React, { useMemo } from 'react';
+import ReactECharts from 'echarts-for-react';
 
 interface PortfolioWeightChartProps {
   data: Array<{
@@ -27,30 +27,62 @@ const PortfolioWeightChart: React.FC<PortfolioWeightChartProps> = ({
   data,
   height = 350,
   title,
-}) => (
-  <div>
-    {title && <h4 style={{ marginBottom: 8 }}>{title}</h4>}
-    <ResponsiveContainer width="100%" height={height}>
-      <PieChart>
-        <Pie
-          data={data}
-          dataKey="value"
-          nameKey="name"
-          cx="50%"
-          cy="50%"
-          outerRadius={120}
-          label={(entry: any) => `${entry.name}: ${typeof entry.percent === 'number' ? (entry.percent * 100).toFixed(1) : '0.0'}%`}
-          labelLine
-        >
-          {data.map((_, index) => (
-            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-          ))}
-        </Pie>
-        <Tooltip formatter={(value: any) => typeof value === 'number' ? `${(value * 100).toFixed(2)}%` : ''} />
-        <Legend />
-      </PieChart>
-    </ResponsiveContainer>
-  </div>
-);
+}) => {
+  const option = useMemo(() => {
+    const pieData = data.map((item, index) => ({
+      name: item.name,
+      value: item.value,
+      itemStyle: {
+        color: COLORS[index % COLORS.length],
+      },
+    }));
+
+    return {
+      title: title ? {
+        text: title,
+        left: 'center',
+        textStyle: {
+          fontSize: 16,
+          fontWeight: 'normal',
+        },
+      } : undefined,
+      tooltip: {
+        trigger: 'item',
+        formatter: (params: any) => {
+          const value = typeof params.value === 'number' ? (params.value * 100).toFixed(2) : '0.00';
+          return `${params.marker}${params.name}: ${value}%`;
+        },
+      },
+      legend: {
+        orient: 'vertical',
+        left: 'left',
+        top: title ? 40 : 20,
+      },
+      series: [
+        {
+          type: 'pie',
+          radius: '60%',
+          center: ['50%', '55%'],
+          data: pieData,
+          label: {
+            formatter: (params: any) => {
+              const percent = typeof params.percent === 'number' ? params.percent.toFixed(1) : '0.0';
+              return `${params.name}: ${percent}%`;
+            },
+          },
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowOffsetX: 0,
+              shadowColor: 'rgba(0, 0, 0, 0.5)',
+            },
+          },
+        },
+      ],
+    };
+  }, [data, title]);
+
+  return <ReactECharts option={option} style={{ height }} />;
+};
 
 export default PortfolioWeightChart;

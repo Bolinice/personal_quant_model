@@ -28,7 +28,8 @@ def main():
     # 创建同步服务
     service = DataSyncService(
         primary_source=settings.PRIMARY_DATA_SOURCE,
-        tushare_token=settings.TUSHARE_TOKEN if settings.TUSHARE_TOKEN else None
+        tushare_token=settings.TUSHARE_TOKEN if settings.TUSHARE_TOKEN else None,
+        tushare_proxy_url=settings.TUSHARE_PROXY_URL if settings.TUSHARE_PROXY_URL else None,
     )
 
     # 检查数据源连接

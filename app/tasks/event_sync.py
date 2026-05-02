@@ -146,6 +146,7 @@ def sync_event_data(self, trade_date: str | None = None):
     try:
         import pandas as pd
 
+        from app.core.config import settings
         from app.data_sources.tushare_source import TushareSource
 
         logger.info(f"开始同步事件数据, run_id={run_id}")
@@ -157,7 +158,7 @@ def sync_event_data(self, trade_date: str | None = None):
         else:
             calc_date = date.fromisoformat(trade_date) if isinstance(trade_date, str) else trade_date
 
-        source = TushareSource()
+        source = TushareSource(token=settings.TUSHARE_TOKEN, proxy_url=settings.TUSHARE_PROXY_URL)
         sync_results = {}
 
         # 同步各类事件

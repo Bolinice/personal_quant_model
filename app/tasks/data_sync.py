@@ -12,12 +12,17 @@ from app.core.logging import logger
 def run_daily_sync(self):
     """日终数据同步任务"""
     try:
+        from app.core.config import settings
         from app.db.base import SessionLocal
         from app.services.data_sync_service import DataSyncService
 
         db = SessionLocal()
         try:
-            service = DataSyncService()
+            service = DataSyncService(
+                primary_source=settings.PRIMARY_DATA_SOURCE,
+                tushare_token=settings.TUSHARE_TOKEN if settings.TUSHARE_TOKEN else None,
+                tushare_proxy_url=settings.TUSHARE_PROXY_URL if settings.TUSHARE_PROXY_URL else None,
+            )
             trade_date = datetime.now(tz=datetime.timezone.utc).date()
             result = service.run_daily_pipeline(trade_date.strftime("%Y-%m-%d"))
             logger.info(f"Daily sync completed: {result}")

@@ -18,3 +18,4 @@ export { contentApi } from './endpoints/content';
 export { monitorApi } from './endpoints/monitor';
 export { eventsApi } from './endpoints/events';
 export { authApi } from './endpoints/auth';
+export { paymentsApi } from './payments';

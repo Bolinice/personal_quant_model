@@ -104,7 +104,23 @@ class Settings(BaseSettings):
 
     # 数据源 - Token必须从.env环境变量读取，禁止硬编码
     TUSHARE_TOKEN: str = ""
+    TUSHARE_PROXY_URL: str = ""  # Tushare代理服务器URL（可选）
     PRIMARY_DATA_SOURCE: str = "akshare"
+
+    # 支付配置 - 生产环境必须设置环境变量
+    ALIPAY_APP_ID: str = ""
+    ALIPAY_PRIVATE_KEY: str = ""
+    ALIPAY_PUBLIC_KEY: str = ""
+    ALIPAY_GATEWAY: str = "https://openapi.alipaydev.com/gateway.do"  # 沙箱环境
+    ALIPAY_NOTIFY_URL: str = ""
+    ALIPAY_RETURN_URL: str = ""
+
+    WECHAT_APP_ID: str = ""
+    WECHAT_MCH_ID: str = ""
+    WECHAT_API_KEY: str = ""
+    WECHAT_CERT_PATH: str = ""
+    WECHAT_KEY_PATH: str = ""
+    WECHAT_NOTIFY_URL: str = ""
 
     # 应用配置
     DEBUG: bool = False
@@ -144,6 +160,8 @@ class Settings(BaseSettings):
             warnings.append(msg)
         if not self.TUSHARE_TOKEN:
             warnings.append("TUSHARE_TOKEN 未设置，数据同步功能不可用")
+        if not self.ALIPAY_APP_ID and not self.WECHAT_APP_ID:
+            warnings.append("支付配置未设置，支付功能不可用")
         if self.ENV == "production" and self.DEBUG:
             raise ValueError("生产环境安全阻断: DEBUG=True 不允许在生产环境开启")
         return warnings

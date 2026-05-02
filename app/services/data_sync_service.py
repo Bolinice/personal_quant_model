@@ -47,13 +47,14 @@ def _safe_date(value) -> date | None:
 class DataSyncService:
     """数据同步服务"""
 
-    def __init__(self, primary_source: str = "crawler", tushare_token: str | None = None):
+    def __init__(self, primary_source: str = "crawler", tushare_token: str | None = None, tushare_proxy_url: str | None = None):
         """
         初始化数据同步服务
 
         Args:
             primary_source: 主数据源 ('crawler', 'tushare' 或 'akshare')
             tushare_token: Tushare token
+            tushare_proxy_url: Tushare 代理服务器 URL（可选）
         """
         # 默认crawler为主数据源 — 爬虫免费且无频率限制，tushare/akshare作为降级备选
         self.primary_source = primary_source
@@ -63,7 +64,7 @@ class DataSyncService:
 
         # 注册数据源
         if tushare_token:
-            tushare = TushareSource(token=tushare_token)
+            tushare = TushareSource(token=tushare_token, proxy_url=tushare_proxy_url)
             data_source_manager.register("tushare", tushare, is_primary=(primary_source == "tushare"))
 
         akshare = AKShareSource()
@@ -727,6 +728,7 @@ def main():
     parser.add_argument("--start-date", required=True, help="开始日期 (YYYY-MM-DD)")
     parser.add_argument("--end-date", required=True, help="结束日期 (YYYY-MM-DD)")
     parser.add_argument("--tushare-token", help="Tushare Token")
+    parser.add_argument("--tushare-proxy-url", help="Tushare 代理服务器 URL")
     parser.add_argument("--primary-source", default="akshare", choices=["tushare", "akshare"], help="主数据源")
     parser.add_argument(
         "--sync-type", default="all", choices=["all", "calendar", "basic", "daily", "index"], help="同步类型"
@@ -735,7 +737,11 @@ def main():
     args = parser.parse_args()
 
     # 创建同步服务
-    service = DataSyncService(primary_source=args.primary_source, tushare_token=args.tushare_token)
+    service = DataSyncService(
+        primary_source=args.primary_source,
+        tushare_token=args.tushare_token,
+        tushare_proxy_url=args.tushare_proxy_url,
+    )
 
     # 执行同步
     if args.sync_type == "all":

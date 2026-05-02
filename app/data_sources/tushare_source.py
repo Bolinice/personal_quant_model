@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from app.data_sources.base import CircuitBreaker
+from app.data_sources.base import CircuitBreaker, CircuitBreakerOpenError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -112,8 +112,9 @@ def _validate_dataframe(df: pd.DataFrame, data_type: str = "price") -> pd.DataFr
 class TushareSource:
     """Tushare数据源 — 带重试和断路器"""
 
-    def __init__(self, token: str | None = None):
+    def __init__(self, token: str | None = None, proxy_url: str | None = None):
         self._token = token
+        self._proxy_url = proxy_url
         self._pro = None
         self._breaker = CircuitBreaker(
             failure_threshold=5,
@@ -127,6 +128,12 @@ class TushareSource:
         if self._pro is None:
             try:
                 import tushare as ts
+                from tushare.pro import client as _ts_client
+
+                # 设置代理URL（如果提供）
+                if self._proxy_url:
+                    _ts_client.DataApi._DataApi__http_url = self._proxy_url
+                    logger.info("Tushare代理URL已设置: %s", self._proxy_url)
 
                 if self._token:
                     ts.set_token(self._token)
@@ -170,18 +177,28 @@ class TushareSource:
     def _call_with_fallback(self, func: Callable, data_type: str, **kwargs) -> pd.DataFrame:
         """带断路器和fallback的数据获取"""
         try:
-            if self._breaker.is_open:
+            # 检查断路器状态
+            if self._breaker.state == "OPEN":
                 logger.warning("Tushare断路器开启，使用AKShare fallback")
                 return self.akshare_fallback.fetch(data_type, **kwargs)
 
-            df = func(**kwargs)
-            self._breaker.record_success()
+            # 通过断路器调用
+            df = self._breaker.call(func, **kwargs)
             return _validate_dataframe(df, data_type)
 
-        except Exception as e:
-            self._breaker.record_failure()
-            logger.error("Tushare请求失败: %s", e)
+        except CircuitBreakerOpenError:
+            # 断路器开启，使用AKShare fallback
+            logger.warning("Tushare断路器开启，使用AKShare fallback")
+            try:
+                df = self.akshare_fallback.fetch(data_type, **kwargs)
+                logger.info("AKShare fallback成功: %s", data_type)
+                return _validate_dataframe(df, data_type)
+            except Exception as fallback_err:
+                logger.error("AKShare fallback也失败: %s", fallback_err)
+                raise
 
+        except Exception as e:
+            logger.error("Tushare请求失败: %s", e)
             # 尝试AKShare fallback
             try:
                 df = self.akshare_fallback.fetch(data_type, **kwargs)

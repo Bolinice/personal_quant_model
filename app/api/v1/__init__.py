@@ -16,6 +16,7 @@ from app.api.v1 import (
     models,
     monitor,
     notifications,
+    payments,
     performance,
     portfolios,
     products,
@@ -48,6 +49,7 @@ api_router.include_router(backtests.router, prefix="/backtests", tags=["回测�
 api_router.include_router(simulated_portfolios.router, prefix="/simulated-portfolios", tags=["模拟组合"])
 api_router.include_router(products.router, prefix="/products", tags=["产品管理"])
 api_router.include_router(subscriptions.router, prefix="/subscriptions", tags=["订阅管理"])
+api_router.include_router(payments.router, prefix="/payments", tags=["支付管理"])
 api_router.include_router(reports.router, prefix="/reports", tags=["报告管理"])
 api_router.include_router(task_logs.router, prefix="/task-logs", tags=["任务日志"])
 api_router.include_router(alert_logs.router, prefix="/alert-logs", tags=["告警日志"])

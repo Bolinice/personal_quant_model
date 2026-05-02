@@ -18,15 +18,33 @@ from app.middleware.middleware import (
     LoggingMiddleware,
     MetricsMiddleware,
     RedisRateLimitMiddleware,
-    SecurityHeadersMiddleware,
     SlowQueryMiddleware,
 )
+from app.middleware.security import SecurityHeadersMiddleware as NewSecurityHeadersMiddleware
+from app.middleware.rate_limit import RateLimitMiddleware, InMemoryRateLimiter
+from app.middleware.tracing import TracingMiddleware
+from app.core.telemetry import setup_telemetry, configure_structlog_with_tracing
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     logger.info("Application starting...")
+
+    # 初始化 OpenTelemetry 追踪系统
+    setup_telemetry(
+        service_name="quant-model-api",
+        environment=settings.ENV,
+        otlp_endpoint=getattr(settings, "OTEL_EXPORTER_OTLP_ENDPOINT", None),
+        enable_console_export=(settings.ENV == "development"),
+    )
+
+    # 配置 structlog 与追踪集成
+    configure_structlog_with_tracing(
+        log_level="DEBUG" if settings.ENV == "development" else "INFO",
+        log_format="json" if settings.ENV == "production" else "text",
+    )
+    logger.info("OpenTelemetry and structlog initialized")
 
     # 生产环境安全检查（阻断而非警告）
     try:
@@ -81,9 +99,38 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.add_middleware(SecurityHeadersMiddleware)
+# 追踪中间件（最先添加，确保追踪所有请求）
+app.add_middleware(TracingMiddleware)
+
+# 安全头中间件（使用新实现）
+app.add_middleware(
+    NewSecurityHeadersMiddleware,
+    enable_hsts=True,
+    hsts_max_age=31536000,
+    hsts_include_subdomains=True,
+    enable_csp=True,
+    csp_directives={
+        "default-src": "'self'",
+        "script-src": "'self' 'unsafe-inline'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data: https:",
+        "font-src": "'self' data:",
+        "connect-src": "'self'",
+        "frame-ancestors": "'none'",
+    },
+)
+
+# 速率限制中间件（使用新实现）
+rate_limiter = InMemoryRateLimiter()
+app.add_middleware(
+    RateLimitMiddleware,
+    limiter=rate_limiter,
+    default_limit=100,
+    default_window=60,
+    exempt_paths=["/health", "/metrics", "/docs", "/openapi.json"],
+)
+
 app.add_middleware(LoggingMiddleware)
-app.add_middleware(RedisRateLimitMiddleware, requests_per_minute=60)
 app.add_middleware(MetricsMiddleware)
 app.add_middleware(SlowQueryMiddleware)
 app.add_middleware(ComplianceMiddleware)

@@ -33,13 +33,13 @@ class TaskLog(Base):
         return f"<TaskLog(id={self.id}, task_type='{self.task_type}', status='{self.status}')>"
 
 
-class AuditLog(Base):
-    """审计日志表"""
+class TaskAuditLog(Base):
+    """任务审计日志表（旧版，已废弃，使用 app.models.audit_log.AuditLog 替代）"""
 
-    __tablename__ = "audit_logs"
+    __tablename__ = "task_audit_logs"
     __table_args__ = (
-        Index("ix_audit_user", "user_id"),
-        Index("ix_audit_action", "action"),
+        Index("ix_task_audit_user", "user_id"),
+        Index("ix_task_audit_action", "action"),
     )
 
     id: int = Column(Integer, primary_key=True, index=True)

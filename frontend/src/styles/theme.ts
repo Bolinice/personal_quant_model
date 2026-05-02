@@ -16,7 +16,7 @@ const theme = createTheme({
       dark: tokens.colors.brand.secondaryDark,
     },
     background: {
-      default: tokens.colors.surface.background,
+      default: '#000000', // 纯黑（官网风格）
       paper: tokens.colors.surface.glass,
     },
     success: {
@@ -89,7 +89,8 @@ const theme = createTheme({
     MuiCssBaseline: {
       styleOverrides: {
         body: {
-          background: tokens.colors.surface.background,
+          background: 'linear-gradient(135deg, #0f0c29 0%, #1a1a2e 50%, #16213e 100%)',
+          backgroundAttachment: 'fixed',
           overflow: 'auto',
           WebkitFontSmoothing: 'antialiased',
           MozOsxFontSmoothing: 'grayscale',

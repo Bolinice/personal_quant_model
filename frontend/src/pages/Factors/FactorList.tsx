@@ -1,31 +1,31 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Card,
-  CardContent,
-  CardHeader,
-  Chip,
+  Box,
+  Typography,
   TextField,
   Select,
   MenuItem,
   FormControl,
   InputLabel,
   IconButton,
-  Box,
-  Typography,
   CircularProgress,
-  TablePagination,
   Tooltip,
   Alert,
-  Snackbar,
+  Chip,
+  Card,
+  CardContent,
 } from '@mui/material';
-import { Search as SearchIcon, Refresh as RefreshIcon } from '@mui/icons-material';
+import {
+  Search as SearchIcon,
+  Refresh as RefreshIcon,
+  TrendingUp as TrendingUpIcon,
+  TrendingDown as TrendingDownIcon,
+  CheckCircle as CheckCircleIcon,
+} from '@mui/icons-material';
+import { motion } from 'framer-motion';
 import client from '../../api/client';
+import PageHeader from '../../components/ui/PageHeader';
+import GlassPanel from '../../components/ui/GlassPanel';
 
 interface FactorMetadataItem {
   factor_name: string;
@@ -38,29 +38,27 @@ interface FactorMetadataItem {
   coverage_threshold: number;
 }
 
-// GROUP_COLORS：为每个因子组分配固定颜色，用于Chip背景色区分
-// 颜色选择遵循直觉：价值(金)=低估值，动量(橙)=趋势，波动率(红)=风险，流动性(青)=交易活跃
 const GROUP_COLORS: Record<string, string> = {
   valuation: '#ffc107',
-  growth: '#4caf50',
-  quality: '#2196f3',
+  growth: '#10b981',
+  quality: '#3b82f6',
   momentum: '#ff9800',
-  volatility: '#f44336',
-  liquidity: '#00bcd4',
-  northbound: '#9c27b0',
-  expectation: '#e91e63',
-  microstructure: '#3f51b5',
-  policy: '#ff5722',
-  supply_chain: '#cddc39',
-  sentiment: '#e91e63',
-  ashare_specific: '#ffeb3b',
-  interaction: '#00bcd4',
-  earnings_quality: '#66bb6a',
-  smart_money: '#29b6f6',
-  technical: '#ffa726',
-  industry_rotation: '#ef5350',
-  alt_data: '#ffc107',
-  risk_penalty: '#f44336',
+  volatility: '#ef4444',
+  liquidity: '#22d3ee',
+  northbound: '#8b5cf6',
+  expectation: '#ec4899',
+  microstructure: '#6366f1',
+  policy: '#f97316',
+  supply_chain: '#84cc16',
+  sentiment: '#ec4899',
+  ashare_specific: '#eab308',
+  interaction: '#22d3ee',
+  earnings_quality: '#10b981',
+  smart_money: '#06b6d4',
+  technical: '#fb923c',
+  industry_rotation: '#f43f5e',
+  alt_data: '#fbbf24',
+  risk_penalty: '#ef4444',
 };
 
 const GROUP_LABELS: Record<string, string> = {
@@ -86,14 +84,14 @@ const GROUP_LABELS: Record<string, string> = {
   risk_penalty: '风险惩罚',
 };
 
-const STATUS_LABELS: Record<
+const STATUS_CONFIG: Record<
   string,
-  { label: string; color: 'success' | 'warning' | 'default' | 'error' }
+  { label: string; color: string; bgColor: string }
 > = {
-  production: { label: '生产', color: 'success' },
-  candidate: { label: '候选', color: 'warning' },
-  experimental: { label: '实验', color: 'default' },
-  deprecated: { label: '废弃', color: 'error' },
+  production: { label: '生产', color: '#10b981', bgColor: 'rgba(16, 185, 129, 0.1)' },
+  candidate: { label: '候选', color: '#f59e0b', bgColor: 'rgba(245, 158, 11, 0.1)' },
+  experimental: { label: '实验', color: '#3b82f6', bgColor: 'rgba(59, 130, 246, 0.1)' },
+  deprecated: { label: '废弃', color: '#ef4444', bgColor: 'rgba(239, 68, 68, 0.1)' },
 };
 
 export default function FactorList() {
@@ -101,16 +99,13 @@ export default function FactorList() {
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [groupFilter, setGroupFilter] = useState<string>('');
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(20);
+  const [statusFilter, setStatusFilter] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState('');
 
   const fetchFactors = async () => {
     setLoading(true);
     setErrorMsg('');
     try {
-      // 使用/factor-metadata而非/factors，因为/factors只返回16个生产因子，
-      // 而/factor-metadata返回全部76个因子（含候选/实验/废弃），用于全局因子管理
       const res = await client.get<FactorMetadataItem[]>('/factor-metadata');
       setFactors(Array.isArray(res.data) ? res.data : []);
     } catch (e: unknown) {
@@ -127,163 +122,347 @@ export default function FactorList() {
   }, []);
 
   const groups = Array.from(new Set(factors.map((f) => f.factor_group))).sort();
+  const statuses = Array.from(new Set(factors.map((f) => f.status))).sort();
 
   const filteredFactors = factors.filter((f) => {
     const matchSearch =
       !searchText ||
       f.factor_name.toLowerCase().includes(searchText.toLowerCase()) ||
-      (f.description || '').includes(searchText);
+      (f.description || '').toLowerCase().includes(searchText.toLowerCase());
     const matchGroup = !groupFilter || f.factor_group === groupFilter;
-    return matchSearch && matchGroup;
+    const matchStatus = !statusFilter || f.status === statusFilter;
+    return matchSearch && matchGroup && matchStatus;
   });
 
-  const pagedFactors = filteredFactors.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  // 按因子组分组
+  const groupedFactors = filteredFactors.reduce((acc, factor) => {
+    const group = factor.factor_group;
+    if (!acc[group]) acc[group] = [];
+    acc[group].push(factor);
+    return acc;
+  }, {} as Record<string, FactorMetadataItem[]>);
+
+  if (loading && factors.length === 0) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+        <CircularProgress sx={{ color: '#22d3ee' }} />
+      </Box>
+    );
+  }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Card>
-        <CardHeader
-          title={
-            <Typography variant="h6">
-              因子列表 ({filteredFactors.length}/{factors.length})
-            </Typography>
-          }
-          action={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <FormControl size="small" sx={{ minWidth: 140 }}>
-                <InputLabel>因子组筛选</InputLabel>
-                <Select
-                  value={groupFilter}
-                  label="因子组筛选"
-                  onChange={(e) => {
-                    setGroupFilter(e.target.value);
-                    setPage(0);
-                  }}
-                >
-                  <MenuItem value="">全部</MenuItem>
-                  {groups.map((g) => (
-                    <MenuItem key={g} value={g}>
-                      {GROUP_LABELS[g] || g}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <TextField
-                size="small"
-                placeholder="搜索因子名称/描述"
-                value={searchText}
-                onChange={(e) => {
-                  setSearchText(e.target.value);
-                  setPage(0);
-                }}
-                sx={{ width: 240 }}
-                slotProps={{
-                  input: {
-                    startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-                  },
-                }}
-              />
-              <Tooltip title="刷新">
-                <IconButton onClick={fetchFactors} disabled={loading}>
-                  <RefreshIcon />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          }
-        />
-        <CardContent sx={{ p: 0 }}>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ width: 200 }}>因子名称</TableCell>
-                  <TableCell sx={{ width: 120 }}>因子组</TableCell>
-                  <TableCell>描述</TableCell>
-                  <TableCell sx={{ width: 80 }}>方向</TableCell>
-                  <TableCell sx={{ width: 80 }}>状态</TableCell>
-                  <TableCell sx={{ width: 60 }}>PIT</TableCell>
-                  <TableCell sx={{ width: 60 }}>版本</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading && factors.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                      <CircularProgress size={24} />
-                    </TableCell>
-                  </TableRow>
-                ) : pagedFactors.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
-                      暂无数据
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  pagedFactors.map((f) => (
-                    <TableRow key={f.factor_name} hover>
-                      <TableCell>
-                        <code style={{ fontSize: 12 }}>{f.factor_name}</code>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={GROUP_LABELS[f.factor_group] || f.factor_group}
-                          size="small"
-                          sx={{
-                            bgcolor: GROUP_COLORS[f.factor_group] || '#9e9e9e',
-                            color: '#fff',
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell>{f.description || '-'}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={f.direction === 1 ? '正向' : '反向'}
-                          size="small"
-                          variant="outlined"
-                          color={f.direction === 1 ? 'success' : 'error'}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={STATUS_LABELS[f.status]?.label || f.status}
-                          size="small"
-                          color={STATUS_LABELS[f.status]?.color || 'default'}
-                        />
-                      </TableCell>
-                      <TableCell>{f.pit_required ? '是' : '-'}</TableCell>
-                      <TableCell>{f.version}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <TablePagination
-            component="div"
-            count={filteredFactors.length}
-            page={page}
-            onPageChange={(_, p) => setPage(p)}
-            rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={(e) => {
-              setRowsPerPage(parseInt(e.target.value, 10));
-              setPage(0);
-            }}
-            rowsPerPageOptions={[10, 20, 50]}
-            labelRowsPerPage="每页行数"
-            labelDisplayedRows={({ from, to, count }) => `${from}-${to} / 共 ${count} 个因子`}
-          />
-        </CardContent>
-      </Card>
-      <Snackbar
-        open={!!errorMsg}
-        autoHideDuration={4000}
-        onClose={() => setErrorMsg('')}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-      >
-        <Alert severity="error" onClose={() => setErrorMsg('')}>
+    <Box>
+      <PageHeader
+        title="因子库"
+        subtitle={`共 ${filteredFactors.length} 个因子 · ${groups.length} 个因子组`}
+        breadcrumbs={[
+          { label: '首页', path: '/' },
+          { label: '因子库' },
+        ]}
+      />
+
+      {errorMsg && (
+        <Alert
+          severity="error"
+          sx={{
+            mb: 3,
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            color: '#fca5a5',
+          }}
+          onClose={() => setErrorMsg('')}
+        >
           {errorMsg}
         </Alert>
-      </Snackbar>
+      )}
+
+      {/* 筛选栏 */}
+      <GlassPanel sx={{ mb: 3 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr) auto' },
+            gap: 2,
+            alignItems: 'center',
+          }}
+        >
+          <TextField
+            size="small"
+            placeholder="搜索因子名称或描述"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            slotProps={{
+              input: {
+                startAdornment: <SearchIcon sx={{ mr: 1, color: '#64748b', fontSize: 20 }} />,
+              },
+            }}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                '& fieldset': {
+                  borderColor: 'rgba(148, 163, 184, 0.1)',
+                },
+                '&:hover fieldset': {
+                  borderColor: 'rgba(148, 163, 184, 0.2)',
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: '#22d3ee',
+                },
+              },
+            }}
+          />
+          <FormControl size="small">
+            <InputLabel>因子组</InputLabel>
+            <Select
+              value={groupFilter}
+              label="因子组"
+              onChange={(e) => setGroupFilter(e.target.value)}
+              sx={{
+                backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                '& fieldset': {
+                  borderColor: 'rgba(148, 163, 184, 0.1)',
+                },
+              }}
+            >
+              <MenuItem value="">全部</MenuItem>
+              {groups.map((g) => (
+                <MenuItem key={g} value={g}>
+                  {GROUP_LABELS[g] || g}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl size="small">
+            <InputLabel>状态</InputLabel>
+            <Select
+              value={statusFilter}
+              label="状态"
+              onChange={(e) => setStatusFilter(e.target.value)}
+              sx={{
+                backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                '& fieldset': {
+                  borderColor: 'rgba(148, 163, 184, 0.1)',
+                },
+              }}
+            >
+              <MenuItem value="">全部</MenuItem>
+              {statuses.map((s) => (
+                <MenuItem key={s} value={s}>
+                  {STATUS_CONFIG[s]?.label || s}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Tooltip title="刷新">
+            <IconButton
+              onClick={fetchFactors}
+              disabled={loading}
+              sx={{
+                color: '#22d3ee',
+                '&:hover': {
+                  backgroundColor: 'rgba(34, 211, 238, 0.1)',
+                },
+              }}
+            >
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      </GlassPanel>
+
+      {/* 因子卡片 - 按组展示 */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+      >
+        {filteredFactors.length === 0 ? (
+          <Box
+            sx={{
+              textAlign: 'center',
+              py: 8,
+              px: 3,
+              background: 'rgba(15, 23, 42, 0.5)',
+              borderRadius: '16px',
+              border: '1px solid rgba(148, 163, 184, 0.06)',
+            }}
+          >
+            <SearchIcon sx={{ fontSize: 64, color: '#64748b', mb: 2 }} />
+            <Typography sx={{ color: '#94a3b8', fontSize: '1rem', mb: 1 }}>
+              未找到匹配的因子
+            </Typography>
+            <Typography sx={{ color: '#64748b', fontSize: '0.875rem' }}>
+              尝试调整筛选条件或搜索关键词
+            </Typography>
+          </Box>
+        ) : (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {Object.entries(groupedFactors).map(([group, groupFactors]) => (
+              <Box key={group}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                  <Box
+                    sx={{
+                      width: 4,
+                      height: 24,
+                      borderRadius: '2px',
+                      background: `linear-gradient(180deg, ${GROUP_COLORS[group] || '#94a3b8'} 0%, transparent 100%)`,
+                    }}
+                  />
+                  <Typography
+                    sx={{
+                      fontSize: '1.125rem',
+                      fontWeight: 600,
+                      color: '#e2e8f0',
+                    }}
+                  >
+                    {GROUP_LABELS[group] || group}
+                  </Typography>
+                  <Chip
+                    label={groupFactors.length}
+                    size="small"
+                    sx={{
+                      backgroundColor: 'rgba(148, 163, 184, 0.1)',
+                      color: '#94a3b8',
+                      fontSize: '0.75rem',
+                      height: 20,
+                    }}
+                  />
+                </Box>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: {
+                      xs: '1fr',
+                      md: 'repeat(2, 1fr)',
+                      lg: 'repeat(3, 1fr)',
+                    },
+                    gap: 2,
+                  }}
+                >
+                  {groupFactors.map((factor, index) => (
+                    <motion.div
+                      key={factor.factor_name}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: index * 0.03 }}
+                    >
+                      <Card
+                        sx={{
+                          height: '100%',
+                          background: 'rgba(15, 23, 42, 0.5)',
+                          backdropFilter: 'blur(20px)',
+                          border: '1px solid rgba(148, 163, 184, 0.06)',
+                          borderRadius: '12px',
+                          transition: 'all 0.2s',
+                          '&:hover': {
+                            borderColor: `${GROUP_COLORS[group] || '#22d3ee'}40`,
+                            transform: 'translateY(-2px)',
+                            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+                          },
+                        }}
+                      >
+                        <CardContent sx={{ p: 2.5 }}>
+                          {/* 头部：因子名 + 状态 */}
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                            <Typography
+                              sx={{
+                                fontSize: '0.8125rem',
+                                fontFamily: '"JetBrains Mono", monospace',
+                                fontWeight: 600,
+                                color: '#e2e8f0',
+                                flex: 1,
+                                mr: 1,
+                                wordBreak: 'break-all',
+                              }}
+                            >
+                              {factor.factor_name}
+                            </Typography>
+                            <Chip
+                              label={STATUS_CONFIG[factor.status]?.label || factor.status}
+                              size="small"
+                              sx={{
+                                backgroundColor: STATUS_CONFIG[factor.status]?.bgColor || 'rgba(148, 163, 184, 0.1)',
+                                color: STATUS_CONFIG[factor.status]?.color || '#94a3b8',
+                                fontSize: '0.6875rem',
+                                height: 20,
+                                fontWeight: 600,
+                              }}
+                            />
+                          </Box>
+
+                          {/* 描述 */}
+                          {factor.description && (
+                            <Typography
+                              sx={{
+                                fontSize: '0.8125rem',
+                                color: '#94a3b8',
+                                lineHeight: 1.5,
+                                mb: 2,
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              {factor.description}
+                            </Typography>
+                          )}
+
+                          {/* 属性标签 */}
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                            <Chip
+                              icon={factor.direction === 1 ? <TrendingUpIcon /> : <TrendingDownIcon />}
+                              label={factor.direction === 1 ? '正向' : '反向'}
+                              size="small"
+                              sx={{
+                                backgroundColor: factor.direction === 1 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                color: factor.direction === 1 ? '#10b981' : '#ef4444',
+                                border: `1px solid ${factor.direction === 1 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
+                                fontSize: '0.6875rem',
+                                height: 24,
+                                '& .MuiChip-icon': {
+                                  fontSize: 14,
+                                },
+                              }}
+                            />
+                            {factor.pit_required && (
+                              <Chip
+                                icon={<CheckCircleIcon />}
+                                label="PIT"
+                                size="small"
+                                sx={{
+                                  backgroundColor: 'rgba(34, 211, 238, 0.1)',
+                                  color: '#22d3ee',
+                                  border: '1px solid rgba(34, 211, 238, 0.2)',
+                                  fontSize: '0.6875rem',
+                                  height: 24,
+                                  '& .MuiChip-icon': {
+                                    fontSize: 14,
+                                  },
+                                }}
+                              />
+                            )}
+                            <Chip
+                              label={`v${factor.version}`}
+                              size="small"
+                              sx={{
+                                backgroundColor: 'rgba(148, 163, 184, 0.1)',
+                                color: '#94a3b8',
+                                fontSize: '0.6875rem',
+                                height: 24,
+                              }}
+                            />
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  ))}
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        )}
+      </motion.div>
     </Box>
   );
 }

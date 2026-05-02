@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
-  Grid,
   Table,
   TableBody,
   TableCell,
@@ -13,13 +12,12 @@ import {
   Tab,
   Snackbar,
   Alert,
+  CircularProgress,
 } from '@mui/material';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import WarningIcon from '@mui/icons-material/Warning';
-import ErrorIcon from '@mui/icons-material/Error';
+import { motion } from 'framer-motion';
 import { monitorApi } from '@/api';
 import type { MonitorFactorHealth, MonitorModelHealth, MonitorAlert, Regime } from '@/api';
-import { PageHeader, GlassPanel, GlassTable, NeonChip, MetricCard } from '@/components/ui';
+import { PageHeader, GlassPanel, NeonChip, MetricCard } from '@/components/ui';
 
 // regimeLabel：后端regime枚举到中文的映射，trending/range_bound/defensive/aggressive
 // 对应趋势/震荡/防御/进攻四种市场状态，regime模块根据波动率和趋势强度判定
@@ -95,262 +93,370 @@ export default function MonitorDashboard() {
 
   const unresolvedAlerts = alerts.filter((a) => !a.resolved_flag);
 
-  if (loading) return <Typography>加载中...</Typography>;
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+        <CircularProgress sx={{ color: '#22d3ee' }} />
+      </Box>
+    );
+  }
 
   return (
     <Box>
-      <PageHeader title="监控中心" />
+      <PageHeader
+        title="监控中心"
+        subtitle="实时监控因子健康、模型状态和系统告警"
+        breadcrumbs={[
+          { label: '首页', path: '/' },
+          { label: '监控中心' },
+        ]}
+      />
 
-      {/* Regime + Alert summary */}
-      <Grid container spacing={2.5} sx={{ mb: 3 }}>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <GlassPanel animate={false}>
-            <Typography variant="body2" sx={{ color: '#64748b', mb: 1 }}>
+      {/* 概览卡片 */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+      >
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'repeat(2, 1fr)',
+              md: 'repeat(4, 1fr)',
+            },
+            gap: 2.5,
+            mb: 3,
+          }}
+        >
+          <GlassPanel>
+            <Typography
+              sx={{
+                fontSize: '0.75rem',
+                color: '#64748b',
+                mb: 1.5,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
               市场状态
             </Typography>
             {regime ? (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <Box
                   sx={{
-                    width: 12,
-                    height: 12,
+                    width: 16,
+                    height: 16,
                     borderRadius: '50%',
                     bgcolor: regimeColor[regime.regime] || '#94a3b8',
+                    boxShadow: `0 0 12px ${regimeColor[regime.regime] || '#94a3b8'}40`,
                   }}
                 />
-                <Typography
-                  sx={{
-                    fontWeight: 700,
-                    color: regimeColor[regime.regime] || '#e2e8f0',
-                    fontSize: '1.2rem',
-                  }}
-                >
-                  {regimeLabel[regime.regime] || regime.regime}
-                </Typography>
-                {regime.confidence != null && (
-                  <Typography variant="caption" sx={{ color: '#64748b' }}>
-                    {(regime.confidence * 100).toFixed(0)}%
+                <Box>
+                  <Typography
+                    sx={{
+                      fontWeight: 700,
+                      color: regimeColor[regime.regime] || '#e2e8f0',
+                      fontSize: '1.25rem',
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {regimeLabel[regime.regime] || regime.regime}
                   </Typography>
-                )}
+                  {regime.confidence != null && (
+                    <Typography
+                      sx={{
+                        fontSize: '0.75rem',
+                        color: '#64748b',
+                        mt: 0.25,
+                      }}
+                    >
+                      置信度 {(regime.confidence * 100).toFixed(0)}%
+                    </Typography>
+                  )}
+                </Box>
               </Box>
             ) : (
-              <Typography sx={{ color: '#64748b' }}>暂无数据</Typography>
+              <Typography sx={{ color: '#64748b', fontSize: '0.9375rem' }}>暂无数据</Typography>
             )}
           </GlassPanel>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+
           <MetricCard label="因子健康" value={factorHealth.length} color="#22d3ee" />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricCard label="模型健康" value={modelHealth.length} color="#8b5cf6" />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <MetricCard
             label="未解决告警"
             value={unresolvedAlerts.length}
             color={unresolvedAlerts.length > 0 ? '#f43f5e' : '#10b981'}
           />
-        </Grid>
-      </Grid>
+        </Box>
+      </motion.div>
 
-      {/* Tabs */}
-      <Box sx={{ borderBottom: '1px solid rgba(148, 163, 184, 0.1)', mb: 2 }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)}>
+      {/* 标签页 */}
+      <Box
+        sx={{
+          borderBottom: '1px solid rgba(148, 163, 184, 0.08)',
+          mb: 3,
+        }}
+      >
+        <Tabs
+          value={tab}
+          onChange={(_, v) => setTab(v)}
+          sx={{
+            '& .MuiTab-root': {
+              color: '#64748b',
+              fontWeight: 600,
+              textTransform: 'none',
+              fontSize: '0.9375rem',
+              '&.Mui-selected': {
+                color: '#22d3ee',
+              },
+            },
+            '& .MuiTabs-indicator': {
+              background: 'linear-gradient(90deg, #22d3ee 0%, #3b82f6 100%)',
+              height: 3,
+              borderRadius: '3px 3px 0 0',
+            },
+          }}
+        >
           <Tab label="因子健康" />
           <Tab label="模型健康" />
           <Tab label="告警列表" />
         </Tabs>
       </Box>
 
-      {/* Factor Health */}
+      {/* 因子健康 */}
       {tab === 0 && (
-        <GlassPanel animate={false}>
-          <GlassTable>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>日期</TableCell>
-                  <TableCell>因子名称</TableCell>
-                  <TableCell>覆盖率</TableCell>
-                  <TableCell>IC均值</TableCell>
-                  <TableCell>ICIR</TableCell>
-                  <TableCell>PSI</TableCell>
-                  <TableCell>状态</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {factorHealth.map((h, i) => (
-                  <TableRow key={i} hover>
-                    <TableCell>{h.trade_date}</TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace' }}>{h.factor_name}</TableCell>
-                    <TableCell>
-                      {h.coverage_rate != null ? `${(h.coverage_rate * 100).toFixed(1)}%` : '-'}
-                    </TableCell>
-                    <TableCell>{h.ic_mean != null ? h.ic_mean.toFixed(4) : '-'}</TableCell>
-                    {/* ICIR=IC均值/IC标准差，即信息比率，衡量因子预测稳定性；可为负值，负值说明因子方向性差或预测不稳定 */}
-                    <TableCell>{h.icir != null ? h.icir.toFixed(2) : '-'}</TableCell>
-                    <TableCell>{h.psi != null ? h.psi.toFixed(4) : '-'}</TableCell>
-                    <TableCell>
-                      <NeonChip
-                        label={
-                          h.health_status === 'healthy'
-                            ? '健康'
-                            : h.health_status === 'warning'
-                              ? '警告'
-                              : '异常'
-                        }
-                        size="small"
-                        neonColor={healthNeon[h.health_status] || 'default'}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {factorHealth.length === 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <GlassPanel>
+            <Box sx={{ overflowX: 'auto' }}>
+              <Table>
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
-                      暂无因子健康数据
-                    </TableCell>
+                    <TableCell>日期</TableCell>
+                    <TableCell>因子名称</TableCell>
+                    <TableCell>覆盖率</TableCell>
+                    <TableCell>IC均值</TableCell>
+                    <TableCell>ICIR</TableCell>
+                    <TableCell>PSI</TableCell>
+                    <TableCell>状态</TableCell>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </GlassTable>
-        </GlassPanel>
-      )}
-
-      {/* Model Health */}
-      {tab === 1 && (
-        <GlassPanel animate={false}>
-          <GlassTable>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>日期</TableCell>
-                  <TableCell>模型ID</TableCell>
-                  <TableCell>预测漂移</TableCell>
-                  <TableCell>特征重要性漂移</TableCell>
-                  <TableCell>OOS得分</TableCell>
-                  <TableCell>状态</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {modelHealth.map((h, i) => (
-                  <TableRow key={i} hover>
-                    <TableCell>{h.trade_date}</TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace' }}>{h.model_id}</TableCell>
-                    <TableCell>
-                      {h.prediction_drift != null ? h.prediction_drift.toFixed(4) : '-'}
-                    </TableCell>
-                    <TableCell>
-                      {h.feature_importance_drift != null
-                        ? h.feature_importance_drift.toFixed(4)
-                        : '-'}
-                    </TableCell>
-                    <TableCell>{h.oos_score != null ? h.oos_score.toFixed(4) : '-'}</TableCell>
-                    <TableCell>
-                      <NeonChip
-                        label={
-                          h.health_status === 'healthy'
-                            ? '健康'
-                            : h.health_status === 'warning'
-                              ? '警告'
-                              : '异常'
-                        }
-                        size="small"
-                        neonColor={healthNeon[h.health_status] || 'default'}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {modelHealth.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} align="center">
-                      暂无模型健康数据
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </GlassTable>
-        </GlassPanel>
-      )}
-
-      {/* Alerts */}
-      {tab === 2 && (
-        <GlassPanel animate={false}>
-          <GlassTable>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>时间</TableCell>
-                  <TableCell>类型</TableCell>
-                  <TableCell>严重程度</TableCell>
-                  <TableCell>对象</TableCell>
-                  <TableCell>消息</TableCell>
-                  <TableCell>状态</TableCell>
-                  <TableCell>操作</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {alerts.map((a) => (
-                  <TableRow key={a.alert_id} hover>
-                    <TableCell>{a.alert_time?.slice(0, 19).replace('T', ' ')}</TableCell>
-                    <TableCell>{a.alert_type || '-'}</TableCell>
-                    <TableCell>
-                      <NeonChip
-                        label={
-                          a.severity === 'critical'
-                            ? '严重'
-                            : a.severity === 'warning'
-                              ? '警告'
-                              : '信息'
-                        }
-                        size="small"
-                        neonColor={severityNeon[a.severity || ''] || 'default'}
-                      />
-                    </TableCell>
-                    <TableCell>{a.object_name || '-'}</TableCell>
-                    <TableCell
-                      sx={{
-                        maxWidth: 300,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {a.message || '-'}
-                    </TableCell>
-                    <TableCell>
-                      <NeonChip
-                        label={a.resolved_flag ? '已解决' : '未解决'}
-                        size="small"
-                        neonColor={a.resolved_flag ? 'green' : 'red'}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {!a.resolved_flag && (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() => handleResolve(a.alert_id)}
+                </TableHead>
+                <TableBody>
+                  {factorHealth.map((h, i) => (
+                    <TableRow key={i}>
+                      <TableCell>{h.trade_date}</TableCell>
+                      <TableCell sx={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.8125rem' }}>
+                        {h.factor_name}
+                      </TableCell>
+                      <TableCell>
+                        {h.coverage_rate != null ? `${(h.coverage_rate * 100).toFixed(1)}%` : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Typography
+                          sx={{
+                            color: h.ic_mean != null && h.ic_mean > 0 ? '#10b981' : '#ef4444',
+                            fontWeight: 600,
+                            fontSize: '0.875rem',
+                          }}
                         >
-                          解决
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {alerts.length === 0 && (
+                          {h.ic_mean != null ? h.ic_mean.toFixed(4) : '-'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{h.icir != null ? h.icir.toFixed(2) : '-'}</TableCell>
+                      <TableCell>{h.psi != null ? h.psi.toFixed(4) : '-'}</TableCell>
+                      <TableCell>
+                        <NeonChip
+                          label={
+                            h.health_status === 'healthy'
+                              ? '健康'
+                              : h.health_status === 'warning'
+                                ? '警告'
+                                : '异常'
+                          }
+                          size="small"
+                          neonColor={healthNeon[h.health_status] || 'default'}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {factorHealth.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center" sx={{ py: 4, color: '#64748b' }}>
+                        暂无因子健康数据
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </Box>
+          </GlassPanel>
+        </motion.div>
+      )}
+
+      {/* 模型健康 */}
+      {tab === 1 && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <GlassPanel>
+            <Box sx={{ overflowX: 'auto' }}>
+              <Table>
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
-                      暂无告警
-                    </TableCell>
+                    <TableCell>日期</TableCell>
+                    <TableCell>模型ID</TableCell>
+                    <TableCell>预测漂移</TableCell>
+                    <TableCell>特征重要性漂移</TableCell>
+                    <TableCell>OOS得分</TableCell>
+                    <TableCell>状态</TableCell>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </GlassTable>
-        </GlassPanel>
+                </TableHead>
+                <TableBody>
+                  {modelHealth.map((h, i) => (
+                    <TableRow key={i}>
+                      <TableCell>{h.trade_date}</TableCell>
+                      <TableCell sx={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.8125rem' }}>
+                        {h.model_id}
+                      </TableCell>
+                      <TableCell>
+                        {h.prediction_drift != null ? h.prediction_drift.toFixed(4) : '-'}
+                      </TableCell>
+                      <TableCell>
+                        {h.feature_importance_drift != null
+                          ? h.feature_importance_drift.toFixed(4)
+                          : '-'}
+                      </TableCell>
+                      <TableCell>{h.oos_score != null ? h.oos_score.toFixed(4) : '-'}</TableCell>
+                      <TableCell>
+                        <NeonChip
+                          label={
+                            h.health_status === 'healthy'
+                              ? '健康'
+                              : h.health_status === 'warning'
+                                ? '警告'
+                                : '异常'
+                          }
+                          size="small"
+                          neonColor={healthNeon[h.health_status] || 'default'}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {modelHealth.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center" sx={{ py: 4, color: '#64748b' }}>
+                        暂无模型健康数据
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </Box>
+          </GlassPanel>
+        </motion.div>
+      )}
+
+      {/* 告警列表 */}
+      {tab === 2 && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <GlassPanel>
+            <Box sx={{ overflowX: 'auto' }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>时间</TableCell>
+                    <TableCell>类型</TableCell>
+                    <TableCell>严重程度</TableCell>
+                    <TableCell>对象</TableCell>
+                    <TableCell>消息</TableCell>
+                    <TableCell>状态</TableCell>
+                    <TableCell>操作</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {alerts.map((a) => (
+                    <TableRow key={a.alert_id}>
+                      <TableCell sx={{ fontSize: '0.8125rem' }}>
+                        {a.alert_time?.slice(0, 19).replace('T', ' ')}
+                      </TableCell>
+                      <TableCell>{a.alert_type || '-'}</TableCell>
+                      <TableCell>
+                        <NeonChip
+                          label={
+                            a.severity === 'critical'
+                              ? '严重'
+                              : a.severity === 'warning'
+                                ? '警告'
+                                : '信息'
+                          }
+                          size="small"
+                          neonColor={severityNeon[a.severity || ''] || 'default'}
+                        />
+                      </TableCell>
+                      <TableCell>{a.object_name || '-'}</TableCell>
+                      <TableCell
+                        sx={{
+                          maxWidth: 300,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {a.message || '-'}
+                      </TableCell>
+                      <TableCell>
+                        <NeonChip
+                          label={a.resolved_flag ? '已解决' : '未解决'}
+                          size="small"
+                          neonColor={a.resolved_flag ? 'green' : 'red'}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {!a.resolved_flag && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => handleResolve(a.alert_id)}
+                            sx={{
+                              borderColor: 'rgba(34, 211, 238, 0.3)',
+                              color: '#22d3ee',
+                              textTransform: 'none',
+                              fontSize: '0.8125rem',
+                              '&:hover': {
+                                borderColor: 'rgba(34, 211, 238, 0.5)',
+                                backgroundColor: 'rgba(34, 211, 238, 0.1)',
+                              },
+                            }}
+                          >
+                            解决
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {alerts.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center" sx={{ py: 4, color: '#64748b' }}>
+                        暂无告警
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </Box>
+          </GlassPanel>
+        </motion.div>
       )}
 
       <Snackbar

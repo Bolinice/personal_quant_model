@@ -32,6 +32,9 @@ import Profile from '@/pages/Settings/Profile';
 import RiskAssessment from '@/pages/Settings/RiskAssessment';
 import SubscriptionPage from '@/pages/Settings/SubscriptionPage';
 import Subscribe from '@/pages/Subscribe';
+import StrategyList from '@/pages/Strategies/StrategyList';
+import StrategyDetail from '@/pages/Strategies/StrategyDetail';
+import StrategyForm from '@/pages/Strategies/StrategyForm';
 
 function AppRoutes() {
   return (
@@ -98,6 +101,24 @@ function AppRoutes() {
           }
         />
         <Route path="backtests/:id" element={<BacktestResult />} />
+        <Route path="strategies" element={<StrategyList />} />
+        <Route
+          path="strategies/create"
+          element={
+            <ProtectedRoute>
+              <StrategyForm />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="strategies/:id/edit"
+          element={
+            <ProtectedRoute>
+              <StrategyForm />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="strategies/:id" element={<StrategyDetail />} />
         <Route path="timing" element={<TimingList />} />
         <Route path="portfolios" element={<PortfolioList />} />
         <Route path="portfolios/:id" element={<PortfolioDetail />} />

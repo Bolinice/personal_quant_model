@@ -3,18 +3,18 @@
  * 参考 Linear, Vercel, Stripe 的设计语言
  */
 
-// 颜色系统 - 更精致的配色
+// 颜色系统 - 与官网统一
 export const colors = {
-  // 品牌色 - 更沉稳优雅
+  // 品牌色 - 青色主题（与官网一致）
   brand: {
-    primary: '#3b82f6',        // 蓝色主色 (更专业)
+    primary: '#3b82f6',        // 蓝色
     primaryLight: '#60a5fa',
     primaryDark: '#2563eb',
-    secondary: '#8b5cf6',      // 紫色辅助色
+    secondary: '#8b5cf6',      // 紫色
     secondaryLight: '#a78bfa',
     secondaryDark: '#7c3aed',
-    accent: '#06b6d4',         // 青色强调色
-    accentLight: '#22d3ee',
+    accent: '#22d3ee',         // 青色强调（官网主色）
+    accentLight: '#06b6d4',
   },
 
   // 语义色 - 更柔和的饱和度
@@ -33,37 +33,37 @@ export const colors = {
     infoBg: 'rgba(59, 130, 246, 0.08)',
   },
 
-  // 表面色 - 更丰富的层次
+  // 表面色 - 纯黑基调（与官网一致）
   surface: {
-    background: '#0a0a0a',           // 更深的背景
-    backgroundElevated: '#0f0f0f',   // 轻微提升
-    glass: 'rgba(17, 17, 19, 0.7)',  // 更精致的玻璃效果
-    glassBorder: 'rgba(255, 255, 255, 0.06)', // 更微妙的边框
-    elevated: 'rgba(20, 20, 22, 0.9)',
-    elevatedHover: 'rgba(24, 24, 27, 0.9)',
-    drawer: 'rgba(12, 12, 14, 0.95)',
-    appBar: 'rgba(10, 10, 12, 0.8)',
-    card: 'rgba(18, 18, 20, 0.8)',
-    cardHover: 'rgba(22, 22, 24, 0.9)',
+    background: '#000000',           // 纯黑背景
+    backgroundElevated: '#0a0a0a',   // 轻微提升
+    glass: 'rgba(15, 23, 42, 0.5)',  // 半透明卡片（官网风格）
+    glassBorder: 'rgba(148, 163, 184, 0.08)', // 微妙边框
+    elevated: 'rgba(15, 23, 42, 0.8)',
+    elevatedHover: 'rgba(15, 23, 42, 0.9)',
+    drawer: 'rgba(3, 7, 18, 0.95)',
+    appBar: 'rgba(0, 0, 0, 0.8)',
+    card: 'rgba(15, 23, 42, 0.5)',
+    cardHover: 'rgba(15, 23, 42, 0.7)',
   },
 
-  // 文本色 - 更精细的层级
+  // 文本色 - 与官网一致
   text: {
-    primary: '#fafafa',           // 更亮的主文本
-    secondary: '#a1a1aa',         // 中性灰
-    tertiary: '#71717a',          // 次要文本
-    disabled: '#52525b',          // 禁用状态
+    primary: '#e2e8f0',           // 主文本（官网）
+    secondary: '#94a3b8',         // 次要文本（官网）
+    tertiary: '#64748b',          // 三级文本（官网）
+    disabled: '#475569',          // 禁用状态
     muted: '#3f3f46',            // 极弱文本
     inverse: '#18181b',          // 反色文本
   },
 
-  // 边框色 - 更微妙的层次
+  // 边框色 - 与官网一致（非常微妙）
   border: {
-    subtle: 'rgba(255, 255, 255, 0.04)',
-    default: 'rgba(255, 255, 255, 0.08)',
-    medium: 'rgba(255, 255, 255, 0.12)',
-    strong: 'rgba(255, 255, 255, 0.18)',
-    brand: 'rgba(59, 130, 246, 0.3)',
+    subtle: 'rgba(148, 163, 184, 0.04)',
+    default: 'rgba(148, 163, 184, 0.06)',
+    medium: 'rgba(148, 163, 184, 0.08)',
+    strong: 'rgba(148, 163, 184, 0.12)',
+    brand: 'rgba(34, 211, 238, 0.2)',  // 青色边框
   },
 
   // 交互状态 - 更精致的反馈
@@ -82,12 +82,14 @@ export const colors = {
     thumbHover: 'rgba(255, 255, 255, 0.2)',
   },
 
-  // 渐变 - 更优雅的渐变
+  // 渐变 - 与官网一致
   gradient: {
     primary: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
     primaryHover: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
-    subtle: 'linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, transparent 100%)',
-    glow: 'radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.15), transparent 50%)',
+    secondary: 'linear-gradient(135deg, #22d3ee 0%, #8b5cf6 100%)', // 青紫渐变（官网）
+    subtle: 'linear-gradient(180deg, rgba(148, 163, 184, 0.05) 0%, transparent 100%)',
+    glow: 'radial-gradient(ellipse 80% 60% at 50% 35%, rgba(59,130,246,0.08) 0%, transparent 100%)',
+    glowPurple: 'radial-gradient(ellipse 60% 50% at 60% 70%, rgba(139,92,246,0.05) 0%, transparent 100%)',
   },
 
   // 叠加层

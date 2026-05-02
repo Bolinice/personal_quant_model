@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import ReactECharts from 'echarts-for-react';
+import ReactECharts from './ReactEChartsCore';
 
 interface PortfolioWeightChartProps {
   data: Array<{
@@ -43,24 +43,24 @@ const PortfolioWeightChart: React.FC<PortfolioWeightChartProps> = ({
         left: 'center',
         textStyle: {
           fontSize: 16,
-          fontWeight: 'normal',
+          fontWeight: 'normal' as const,
         },
       } : undefined,
       tooltip: {
-        trigger: 'item',
+        trigger: 'item' as const,
         formatter: (params: any) => {
           const value = typeof params.value === 'number' ? (params.value * 100).toFixed(2) : '0.00';
           return `${params.marker}${params.name}: ${value}%`;
         },
       },
       legend: {
-        orient: 'vertical',
+        orient: 'vertical' as const,
         left: 'left',
         top: title ? 40 : 20,
       },
       series: [
         {
-          type: 'pie',
+          type: 'pie' as const,
           radius: '60%',
           center: ['50%', '55%'],
           data: pieData,

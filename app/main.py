@@ -1,10 +1,17 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.v1 import api_router
 from app.core.config import settings
+from app.core.exception_handlers import (
+    general_exception_handler,
+    http_exception_handler,
+    validation_exception_handler,
+)
 from app.core.logging import logger
 from app.middleware.middleware import (
     ComplianceMiddleware,
@@ -49,6 +56,11 @@ app = FastAPI(
     version="2.1.0",
     lifespan=lifespan,
 )
+
+# 注册全局异常处理器
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
 
 
 # 添加中间件确保 UTF-8 编码

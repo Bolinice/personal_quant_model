@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import ReactECharts from 'echarts-for-react';
+import ReactECharts from './ReactEChartsCore';
 
 interface DrawdownChartProps {
   data: Array<{
@@ -21,11 +21,11 @@ const DrawdownChart: React.FC<DrawdownChartProps> = ({ data, height = 250, title
         left: 0,
         textStyle: {
           fontSize: 16,
-          fontWeight: 'normal',
+          fontWeight: 'normal' as const,
         },
       } : undefined,
       tooltip: {
-        trigger: 'axis',
+        trigger: 'axis' as const,
         formatter: (params: any) => {
           const value = typeof params[0].value === 'number'
             ? `${(params[0].value * 100).toFixed(2)}%`
@@ -40,14 +40,14 @@ const DrawdownChart: React.FC<DrawdownChartProps> = ({ data, height = 250, title
         bottom: 50,
       },
       xAxis: {
-        type: 'category',
+        type: 'category' as const,
         data: dates,
         axisLabel: {
           fontSize: 12,
         },
       },
       yAxis: {
-        type: 'value',
+        type: 'value' as const,
         axisLabel: {
           fontSize: 12,
           formatter: (v: number) => `${(v * 100).toFixed(1)}%`,
@@ -56,7 +56,7 @@ const DrawdownChart: React.FC<DrawdownChartProps> = ({ data, height = 250, title
       series: [
         {
           name: '回撤',
-          type: 'line',
+          type: 'line' as const,
           data: drawdownValues,
           smooth: false,
           symbol: 'none',

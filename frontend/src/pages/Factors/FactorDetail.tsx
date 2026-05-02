@@ -22,7 +22,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CalculateIcon from '@mui/icons-material/Calculate';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
-import ReactECharts from 'echarts-for-react';
+import ReactECharts from '@/components/charts/ReactEChartsCore';
 import { factorApi } from '@/api';
 import type { Factor, FactorAnalysis } from '@/api';
 import { PageHeader, GlassPanel, GlassTable, NeonChip } from '@/components/ui';

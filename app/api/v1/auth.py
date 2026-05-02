@@ -121,6 +121,21 @@ def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
     )
 
 
+@router.post("/logout")
+def logout(request: RefreshTokenRequest, current_user: User = Depends(get_current_user)):
+    """
+    用户登出
+    将refresh token加入黑名单，使其无法再次使用
+    """
+    from app.core.token_blacklist import get_token_blacklist
+
+    blacklist = get_token_blacklist()
+    blacklist.add(request.refresh_token)
+
+    logger.info(f"User {current_user.username} logged out")
+    return success(message="登出成功")
+
+
 @router.get("/me")
 def get_current_user_info(current_user: User = Depends(get_current_user)):
     """获取当前用户信息"""

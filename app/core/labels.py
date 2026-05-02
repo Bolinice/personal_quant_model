@@ -72,8 +72,22 @@ class LabelBuilder:
             # 无基准时, 用全市场平均收益作为基准
             # 排除指定股票, 避免被评估股票自身参与基准计算导致循环依赖
             # 循环依赖: 若股票i也是基准成分, 则超额收益被自身拉低, 导致标签有偏
+
+            # ✅ 强制要求提供exclude_codes，避免未来函数风险
+            if not exclude_codes:
+                from app.core.logging import logger as _logger
+                _logger.error(
+                    "未来函数风险: 使用全市场平均作为基准时，必须提供exclude_codes排除被评估股票，"
+                    "否则股票自身会参与基准计算，导致标签偏差。"
+                    "建议: 1) 提供benchmark_df; 2) 提供exclude_codes排除当前评估的股票池"
+                )
+                raise ValueError(
+                    "Must provide exclude_codes when using market average as benchmark to avoid look-ahead bias. "
+                    "The evaluated stocks must be excluded from benchmark calculation."
+                )
+
             merged = stock_fwd.copy()
-            bench_pool = merged[~merged[code_col].isin(exclude_codes)] if exclude_codes else merged
+            bench_pool = merged[~merged[code_col].isin(exclude_codes)]
             # 注意: 若排除后无可用股票, 退回全市场平均(并记录警告)
             if bench_pool.empty:
                 from app.core.logging import logger as _logger

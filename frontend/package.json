@@ -11,9 +11,9 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,json,css,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,json,css,md}\"",
     "preview": "vite preview",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "test": "NODE_OPTIONS='--max-old-space-size=4096' vitest run",
+    "test:watch": "NODE_OPTIONS='--max-old-space-size=4096' vitest",
+    "test:coverage": "NODE_OPTIONS='--max-old-space-size=4096' vitest run --coverage",
     "prepare": "cd .. && husky install frontend/.husky"
   },
   "dependencies": {
@@ -26,7 +26,6 @@
     "axios": "^1.15.0",
     "dayjs": "^1.11.20",
     "echarts": "^6.0.0",
-    "echarts-for-react": "^3.0.6",
     "framer-motion": "^12.38.0",
     "i18next": "^26.0.8",
     "react": "^19.2.4",

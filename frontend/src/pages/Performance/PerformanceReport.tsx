@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Box, Typography, Grid, TextField, MenuItem, Button, Snackbar, Alert } from '@mui/material';
 import AssessmentIcon from '@mui/icons-material/Assessment';
-import ReactECharts from 'echarts-for-react';
+import ReactECharts from '@/components/charts/ReactEChartsCore';
 import { performanceApi, backtestApi } from '@/api';
 import type { PerformanceAnalysis, PerformanceReport } from '@/api';
 import type { Backtest } from '@/api';

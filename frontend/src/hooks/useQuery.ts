@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export interface QueryState<T> {
   data: T | null;
@@ -25,26 +25,36 @@ export function useQuery<T>(
     error: '',
   });
 
+  // Use refs to avoid recreating execute on every callback change
+  const queryFnRef = useRef(queryFn);
+  const onSuccessRef = useRef(onSuccess);
+  const onErrorRef = useRef(onError);
+
+  // Update refs on each render
+  queryFnRef.current = queryFn;
+  onSuccessRef.current = onSuccess;
+  onErrorRef.current = onError;
+
   const execute = useCallback(async () => {
     if (!enabled) return;
 
     setState((prev) => ({ ...prev, loading: true, error: '' }));
     try {
-      const result = await queryFn();
+      const result = await queryFnRef.current();
       setState({ data: result, loading: false, error: '' });
-      onSuccess?.(result);
+      onSuccessRef.current?.(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : '请求失败';
       setState({ data: null, loading: false, error: message });
-      onError?.(err instanceof Error ? err : new Error(message));
+      onErrorRef.current?.(err instanceof Error ? err : new Error(message));
     }
-  }, [enabled, queryFn, onSuccess, onError]);
+  }, [enabled]);
 
   useEffect(() => {
     if (!refetchOnMount || !enabled) return;
     execute();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, execute, refetchOnMount]);
+  }, [...deps, refetchOnMount, enabled]);
 
   const refetch = useCallback(() => {
     execute();
@@ -64,20 +74,30 @@ export function useQueries<T extends unknown[]>(
     error: '',
   });
 
+  // Use refs to avoid recreating execute on every callback change
+  const queryFnsRef = useRef(queryFns);
+  const onSuccessRef = useRef(onSuccess);
+  const onErrorRef = useRef(onError);
+
+  // Update refs on each render
+  queryFnsRef.current = queryFns;
+  onSuccessRef.current = onSuccess;
+  onErrorRef.current = onError;
+
   const execute = useCallback(async () => {
     if (!enabled) return;
 
     setState((prev) => ({ ...prev, loading: true, error: '' }));
     try {
-      const results = await Promise.all(queryFns.map((fn) => fn()));
+      const results = await Promise.all(queryFnsRef.current.map((fn) => fn()));
       setState({ data: results as T, loading: false, error: '' });
-      onSuccess?.(results);
+      onSuccessRef.current?.(results);
     } catch (err) {
       const message = err instanceof Error ? err.message : '请求失败';
       setState({ data: null, loading: false, error: message });
-      onError?.(err instanceof Error ? err : new Error(message));
+      onErrorRef.current?.(err instanceof Error ? err : new Error(message));
     }
-  }, [enabled, queryFns, onSuccess, onError]);
+  }, [enabled]);
 
   useEffect(() => {
     if (!enabled) return;

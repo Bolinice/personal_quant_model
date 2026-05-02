@@ -35,7 +35,7 @@ import HistoryIcon from '@mui/icons-material/History';
 import ApiIcon from '@mui/icons-material/Api';
 import GroupIcon from '@mui/icons-material/Group';
 import DescriptionIcon from '@mui/icons-material/Description';
-import ReactECharts from 'echarts-for-react';
+import ReactECharts from '@/components/charts/ReactEChartsCore';
 import { stockPoolApi, modelApi, subscriptionApi } from '@/api';
 import type { StockPool, Model, ModelPerformance, ModelScore } from '@/api';
 import { PageHeader, GlassPanel, GlassTable, NeonChip, MetricCard } from '@/components/ui';

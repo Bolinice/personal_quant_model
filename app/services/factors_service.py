@@ -141,23 +141,35 @@ def calculate_ic_analysis(factor_id: int, start_date: str, end_date: str, db: Se
         columns=["security_id", "trade_date", "factor_value"],
     )
 
-    # 获取后续收益率
-    next_returns = []
-    for _, row in df.iterrows():
-        # 获取下一个交易日的收益率
-        next_date = get_next_trading_date(row["trade_date"])
-        returns = (
-            db.query(StockDaily)
-            .filter(StockDaily.ts_code == row["security_id"], StockDaily.trade_date == next_date)
-            .first()
+    # 批量获取所有需要的交易日期
+    unique_dates = df["trade_date"].unique()
+    date_mapping = {}
+    for date in unique_dates:
+        next_date = get_next_trading_date(date)
+        if next_date:
+            date_mapping[date] = next_date
+
+    # 批量获取所有股票的收益率数据（一次查询）
+    all_security_ids = df["security_id"].unique().tolist()
+    all_dates = list(date_mapping.values())
+
+    stock_returns = (
+        db.query(StockDaily.ts_code, StockDaily.trade_date, StockDaily.pct_chg)
+        .filter(
+            StockDaily.ts_code.in_(all_security_ids),
+            StockDaily.trade_date.in_(all_dates)
         )
+        .all()
+    )
 
-        if returns:
-            next_returns.append(returns.pct_chg)
-        else:
-            next_returns.append(0)
+    # 构建收益率字典 {(ts_code, trade_date): pct_chg}
+    returns_dict = {(r.ts_code, r.trade_date): r.pct_chg for r in stock_returns}
 
-    df["next_return"] = next_returns
+    # 映射下一日收益率
+    df["next_return"] = df.apply(
+        lambda row: returns_dict.get((row["security_id"], date_mapping.get(row["trade_date"])), 0),
+        axis=1
+    )
 
     # 计算IC
     ic = df["factor_value"].corr(df["next_return"])
@@ -165,28 +177,42 @@ def calculate_ic_analysis(factor_id: int, start_date: str, end_date: str, db: Se
     # 计算Rank IC
     rank_ic = df["factor_value"].rank().corr(df["next_return"].rank())
 
-    # 计算IC衰减
+    # 计算IC衰减（批量查询优化）
     ic_decay = []
     for i in range(1, 21):  # 1-20日衰减
-        lag_returns = []
-        for _, row in df.iterrows():
-            lag_date = get_trading_date_after(row["trade_date"], i)
-            returns = (
-                db.query(StockDaily)
-                .filter(StockDaily.ts_code == row["security_id"], StockDaily.trade_date == lag_date)
-                .first()
-            )
+        # 批量获取滞后日期
+        lag_date_mapping = {}
+        for date in unique_dates:
+            lag_date = get_trading_date_after(date, i)
+            if lag_date:
+                lag_date_mapping[date] = lag_date
 
-            if returns:
-                lag_returns.append(returns.pct_chg)
-            else:
-                lag_returns.append(0)
-
-        if lag_returns:
-            lag_ic = df["factor_value"].corr(lag_returns)
-            ic_decay.append(lag_ic)
-        else:
+        # 批量查询滞后期收益率
+        lag_dates = list(lag_date_mapping.values())
+        if not lag_dates:
             ic_decay.append(0)
+            continue
+
+        lag_returns = (
+            db.query(StockDaily.ts_code, StockDaily.trade_date, StockDaily.pct_chg)
+            .filter(
+                StockDaily.ts_code.in_(all_security_ids),
+                StockDaily.trade_date.in_(lag_dates)
+            )
+            .all()
+        )
+
+        lag_returns_dict = {(r.ts_code, r.trade_date): r.pct_chg for r in lag_returns}
+
+        # 映射滞后收益率
+        df[f"lag_{i}_return"] = df.apply(
+            lambda row: lag_returns_dict.get((row["security_id"], lag_date_mapping.get(row["trade_date"])), 0),
+            axis=1
+        )
+
+        # 计算滞后IC
+        lag_ic = df["factor_value"].corr(df[f"lag_{i}_return"])
+        ic_decay.append(lag_ic)
 
     # 保存分析结果
     analysis_data = FactorAnalysisCreate(
@@ -220,25 +246,42 @@ def calculate_group_returns(factor_id: int, start_date: str, end_date: str, db: 
     # 按因子值分组（10组）
     df["group"] = pd.qcut(df["factor_value"], 10, labels=False)
 
-    # 计算每组后续收益率
+    # 批量获取所有需要的交易日期和收益率数据
+    unique_dates = df["trade_date"].unique()
+    date_mapping = {}
+    for date in unique_dates:
+        next_date = get_next_trading_date(date)
+        if next_date:
+            date_mapping[date] = next_date
+
+    # 批量查询所有股票的收益率（一次查询）
+    all_security_ids = df["security_id"].unique().tolist()
+    all_dates = list(date_mapping.values())
+
+    stock_returns = (
+        db.query(StockDaily.ts_code, StockDaily.trade_date, StockDaily.pct_chg)
+        .filter(
+            StockDaily.ts_code.in_(all_security_ids),
+            StockDaily.trade_date.in_(all_dates)
+        )
+        .all()
+    )
+
+    # 构建收益率字典
+    returns_dict = {(r.ts_code, r.trade_date): r.pct_chg for r in stock_returns}
+
+    # 映射下一日收益率
+    df["next_return"] = df.apply(
+        lambda row: returns_dict.get((row["security_id"], date_mapping.get(row["trade_date"])), 0),
+        axis=1
+    )
+
+    # 计算每组平均收益率
     group_returns = []
     for group in range(10):
         group_df = df[df["group"] == group]
-        returns = []
-
-        for _, row in group_df.iterrows():
-            next_date = get_next_trading_date(row["trade_date"])
-            returns_data = (
-                db.query(StockDaily)
-                .filter(StockDaily.ts_code == row["security_id"], StockDaily.trade_date == next_date)
-                .first()
-            )
-
-            if returns_data:
-                returns.append(returns_data.pct_chg)
-
-        if returns:
-            avg_return = np.mean(returns)
+        if not group_df.empty:
+            avg_return = group_df["next_return"].mean()
             group_returns.append(avg_return)
         else:
             group_returns.append(0)

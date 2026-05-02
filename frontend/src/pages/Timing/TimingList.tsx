@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import SettingsIcon from '@mui/icons-material/Settings';
-import ReactECharts from 'echarts-for-react';
+import ReactECharts from '@/components/charts/ReactEChartsCore';
 import { timingApi } from '@/api';
 import type { TimingSignal, TimingConfig } from '@/api';
 import { modelApi } from '@/api';

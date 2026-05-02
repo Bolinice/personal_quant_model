@@ -16,6 +16,7 @@ from jose import JWTError, jwt
 
 from app.core.config import settings
 from app.core.logging import logger
+from app.core.token_blacklist import get_token_blacklist
 from app.models.user import APIKey, User
 
 if TYPE_CHECKING:
@@ -24,9 +25,6 @@ if TYPE_CHECKING:
 
 class AuthService:
     """认证服务"""
-
-    # Refresh Token 黑名单（生产环境应迁移到 Redis）
-    _revoked_tokens: set[str] = set()
 
     @staticmethod
     def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
@@ -74,9 +72,10 @@ class AuthService:
         Returns:
             (new_access_token, new_refresh_token) 或 None
         """
-        # 检查黑名单
-        token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
-        if token_hash in AuthService._revoked_tokens:
+        # 检查黑名单（使用Redis）
+        blacklist = get_token_blacklist()
+        if blacklist.is_blacklisted(refresh_token):
+            logger.warning("Attempted to use blacklisted refresh token")
             return None
 
         payload = AuthService.verify_token(refresh_token, "refresh")
@@ -87,8 +86,8 @@ class AuthService:
         if not user_id:
             return None
 
-        # 将旧refresh token加入黑名单
-        AuthService._revoked_tokens.add(token_hash)
+        # 将旧refresh token加入黑名单（使用Redis，自动过期）
+        blacklist.add(refresh_token)
 
         new_data = {"sub": user_id, "role": payload.get("role", "user")}
         new_access = AuthService.create_access_token(new_data)

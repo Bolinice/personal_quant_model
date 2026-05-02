@@ -2,9 +2,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app.api.v1.auth import get_current_user
 from app.core.response import success
 from app.db.base import get_db
 from app.models.payments import PaymentOrder
+from app.models.user import User
 from app.schemas.payments import (
     PaymentNotifyRequest,
     PaymentOrderCreate,
@@ -29,9 +31,20 @@ router = APIRouter()
 
 
 @router.post("/orders", response_model=PaymentOrderResponse)
-def create_order(order_data: PaymentOrderCreate, db: Session = Depends(get_db)):
+def create_order(
+    order_data: PaymentOrderCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """创建支付订单"""
     try:
+        # ✅ 验证用户权限：只能为自己创建订单
+        if order_data.user_id != current_user.id:
+            raise HTTPException(
+                status_code=403,
+                detail="无权为其他用户创建订单"
+            )
+
         # 创建订单
         order = create_payment_order(order_data, db)
 
@@ -87,29 +100,55 @@ def create_order(order_data: PaymentOrderCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/orders/{order_no}", response_model=PaymentOrderDetail)
-def query_order(order_no: str, db: Session = Depends(get_db)):
+def query_order(
+    order_no: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """查询订单详情"""
     order = get_payment_order(order_no, db)
     if not order:
         raise HTTPException(status_code=404, detail="订单不存在")
 
+    # ✅ 验证用户权限：只能查看自己的订单
+    if order.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="无权查看其他用户的订单")
+
     return order
 
 
 @router.get("/orders/user/{user_id}")
-def get_user_orders(user_id: int, limit: int = 50, db: Session = Depends(get_db)):
+def get_user_orders(
+    user_id: int,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """获取用户的订单列表"""
+    # ✅ 验证用户权限：只能查看自己的订单列表
+    if user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="无权查看其他用户的订单")
+
     orders = get_user_payment_orders(user_id, db, limit)
     return success([PaymentOrderDetail.model_validate(order) for order in orders])
 
 
 @router.post("/orders/{order_no}/cancel")
-def cancel_order_endpoint(order_no: str, db: Session = Depends(get_db)):
+def cancel_order_endpoint(
+    order_no: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """取消订单"""
-    order = cancel_order(order_no, db)
+    order = get_payment_order(order_no, db)
     if not order:
         raise HTTPException(status_code=404, detail="订单不存在")
 
+    # ✅ 验证用户权限：只能取消自己的订单
+    if order.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="无权取消其他用户的订单")
+
+    order = cancel_order(order_no, db)
     return success({"order_no": order.order_no, "status": order.status})
 
 
@@ -197,11 +236,19 @@ async def wechat_notify(request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/refund", response_model=RefundResponse)
-def refund_order(refund_data: RefundRequest, db: Session = Depends(get_db)):
+def refund_order(
+    refund_data: RefundRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """退款"""
     order = get_payment_order(refund_data.order_no, db)
     if not order:
         raise HTTPException(status_code=404, detail="订单不存在")
+
+    # ✅ 验证用户权限：只能退款自己的订单
+    if order.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="无权退款其他用户的订单")
 
     if order.status != "paid":
         raise HTTPException(status_code=400, detail="订单状态不允许退款")
@@ -245,11 +292,19 @@ def refund_order(refund_data: RefundRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/mock/pay/{order_no}")
-def mock_payment(order_no: str, db: Session = Depends(get_db)):
+def mock_payment(
+    order_no: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """模拟支付成功（仅用于开发测试）"""
     order = get_payment_order(order_no, db)
     if not order:
         raise HTTPException(status_code=404, detail="订单不存在")
+
+    # ✅ 验证用户权限：只能模拟支付自己的订单
+    if order.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="无权操作其他用户的订单")
 
     if order.status != "pending":
         raise HTTPException(status_code=400, detail="订单状态不允许支付")

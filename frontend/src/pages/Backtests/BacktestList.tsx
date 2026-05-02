@@ -82,7 +82,7 @@ export default function BacktestList() {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => requireAuth(() => navigate('/backtests/create'))}
+            onClick={() => requireAuth(() => navigate('/app/backtests/create'))}
           >
             新建回测
           </Button>
@@ -93,56 +93,54 @@ export default function BacktestList() {
         <Typography>加载中...</Typography>
       ) : (
         <GlassTable>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>ID</TableCell>
-                <TableCell>名称</TableCell>
-                <TableCell>开始日期</TableCell>
-                <TableCell>结束日期</TableCell>
-                <TableCell>初始资金</TableCell>
-                <TableCell>状态</TableCell>
-                <TableCell>创建时间</TableCell>
-                <TableCell>操作</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {backtests.map((b) => (
-                <TableRow key={b.id} hover>
-                  <TableCell>{b.id}</TableCell>
-                  <TableCell>{b.name}</TableCell>
-                  <TableCell>{b.start_date?.slice(0, 10)}</TableCell>
-                  <TableCell>{b.end_date?.slice(0, 10)}</TableCell>
-                  <TableCell>{b.initial_capital?.toLocaleString()}</TableCell>
-                  <TableCell>
-                    <NeonChip
-                      label={statusLabel[b.status] || b.status}
-                      size="small"
-                      neonColor={statusNeonColor[b.status]}
-                    />
-                  </TableCell>
-                  <TableCell>{b.created_at?.slice(0, 10)}</TableCell>
-                  <TableCell>
-                    {b.status === 'pending' && (
-                      <IconButton size="small" color="success" onClick={() => handleRun(b.id)}>
-                        <PlayArrowIcon fontSize="small" />
-                      </IconButton>
-                    )}
-                    <IconButton size="small" onClick={() => navigate(`/backtests/${b.id}`)}>
-                      <VisibilityIcon fontSize="small" />
+          <TableHead>
+            <TableRow>
+              <TableCell>ID</TableCell>
+              <TableCell>名称</TableCell>
+              <TableCell>开始日期</TableCell>
+              <TableCell>结束日期</TableCell>
+              <TableCell>初始资金</TableCell>
+              <TableCell>状态</TableCell>
+              <TableCell>创建时间</TableCell>
+              <TableCell>操作</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {backtests.map((b) => (
+              <TableRow key={b.id} hover>
+                <TableCell>{b.id}</TableCell>
+                <TableCell>{b.name}</TableCell>
+                <TableCell>{b.start_date?.slice(0, 10)}</TableCell>
+                <TableCell>{b.end_date?.slice(0, 10)}</TableCell>
+                <TableCell>{b.initial_capital?.toLocaleString()}</TableCell>
+                <TableCell>
+                  <NeonChip
+                    label={statusLabel[b.status] || b.status}
+                    size="small"
+                    neonColor={statusNeonColor[b.status]}
+                  />
+                </TableCell>
+                <TableCell>{b.created_at?.slice(0, 10)}</TableCell>
+                <TableCell>
+                  {b.status === 'pending' && (
+                    <IconButton size="small" color="success" onClick={() => handleRun(b.id)}>
+                      <PlayArrowIcon fontSize="small" />
                     </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {backtests.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} align="center">
-                    暂无回测数据
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                  )}
+                  <IconButton size="small" onClick={() => navigate(`/app/backtests/${b.id}`)}>
+                    <VisibilityIcon fontSize="small" />
+                  </IconButton>
+                </TableCell>
+              </TableRow>
+            ))}
+            {backtests.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={8} align="center">
+                  暂无回测数据
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
         </GlassTable>
       )}
 

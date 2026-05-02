@@ -105,26 +105,61 @@ export default function Dashboard() {
 
   useEffect(() => {
     Promise.all([
+      // 获取因子总数：使用limit=100获取所有因子，然后计算长度
       factorApi
-        .list({ limit: 1 })
-        .then((res) => setFactorCount((res.data as any).total ?? res.data.length ?? 0))
-        .catch(() => {}),
+        .list({ limit: 100 })
+        .then((res) => {
+          console.log('Factor API response:', res);
+          // 后端返回的是数组，不是分页对象
+          const factors = Array.isArray(res.data) ? res.data : [];
+          setFactorCount(factors.length);
+        })
+        .catch((err) => {
+          console.error('Factor API error:', err);
+        }),
+      // 获取模型总数
       modelApi
-        .list({ limit: 1 })
-        .then((res) => setModelCount((res.data as any).total ?? res.data.length ?? 0))
-        .catch(() => {}),
+        .list({ limit: 100 })
+        .then((res) => {
+          console.log('Model API response:', res);
+          const models = Array.isArray(res.data) ? res.data : [];
+          setModelCount(models.length);
+        })
+        .catch((err) => {
+          console.error('Model API error:', err);
+        }),
+      // 获取市场状态
       monitorApi
         .getRegime()
-        .then((res) => setRegime(res.data))
-        .catch(() => {}),
+        .then((res) => {
+          console.log('Regime API response:', res);
+          setRegime(res.data);
+        })
+        .catch((err) => {
+          console.error('Regime API error:', err);
+        }),
+      // 获取告警列表
       monitorApi
         .getAlerts({ page_size: 5, resolved: false })
-        .then((res) => setAlerts(res.data))
-        .catch(() => {}),
+        .then((res) => {
+          console.log('Alerts API response:', res);
+          const alerts = Array.isArray(res.data) ? res.data : [];
+          setAlerts(alerts);
+        })
+        .catch((err) => {
+          console.error('Alerts API error:', err);
+        }),
+      // 获取因子健康状态
       monitorApi
         .getFactorHealth()
-        .then((res) => setFactorHealth(res.data))
-        .catch(() => {}),
+        .then((res) => {
+          console.log('Factor Health API response:', res);
+          const health = Array.isArray(res.data) ? res.data : [];
+          setFactorHealth(health);
+        })
+        .catch((err) => {
+          console.error('Factor Health API error:', err);
+        }),
     ]).finally(() => setLoading(false));
 
     if (!isTourCompleted('dashboard')) {

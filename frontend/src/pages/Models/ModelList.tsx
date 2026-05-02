@@ -415,82 +415,80 @@ export default function ModelList() {
         <>
         <GlassPanel animate={false}>
           <GlassTable>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>模型名称</TableCell>
-                  <TableCell>代码</TableCell>
-                  <TableCell>股票池</TableCell>
-                  <TableCell>频率</TableCell>
-                  <TableCell>版本</TableCell>
-                  <TableCell>状态</TableCell>
-                  <TableCell>更新时间</TableCell>
-                  <TableCell align="right">操作</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {paged.map((model) => {
-                  const pool = inferPool(model.model_code);
-                  const freq = inferFreq(model.model_code);
-                  return (
-                    <TableRow
-                      key={model.id}
-                      hover
-                      onClick={() => navigate(`/app/models/${model.model_code}`)}
-                      sx={{ cursor: 'pointer' }}
+            <TableHead>
+              <TableRow>
+                <TableCell>模型名称</TableCell>
+                <TableCell>代码</TableCell>
+                <TableCell>股票池</TableCell>
+                <TableCell>频率</TableCell>
+                <TableCell>版本</TableCell>
+                <TableCell>状态</TableCell>
+                <TableCell>更新时间</TableCell>
+                <TableCell align="right">操作</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {paged.map((model) => {
+                const pool = inferPool(model.model_code);
+                const freq = inferFreq(model.model_code);
+                return (
+                  <TableRow
+                    key={model.id}
+                    hover
+                    onClick={() => navigate(`/app/models/${model.model_code}`)}
+                    sx={{ cursor: 'pointer' }}
+                  >
+                    <TableCell sx={{ fontWeight: 600, color: '#e2e8f0' }}>
+                      {model.model_name}
+                    </TableCell>
+                    <TableCell
+                      sx={{ fontFamily: 'monospace', color: '#94a3b8', fontSize: '0.8rem' }}
                     >
-                      <TableCell sx={{ fontWeight: 600, color: '#e2e8f0' }}>
-                        {model.model_name}
-                      </TableCell>
-                      <TableCell
-                        sx={{ fontFamily: 'monospace', color: '#94a3b8', fontSize: '0.8rem' }}
-                      >
-                        {model.model_code}
-                      </TableCell>
-                      <TableCell>
-                        {pool ? (
-                          <NeonChip
-                            label={POOL_NAMES[pool] || pool}
-                            size="small"
-                            neonColor={POOL_NEON[pool] || 'default'}
-                          />
-                        ) : (
-                          '-'
-                        )}
-                      </TableCell>
-                      <TableCell>{freq ? FREQ_LABELS[freq] || freq : '-'}</TableCell>
-                      <TableCell>{model.version}</TableCell>
-                      <TableCell>
+                      {model.model_code}
+                    </TableCell>
+                    <TableCell>
+                      {pool ? (
                         <NeonChip
-                          label={model.status === 'active' ? t.models.running : t.models.stopped}
+                          label={POOL_NAMES[pool] || pool}
                           size="small"
-                          neonColor={model.status === 'active' ? 'green' : 'default'}
+                          neonColor={POOL_NEON[pool] || 'default'}
                         />
-                      </TableCell>
-                      <TableCell sx={{ color: '#64748b', fontSize: '0.85rem' }}>
-                        {model.updated_at?.slice(0, 10)}
-                      </TableCell>
-                      <TableCell align="right">
-                        <IconButton
-                          size="small"
-                          onClick={(e) => handleMenuOpen(e, model)}
-                          sx={{ color: '#64748b' }}
-                        >
-                          <MoreVertIcon fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {filtered.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={8} align="center">
-                      暂无模型数据
+                      ) : (
+                        '-'
+                      )}
+                    </TableCell>
+                    <TableCell>{freq ? FREQ_LABELS[freq] || freq : '-'}</TableCell>
+                    <TableCell>{model.version}</TableCell>
+                    <TableCell>
+                      <NeonChip
+                        label={model.status === 'active' ? t.models.running : t.models.stopped}
+                        size="small"
+                        neonColor={model.status === 'active' ? 'green' : 'default'}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ color: '#64748b', fontSize: '0.85rem' }}>
+                      {model.updated_at?.slice(0, 10)}
+                    </TableCell>
+                    <TableCell align="right">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => handleMenuOpen(e, model)}
+                        sx={{ color: '#64748b' }}
+                      >
+                        <MoreVertIcon fontSize="small" />
+                      </IconButton>
                     </TableCell>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                );
+              })}
+              {filtered.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} align="center">
+                    暂无模型数据
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
           </GlassTable>
         </GlassPanel>
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>

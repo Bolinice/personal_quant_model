@@ -500,51 +500,49 @@ export default function ModelDetail() {
                 策略表现
               </Typography>
               <GlassTable>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>日期</TableCell>
-                      <TableCell>日收益</TableCell>
-                      <TableCell>累计收益</TableCell>
-                      <TableCell>最大回撤</TableCell>
-                      <TableCell>夏普比率</TableCell>
-                      <TableCell>IC</TableCell>
-                      <TableCell>Rank IC</TableCell>
-                      <TableCell>换手率</TableCell>
-                      <TableCell>持仓数</TableCell>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>日期</TableCell>
+                    <TableCell>日收益</TableCell>
+                    <TableCell>累计收益</TableCell>
+                    <TableCell>最大回撤</TableCell>
+                    <TableCell>夏普比率</TableCell>
+                    <TableCell>IC</TableCell>
+                    <TableCell>Rank IC</TableCell>
+                    <TableCell>换手率</TableCell>
+                    <TableCell>持仓数</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {performance.map((p) => (
+                    <TableRow key={p.id} hover>
+                      <TableCell>{p.trade_date?.slice(0, 10)}</TableCell>
+                      <TableCell
+                        sx={{ color: (p.daily_return ?? 0) >= 0 ? '#22d3ee' : '#f43f5e' }}
+                      >
+                        {fmt(p.daily_return, true)}
+                      </TableCell>
+                      <TableCell
+                        sx={{ color: (p.cumulative_return ?? 0) >= 0 ? '#22d3ee' : '#f43f5e' }}
+                      >
+                        {fmt(p.cumulative_return, true)}
+                      </TableCell>
+                      <TableCell sx={{ color: '#f43f5e' }}>{fmt(p.max_drawdown, true)}</TableCell>
+                      <TableCell>{fmt(p.sharpe_ratio)}</TableCell>
+                      <TableCell>{fmt(p.ic)}</TableCell>
+                      <TableCell>{fmt(p.rank_ic)}</TableCell>
+                      <TableCell>{fmt(p.turnover, true)}</TableCell>
+                      <TableCell>{p.num_selected ?? '-'}</TableCell>
                     </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {performance.map((p) => (
-                      <TableRow key={p.id} hover>
-                        <TableCell>{p.trade_date?.slice(0, 10)}</TableCell>
-                        <TableCell
-                          sx={{ color: (p.daily_return ?? 0) >= 0 ? '#22d3ee' : '#f43f5e' }}
-                        >
-                          {fmt(p.daily_return, true)}
-                        </TableCell>
-                        <TableCell
-                          sx={{ color: (p.cumulative_return ?? 0) >= 0 ? '#22d3ee' : '#f43f5e' }}
-                        >
-                          {fmt(p.cumulative_return, true)}
-                        </TableCell>
-                        <TableCell sx={{ color: '#f43f5e' }}>{fmt(p.max_drawdown, true)}</TableCell>
-                        <TableCell>{fmt(p.sharpe_ratio)}</TableCell>
-                        <TableCell>{fmt(p.ic)}</TableCell>
-                        <TableCell>{fmt(p.rank_ic)}</TableCell>
-                        <TableCell>{fmt(p.turnover, true)}</TableCell>
-                        <TableCell>{p.num_selected ?? '-'}</TableCell>
-                      </TableRow>
-                    ))}
-                    {performance.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={9} align="center">
-                          暂无策略表现数据
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+                  ))}
+                  {performance.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={9} align="center">
+                        暂无策略表现数据
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
               </GlassTable>
             </GlassPanel>
           </TabPanel>
@@ -557,36 +555,34 @@ export default function ModelDetail() {
               </Typography>
               {scores.length > 0 ? (
                 <GlassTable>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>证券代码</TableCell>
-                        <TableCell>综合得分</TableCell>
-                        <TableCell>排名</TableCell>
-                        <TableCell>分位</TableCell>
-                        <TableCell>入选</TableCell>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>证券代码</TableCell>
+                      <TableCell>综合得分</TableCell>
+                      <TableCell>排名</TableCell>
+                      <TableCell>分位</TableCell>
+                      <TableCell>入选</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {scores.slice(0, 100).map((s) => (
+                      <TableRow key={s.id} hover>
+                        <TableCell sx={{ fontFamily: 'monospace' }}>{s.security_id}</TableCell>
+                        <TableCell>{s.score?.toFixed(4) ?? '-'}</TableCell>
+                        <TableCell>{s.rank ?? '-'}</TableCell>
+                        <TableCell>
+                          {s.quantile != null ? `${(s.quantile * 100).toFixed(1)}%` : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <NeonChip
+                            label={s.is_selected ? '入选' : '未入选'}
+                            size="small"
+                            neonColor={s.is_selected ? 'green' : 'default'}
+                          />
+                        </TableCell>
                       </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {scores.slice(0, 100).map((s) => (
-                        <TableRow key={s.id} hover>
-                          <TableCell sx={{ fontFamily: 'monospace' }}>{s.security_id}</TableCell>
-                          <TableCell>{s.score?.toFixed(4) ?? '-'}</TableCell>
-                          <TableCell>{s.rank ?? '-'}</TableCell>
-                          <TableCell>
-                            {s.quantile != null ? `${(s.quantile * 100).toFixed(1)}%` : '-'}
-                          </TableCell>
-                          <TableCell>
-                            <NeonChip
-                              label={s.is_selected ? '入选' : '未入选'}
-                              size="small"
-                              neonColor={s.is_selected ? 'green' : 'default'}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                    ))}
+                  </TableBody>
                 </GlassTable>
               ) : (
                 <Typography sx={{ color: '#64748b', py: 2 }}>暂无持仓数据</Typography>

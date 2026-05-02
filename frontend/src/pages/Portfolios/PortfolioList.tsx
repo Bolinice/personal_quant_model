@@ -130,51 +130,49 @@ export default function PortfolioList() {
         <Typography>请选择模型查询组合</Typography>
       ) : (
         <GlassTable>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>ID</TableCell>
-                <TableCell>组合代码</TableCell>
-                <TableCell>组合名称</TableCell>
-                <TableCell>初始资金</TableCell>
-                <TableCell>当前市值</TableCell>
-                <TableCell>状态</TableCell>
-                <TableCell>创建时间</TableCell>
-                <TableCell>操作</TableCell>
+          <TableHead>
+            <TableRow>
+              <TableCell>ID</TableCell>
+              <TableCell>组合代码</TableCell>
+              <TableCell>组合名称</TableCell>
+              <TableCell>初始资金</TableCell>
+              <TableCell>当前市值</TableCell>
+              <TableCell>状态</TableCell>
+              <TableCell>创建时间</TableCell>
+              <TableCell>操作</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {portfolios.map((p) => (
+              <TableRow key={p.id} hover>
+                <TableCell>{p.id}</TableCell>
+                <TableCell sx={{ fontFamily: 'monospace' }}>{p.portfolio_code}</TableCell>
+                <TableCell>{p.portfolio_name}</TableCell>
+                <TableCell>{p.initial_capital?.toLocaleString()}</TableCell>
+                <TableCell>{p.current_value?.toLocaleString()}</TableCell>
+                <TableCell>
+                  <NeonChip
+                    label={p.is_active ? '活跃' : '停用'}
+                    size="small"
+                    neonColor={p.is_active ? 'green' : 'default'}
+                  />
+                </TableCell>
+                <TableCell>{p.created_at?.slice(0, 10)}</TableCell>
+                <TableCell>
+                  <Button size="small" onClick={() => navigate(`/app/portfolios/${p.id}`)}>
+                    详情
+                  </Button>
+                </TableCell>
               </TableRow>
-            </TableHead>
-            <TableBody>
-              {portfolios.map((p) => (
-                <TableRow key={p.id} hover>
-                  <TableCell>{p.id}</TableCell>
-                  <TableCell sx={{ fontFamily: 'monospace' }}>{p.portfolio_code}</TableCell>
-                  <TableCell>{p.portfolio_name}</TableCell>
-                  <TableCell>{p.initial_capital?.toLocaleString()}</TableCell>
-                  <TableCell>{p.current_value?.toLocaleString()}</TableCell>
-                  <TableCell>
-                    <NeonChip
-                      label={p.is_active ? '活跃' : '停用'}
-                      size="small"
-                      neonColor={p.is_active ? 'green' : 'default'}
-                    />
-                  </TableCell>
-                  <TableCell>{p.created_at?.slice(0, 10)}</TableCell>
-                  <TableCell>
-                    <Button size="small" onClick={() => navigate(`/portfolios/${p.id}`)}>
-                      详情
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {portfolios.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} align="center">
-                    暂无组合数据
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+            ))}
+            {portfolios.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={8} align="center">
+                  暂无组合数据
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
         </GlassTable>
       )}
 

@@ -172,60 +172,58 @@ export default function EventList() {
           {/* Event table */}
           <GlassPanel animate={false}>
             <GlassTable>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>日期</TableCell>
-                    <TableCell>类型</TableCell>
-                    <TableCell>子类型</TableCell>
-                    <TableCell>严重程度</TableCell>
-                    <TableCell>评分</TableCell>
-                    <TableCell>标题</TableCell>
-                    <TableCell>来源</TableCell>
-                    <TableCell>操作</TableCell>
+              <TableHead>
+                <TableRow>
+                  <TableCell>日期</TableCell>
+                  <TableCell>类型</TableCell>
+                  <TableCell>子类型</TableCell>
+                  <TableCell>严重程度</TableCell>
+                  <TableCell>评分</TableCell>
+                  <TableCell>标题</TableCell>
+                  <TableCell>来源</TableCell>
+                  <TableCell>操作</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {pagedEvents.map((e) => (
+                  <TableRow key={e.id} hover>
+                    <TableCell>{e.event_date}</TableCell>
+                    <TableCell>{e.event_type}</TableCell>
+                    <TableCell>{e.event_subtype || '-'}</TableCell>
+                    <TableCell>
+                      <NeonChip
+                        label={severityLabel[e.severity || ''] || e.severity || '-'}
+                        size="small"
+                        neonColor={severityMap[e.severity || ''] || 'default'}
+                      />
+                    </TableCell>
+                    <TableCell>{e.score != null ? e.score.toFixed(2) : '-'}</TableCell>
+                    <TableCell
+                      sx={{
+                        maxWidth: 200,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {e.title || '-'}
+                    </TableCell>
+                    <TableCell>{e.source || '-'}</TableCell>
+                    <TableCell>
+                      <Button size="small" onClick={() => handleViewDetail(e)}>
+                        详情
+                      </Button>
+                    </TableCell>
                   </TableRow>
-                </TableHead>
-                <TableBody>
-                  {pagedEvents.map((e) => (
-                    <TableRow key={e.id} hover>
-                      <TableCell>{e.event_date}</TableCell>
-                      <TableCell>{e.event_type}</TableCell>
-                      <TableCell>{e.event_subtype || '-'}</TableCell>
-                      <TableCell>
-                        <NeonChip
-                          label={severityLabel[e.severity || ''] || e.severity || '-'}
-                          size="small"
-                          neonColor={severityMap[e.severity || ''] || 'default'}
-                        />
-                      </TableCell>
-                      <TableCell>{e.score != null ? e.score.toFixed(2) : '-'}</TableCell>
-                      <TableCell
-                        sx={{
-                          maxWidth: 200,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {e.title || '-'}
-                      </TableCell>
-                      <TableCell>{e.source || '-'}</TableCell>
-                      <TableCell>
-                        <Button size="small" onClick={() => handleViewDetail(e)}>
-                          详情
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {pagedEvents.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={8} align="center">
-                        暂无事件数据
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                ))}
+                {pagedEvents.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={8} align="center">
+                      暂无事件数据
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
             </GlassTable>
             <TablePagination
               component="div"
@@ -245,97 +243,95 @@ export default function EventList() {
       {tab === 'risk' && (
         <GlassPanel animate={false}>
           <GlassTable>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>日期</TableCell>
-                  <TableCell>股票ID</TableCell>
-                  <TableCell>黑名单</TableCell>
-                  <TableCell>审计问题</TableCell>
-                  <TableCell>违规</TableCell>
-                  <TableCell>高质押</TableCell>
-                  <TableCell>高商誉</TableCell>
-                  <TableCell>业绩预警</TableCell>
-                  <TableCell>减持</TableCell>
-                  <TableCell>现金流风险</TableCell>
-                  <TableCell>风险惩罚分</TableCell>
+            <TableHead>
+              <TableRow>
+                <TableCell>日期</TableCell>
+                <TableCell>股票ID</TableCell>
+                <TableCell>黑名单</TableCell>
+                <TableCell>审计问题</TableCell>
+                <TableCell>违规</TableCell>
+                <TableCell>高质押</TableCell>
+                <TableCell>高商誉</TableCell>
+                <TableCell>业绩预警</TableCell>
+                <TableCell>减持</TableCell>
+                <TableCell>现金流风险</TableCell>
+                <TableCell>风险惩罚分</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {riskFlags.map((r, i) => (
+                <TableRow key={i} hover>
+                  <TableCell>{r.trade_date}</TableCell>
+                  <TableCell>{r.stock_id}</TableCell>
+                  <TableCell>
+                    <NeonChip
+                      label={r.blacklist_flag ? '是' : '否'}
+                      size="small"
+                      neonColor={r.blacklist_flag ? 'red' : 'green'}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <NeonChip
+                      label={r.audit_issue_flag ? '是' : '否'}
+                      size="small"
+                      neonColor={r.audit_issue_flag ? 'red' : 'green'}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <NeonChip
+                      label={r.violation_flag ? '是' : '否'}
+                      size="small"
+                      neonColor={r.violation_flag ? 'red' : 'green'}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <NeonChip
+                      label={r.pledge_high_flag ? '是' : '否'}
+                      size="small"
+                      neonColor={r.pledge_high_flag ? 'amber' : 'green'}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <NeonChip
+                      label={r.goodwill_high_flag ? '是' : '否'}
+                      size="small"
+                      neonColor={r.goodwill_high_flag ? 'amber' : 'green'}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <NeonChip
+                      label={r.earnings_warning_flag ? '是' : '否'}
+                      size="small"
+                      neonColor={r.earnings_warning_flag ? 'amber' : 'green'}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <NeonChip
+                      label={r.reduction_flag ? '是' : '否'}
+                      size="small"
+                      neonColor={r.reduction_flag ? 'amber' : 'green'}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <NeonChip
+                      label={r.cashflow_risk_flag ? '是' : '否'}
+                      size="small"
+                      neonColor={r.cashflow_risk_flag ? 'red' : 'green'}
+                    />
+                  </TableCell>
+                  <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                    {r.risk_penalty_score?.toFixed(2) ?? '-'}
+                  </TableCell>
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {riskFlags.map((r, i) => (
-                  <TableRow key={i} hover>
-                    <TableCell>{r.trade_date}</TableCell>
-                    <TableCell>{r.stock_id}</TableCell>
-                    <TableCell>
-                      <NeonChip
-                        label={r.blacklist_flag ? '是' : '否'}
-                        size="small"
-                        neonColor={r.blacklist_flag ? 'red' : 'green'}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <NeonChip
-                        label={r.audit_issue_flag ? '是' : '否'}
-                        size="small"
-                        neonColor={r.audit_issue_flag ? 'red' : 'green'}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <NeonChip
-                        label={r.violation_flag ? '是' : '否'}
-                        size="small"
-                        neonColor={r.violation_flag ? 'red' : 'green'}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <NeonChip
-                        label={r.pledge_high_flag ? '是' : '否'}
-                        size="small"
-                        neonColor={r.pledge_high_flag ? 'amber' : 'green'}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <NeonChip
-                        label={r.goodwill_high_flag ? '是' : '否'}
-                        size="small"
-                        neonColor={r.goodwill_high_flag ? 'amber' : 'green'}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <NeonChip
-                        label={r.earnings_warning_flag ? '是' : '否'}
-                        size="small"
-                        neonColor={r.earnings_warning_flag ? 'amber' : 'green'}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <NeonChip
-                        label={r.reduction_flag ? '是' : '否'}
-                        size="small"
-                        neonColor={r.reduction_flag ? 'amber' : 'green'}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <NeonChip
-                        label={r.cashflow_risk_flag ? '是' : '否'}
-                        size="small"
-                        neonColor={r.cashflow_risk_flag ? 'red' : 'green'}
-                      />
-                    </TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                      {r.risk_penalty_score?.toFixed(2) ?? '-'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {riskFlags.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={11} align="center">
-                      暂无风险标签数据
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+              ))}
+              {riskFlags.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={11} align="center">
+                    暂无风险标签数据
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
           </GlassTable>
         </GlassPanel>
       )}

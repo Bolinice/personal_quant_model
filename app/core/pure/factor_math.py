@@ -464,3 +464,456 @@ def calc_current_ratio(current_assets: pd.Series, current_liabilities: pd.Series
         流动比率序列
     """
     return safe_divide(current_assets, current_liabilities)
+
+
+# ==================== 应计项因子 ====================
+
+
+def calc_sloan_accrual(
+    net_profit: pd.Series,
+    operating_cash_flow: pd.Series,
+    total_assets: pd.Series,
+    total_assets_prev: pd.Series | None = None,
+) -> pd.Series:
+    """Sloan应计因子: (净利润 - 经营现金流) / 平均总资产
+
+    Sloan(1996): 高应计企业未来盈利反转概率大，应计是盈利质量的反向指标。
+    经营现金流比净利润更难操纵，二者差异反映盈余管理空间。
+
+    Args:
+        net_profit: 净利润
+        operating_cash_flow: 经营现金流
+        total_assets: 期末总资产
+        total_assets_prev: 期初总资产（可选）
+
+    Returns:
+        Sloan应计序列
+    """
+    accruals = net_profit - operating_cash_flow
+    if total_assets_prev is not None:
+        avg_assets = (total_assets + total_assets_prev) / 2
+    else:
+        avg_assets = total_assets
+    return safe_divide(accruals, avg_assets)
+
+
+# ==================== 盈余质量因子 ====================
+
+
+def calc_cash_flow_manipulation(net_profit: pd.Series, operating_cash_flow: pd.Series) -> pd.Series:
+    """现金流操纵概率: |CFO - 净利润| / |净利润|
+
+    CFO与净利严重偏离暗示可能存在盈余管理（如提前确认收入/延迟计提费用）。
+
+    Args:
+        net_profit: 净利润
+        operating_cash_flow: 经营现金流
+
+    Returns:
+        现金流操纵概率序列
+    """
+    net_profit_abs = net_profit.abs().replace(0, np.nan)
+    return safe_divide((operating_cash_flow - net_profit).abs(), net_profit_abs)
+
+
+def calc_cfo_to_net_profit(operating_cash_flow: pd.Series, net_profit: pd.Series, clip_range: tuple[float, float] = (-5, 5)) -> pd.Series:
+    """CFO/净利润: 现金流支撑度
+
+    Args:
+        operating_cash_flow: 经营现金流
+        net_profit: 净利润
+        clip_range: 截断范围，防止极端值
+
+    Returns:
+        CFO/净利润序列
+    """
+    net_profit_safe = net_profit.replace(0, np.nan)
+    ratio = safe_divide(operating_cash_flow, net_profit_safe)
+    return ratio.clip(*clip_range)
+
+
+def calc_earnings_stability(net_profit_std: pd.Series, net_profit_mean: pd.Series, max_cv: float = 10.0) -> pd.Series:
+    """盈利稳定性: 1/(1+CV)，CV为变异系数
+
+    用近8季净利变异系数(CV)的变换，CV越小盈利越稳定。
+    1/(1+CV)映射: CV=0→1(最稳定), CV→∞→0(极不稳定)
+
+    Args:
+        net_profit_std: 净利润标准差（多期）
+        net_profit_mean: 净利润均值（多期）
+        max_cv: CV最大值截断
+
+    Returns:
+        盈利稳定性序列
+    """
+    mean_abs = net_profit_mean.abs().replace(0, np.nan)
+    cv = safe_divide(net_profit_std, mean_abs).clip(0, max_cv)
+    return 1 / (1 + cv)
+
+
+# ==================== 风险惩罚因子 ====================
+
+
+def calc_goodwill_ratio(goodwill: pd.Series, total_equity: pd.Series) -> pd.Series:
+    """商誉/净资产比率
+
+    高商誉比=高并购溢价，A股商誉减值是年报季重大风险。
+
+    Args:
+        goodwill: 商誉
+        total_equity: 净资产
+
+    Returns:
+        商誉比率序列
+    """
+    return safe_divide(goodwill, total_equity)
+
+
+# ==================== 因子交互项 ====================
+
+
+def calc_value_quality_interaction(ep_ttm: pd.Series, roe: pd.Series) -> pd.Series:
+    """价值×质量交互项: EP × ROE
+
+    低估值+高盈利质量的股票，即"便宜且优秀"的GARP策略内核。
+
+    Args:
+        ep_ttm: 市盈率倒数
+        roe: 净资产收益率
+
+    Returns:
+        价值质量交互项序列
+    """
+    return ep_ttm * roe
+
+
+def calc_size_momentum_interaction(market_cap: pd.Series, momentum: pd.Series) -> pd.Series:
+    """规模×动量交互项: log(市值) × 动量
+
+    捕捉大盘股动量效应，用log消除市值量纲差异。
+
+    Args:
+        market_cap: 总市值
+        momentum: 动量因子值
+
+    Returns:
+        规模动量交互项序列
+    """
+    return np.log(market_cap) * momentum
+
+
+# ==================== 北向资金因子 ====================
+
+
+def calc_north_net_buy_ratio(north_net_buy: pd.Series, daily_volume: pd.Series) -> pd.Series:
+    """北向净买入占比: 北向净买入/日成交量
+
+    衡量外资对个股的短期关注度。
+
+    Args:
+        north_net_buy: 北向净买入额
+        daily_volume: 日成交量
+
+    Returns:
+        北向净买入占比序列
+    """
+    return safe_divide(north_net_buy, daily_volume)
+
+
+def calc_north_holding_change(north_holding: pd.Series, period: int = 5) -> pd.Series:
+    """北向持仓变化率
+
+    Args:
+        north_holding: 北向持仓量
+        period: 回看天数
+
+    Returns:
+        北向持仓变化率序列
+    """
+    return north_holding.pct_change(period)
+
+
+# ==================== 微观结构因子 ====================
+
+
+def calc_large_order_ratio(large_order_volume: pd.Series, super_large_order_volume: pd.Series, total_volume: pd.Series) -> pd.Series:
+    """大单成交占比: (大单+超大单)/总成交量
+
+    Args:
+        large_order_volume: 大单成交量
+        super_large_order_volume: 超大单成交量
+        total_volume: 总成交量
+
+    Returns:
+        大单成交占比序列
+    """
+    smart_money_vol = large_order_volume.fillna(0) + super_large_order_volume.fillna(0)
+    return safe_divide(smart_money_vol, total_volume)
+
+
+def calc_overnight_return(open_price: pd.Series, prev_close: pd.Series) -> pd.Series:
+    """隔夜收益率: 今日开盘/昨收 - 1
+
+    反映集合竞价和隔夜信息，A股隔夜收益有显著反转效应。
+
+    Args:
+        open_price: 开盘价
+        prev_close: 前一日收盘价
+
+    Returns:
+        隔夜收益率序列
+    """
+    return safe_divide(open_price, prev_close) - 1
+
+
+def calc_intraday_return(close: pd.Series, open_price: pd.Series) -> pd.Series:
+    """日内收益率: 收盘/开盘 - 1
+
+    Args:
+        close: 收盘价
+        open_price: 开盘价
+
+    Returns:
+        日内收益率序列
+    """
+    return safe_divide(close, open_price) - 1
+
+
+def calc_vpin(abs_return: pd.Series, volume_ratio: pd.Series) -> pd.Series:
+    """VPIN: 量价交互的知情交易概率指标
+
+    |收益率| × 相对成交量，成交量放大+价格大幅变动=疑似知情交易。
+
+    Args:
+        abs_return: 绝对收益率
+        volume_ratio: 相对成交量（当前成交量/均值）
+
+    Returns:
+        VPIN序列
+    """
+    return abs_return * volume_ratio
+
+
+# ==================== 技术指标因子 ====================
+
+
+def calc_rsi(close: pd.Series, period: int = 14) -> pd.Series:
+    """RSI相对强弱指标 (Wilder平滑法)
+
+    Args:
+        close: 收盘价序列
+        period: 周期（默认14）
+
+    Returns:
+        RSI序列（0-100）
+    """
+    if len(close) < period + 1:
+        return pd.Series(np.nan, index=close.index)
+
+    price_diff = close.diff()
+    gain = price_diff.clip(lower=0)
+    loss = (-price_diff).clip(lower=0)
+
+    # Wilder平滑: EMA with alpha=1/period
+    wilder_alpha = 1.0 / period
+    avg_gain = gain.ewm(alpha=wilder_alpha, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=wilder_alpha, adjust=False).mean()
+
+    # 处理avg_loss为0的情况
+    rs = pd.Series(np.nan, index=close.index)
+    mask_zero_loss = (avg_loss == 0) & (avg_gain > 0)
+    mask_normal = avg_loss > 0
+
+    rs[mask_zero_loss] = np.inf  # 当loss=0且gain>0时，RS=无穷大，RSI=100
+    rs[mask_normal] = avg_gain[mask_normal] / avg_loss[mask_normal]
+
+    rsi = pd.Series(np.nan, index=close.index)
+    rsi[mask_zero_loss] = 100.0
+    rsi[mask_normal] = 100 - (100 / (1 + rs[mask_normal]))
+
+    return rsi
+
+
+def calc_bollinger_position(close: pd.Series, period: int = 20, num_std: float = 2.0) -> pd.Series:
+    """布林带位置: (价格-中轨)/(2×标准差)
+
+    标准化到[-1,1]，0.5=中轨，1=上轨2倍标准差。
+
+    Args:
+        close: 收盘价序列
+        period: 移动平均周期
+        num_std: 标准差倍数
+
+    Returns:
+        布林带位置序列（-1到1）
+    """
+    if len(close) < period:
+        return pd.Series(np.nan, index=close.index)
+
+    ma = close.rolling(period).mean()
+    std = close.rolling(period).std()
+    position = safe_divide(close - ma, num_std * std)
+    return position.clip(-1, 1)
+
+
+def calc_macd_signal(close: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> pd.Series:
+    """MACD信号: (DIF-DEA)/close×100
+
+    除以收盘价做归一化处理，乘100放大到百分比量级。
+
+    Args:
+        close: 收盘价序列
+        fast: 快线周期
+        slow: 慢线周期
+        signal: 信号线周期
+
+    Returns:
+        MACD信号序列
+    """
+    if len(close) < slow + signal:
+        return pd.Series(np.nan, index=close.index)
+
+    ema_fast = close.ewm(span=fast, adjust=False).mean()
+    ema_slow = close.ewm(span=slow, adjust=False).mean()
+    dif = ema_fast - ema_slow
+    dea = dif.ewm(span=signal, adjust=False).mean()
+
+    return safe_divide(dif - dea, close) * 100
+
+
+def calc_obv_ratio(close: pd.Series, volume: pd.Series, period: int = 20, min_periods: int = 10) -> pd.Series:
+    """OBV能量潮比率: OBV/20日OBV均值 - 1
+
+    衡量成交量趋势强度。
+
+    Args:
+        close: 收盘价序列
+        volume: 成交量序列
+        period: 移动平均周期
+        min_periods: 最小有效天数
+
+    Returns:
+        OBV比率序列（截断到[-3,3]）
+    """
+    if len(close) < period:
+        return pd.Series(np.nan, index=close.index)
+
+    daily_ret = close.pct_change()
+    direction = np.sign(daily_ret).fillna(0)
+    obv = (direction * volume).cumsum()
+    obv_ma = obv.rolling(period, min_periods=min_periods).mean()
+
+    ratio = safe_divide(obv, obv_ma) - 1
+    return ratio.clip(-3, 3)
+
+
+# ==================== 分析师因子 ====================
+
+
+def calc_eps_revision(current_eps: pd.Series, prev_eps: pd.Series) -> pd.Series:
+    """EPS修正幅度: (当前EPS - 前期EPS) / |前期EPS|
+
+    Args:
+        current_eps: 当前一致预期EPS
+        prev_eps: 前期一致预期EPS（如1个月前）
+
+    Returns:
+        EPS修正幅度序列
+    """
+    return safe_divide(current_eps - prev_eps, prev_eps.abs())
+
+
+def calc_rating_upgrade_ratio(current_rating: pd.Series, prev_rating: pd.Series) -> pd.Series:
+    """评级上调比例: (前期评级 - 当前评级) / |前期评级|
+
+    评级越低越好(1=强烈推荐, 5=卖出)，所以rating下降=上调。
+
+    Args:
+        current_rating: 当前平均评级
+        prev_rating: 前期平均评级
+
+    Returns:
+        评级上调比例序列
+    """
+    return safe_divide(prev_rating - current_rating, prev_rating.abs())
+
+
+def calc_earnings_surprise(actual_eps: pd.Series, expected_eps: pd.Series) -> pd.Series:
+    """业绩超预期: (实际EPS - 预期EPS) / |预期EPS|
+
+    Args:
+        actual_eps: 实际EPS
+        expected_eps: 预期EPS
+
+    Returns:
+        业绩超预期序列
+    """
+    return safe_divide(actual_eps - expected_eps, expected_eps.abs())
+
+
+# ==================== A股特色因子 ====================
+
+
+def calc_limit_up_down_ratio(pct_chg: pd.Series, limit_pct: float = 10.0, tolerance: float = 0.01) -> tuple[pd.Series, pd.Series]:
+    """涨跌停占比: 判断是否涨停/跌停
+
+    Args:
+        pct_chg: 涨跌幅（百分比形式，如9.9表示9.9%）
+        limit_pct: 涨跌停限制（默认10%）
+        tolerance: 容差（默认0.01%）
+
+    Returns:
+        (涨停标记, 跌停标记) 元组
+    """
+    is_limit_up = (pct_chg >= limit_pct - tolerance).astype(float)
+    is_limit_down = (pct_chg <= -(limit_pct - tolerance)).astype(float)
+    return is_limit_up, is_limit_down
+
+
+def calc_ipo_age(list_date: pd.Series, trade_date: pd.Series) -> pd.Series:
+    """IPO年龄: (交易日期 - 上市日期) / 365.25
+
+    Args:
+        list_date: 上市日期
+        trade_date: 交易日期
+
+    Returns:
+        IPO年龄序列（年）
+    """
+    list_dt = pd.to_datetime(list_date)
+    trade_dt = pd.to_datetime(trade_date)
+    age = (trade_dt - list_dt).dt.days / 365.25
+    return age.clip(lower=0)
+
+
+# ==================== 聪明钱因子 ====================
+
+
+def calc_smart_money_ratio(large_order_volume: pd.Series, super_large_order_volume: pd.Series, total_volume: pd.Series) -> pd.Series:
+    """聪明钱比率: (大单+超大单)/总成交量
+
+    大单占比上升=聪明钱入场。
+
+    Args:
+        large_order_volume: 大单成交量
+        super_large_order_volume: 超大单成交量
+        total_volume: 总成交量
+
+    Returns:
+        聪明钱比率序列
+    """
+    smart_vol = large_order_volume.fillna(0) + super_large_order_volume.fillna(0)
+    return safe_divide(smart_vol, total_volume)
+
+
+def calc_margin_signal(margin_balance: pd.Series, period: int = 5) -> pd.Series:
+    """融资融券信号: 融资余额变化率
+
+    Args:
+        margin_balance: 融资余额
+        period: 回看天数
+
+    Returns:
+        融资余额变化率序列
+    """
+    return margin_balance.pct_change(period)

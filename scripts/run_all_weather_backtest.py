@@ -107,7 +107,8 @@ def load_benchmark(session, benchmark_code, start_date, end_date):
 def run_all_weather_backtest(
     universe_type="hs300",
     start_date="2024-04-01",
-    end_date="2024-12-31"
+    end_date="2024-12-31",  # 恢复完整测试期
+    batch_size=100  # 每批处理100只股票
 ):
     """运行全能增强组合回测"""
 
@@ -170,10 +171,15 @@ def run_all_weather_backtest(
         def create_signal_generator(top_n):
             def signal_generator(trade_date, universe, state):
                 # state是BacktestState对象，直接访问属性
-                total_value = state.cash + sum(
-                    pos.shares * pos.current_price
-                    for pos in state.positions.values()
-                )
+                # 计算持仓市值，需要从price_data查询当前价格
+                position_value = 0.0
+                for ts_code, pos in state.positions.items():
+                    price_key = (ts_code, trade_date)
+                    if price_key in price_data:
+                        current_price = float(price_data[price_key]["close"])
+                        position_value += float(pos.shares) * current_price
+
+                total_value = float(state.cash) + position_value
                 current_holdings = {
                     ts_code: pos.shares
                     for ts_code, pos in state.positions.items()
@@ -238,23 +244,38 @@ def run_all_weather_backtest(
         # 8. 计算绩效指标
         print("计算绩效指标...")
         analyzer = PerformanceAnalyzer()
-        nav_series = {item["trade_date"]: item["nav"] for item in result["nav_history"]}
-        benchmark_series = benchmark_data
+
+        # 转换为 pandas Series，确保所有值都是 float
+        import pandas as pd
+        nav_dict = {item["trade_date"]: float(item["nav"]) for item in result["nav_history"]}
+        nav_series = pd.Series(nav_dict).sort_index()
+        benchmark_dict = {k: float(v) for k, v in benchmark_data.items()}
+        benchmark_series = pd.Series(benchmark_dict).sort_index()
+
+        # 计算日收益率（用于夏普比率、信息比率、胜率等指标）
+        daily_returns = nav_series.pct_change().dropna()
+        benchmark_returns = benchmark_series.pct_change().dropna()
 
         metrics = {
             "total_return": analyzer.calc_total_return(nav_series),
             "annual_return": analyzer.calc_annual_return(nav_series),
-            "annual_volatility": analyzer.calc_volatility(nav_series),
-            "sharpe_ratio": analyzer.calc_sharpe_ratio(nav_series),
-            "max_drawdown": analyzer.calc_max_drawdown(nav_series),
-            "calmar_ratio": analyzer.calc_calmar_ratio(nav_series),
-            "benchmark_return": analyzer.calc_total_return(benchmark_series),
-            "excess_return": analyzer.calc_total_return(nav_series) - analyzer.calc_total_return(benchmark_series),
-            "information_ratio": analyzer.calc_information_ratio(nav_series, benchmark_series),
-            "win_rate": analyzer.calc_win_rate(result["trade_records"]),
+            "annual_volatility": analyzer.calc_volatility(daily_returns),  # 修复：传入收益率而非净值
+            "sharpe_ratio": analyzer.calc_sharpe_ratio(daily_returns),  # 修复：传入收益率而非净值
+        }
+        # calc_max_drawdown 返回 (最大回撤, 开始日期, 结束日期)
+        max_dd_tuple = analyzer.calc_max_drawdown(nav_series)
+        metrics["max_drawdown"] = max_dd_tuple[0]  # 只取最大回撤值
+        metrics["calmar_ratio"] = analyzer.calc_calmar_ratio(metrics["annual_return"], metrics["max_drawdown"])
+
+        benchmark_return = float(analyzer.calc_total_return(benchmark_series))
+        metrics.update({
+            "benchmark_return": benchmark_return,
+            "excess_return": analyzer.calc_total_return(nav_series) - benchmark_return,
+            "information_ratio": analyzer.calc_information_ratio(daily_returns, benchmark_returns),  # 修复：传入收益率
+            "win_rate": analyzer.calc_win_rate(daily_returns),
             "trade_count": len(result["trade_records"]),
             "turnover_rate": result.get("turnover_rate", 0),
-        }
+        })
 
         # 9. 保存结果
         output = {

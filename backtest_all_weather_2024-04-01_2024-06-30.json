@@ -1,0 +1,6646 @@
+{
+  "strategy": {
+    "name": "全能增强组合",
+    "code": "ALL_WEATHER",
+    "description": "综合基本面、技术面、资金面、风险面的多维度因子，构建攻守兼备的全天候策略"
+  },
+  "config": {
+    "universe_type": "hs300",
+    "start_date": "2024-04-01",
+    "end_date": "2024-06-30",
+    "initial_capital": 1000000,
+    "rebalance_freq": "monthly",
+    "factor_groups": [
+      "valuation",
+      "growth",
+      "quality",
+      "momentum",
+      "earnings_quality",
+      "smart_money",
+      "northbound",
+      "sentiment",
+      "volatility",
+      "liquidity",
+      "ashare_specific"
+    ],
+    "top_n": 50,
+    "method": "equal_weight",
+    "total_factors": 44
+  },
+  "metrics": {
+    "total_return": -0.052730413769428,
+    "annual_return": -0.2891407147850148,
+    "annual_volatility": 0.15909799440158864,
+    "sharpe_ratio": -2.309609103829654,
+    "max_drawdown": -0.0936962908605006,
+    "calmar_ratio": -3.0859355490976794,
+    "benchmark_return": -0.01961196916937724,
+    "excess_return": -0.033118444600050756,
+    "information_ratio": -0.9034790446148467,
+    "win_rate": 0.41025641025641024,
+    "trade_count": 26,
+    "turnover_rate": 0
+  },
+  "nav_history": [
+    {
+      "trade_date": "2024-04-30",
+      "nav": 0.9881665299999998,
+      "total_value": 988166.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 975058.0,
+      "drawdown": 0,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.23,
+          "prev_price": 9.23,
+          "pnl": 0.0,
+          "weight": 0.047637
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 51.76,
+          "prev_price": 51.76,
+          "pnl": 0.0,
+          "weight": 0.036666
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 6.68,
+          "prev_price": 6.68,
+          "pnl": 0.0,
+          "weight": 0.047996
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 16.02,
+          "prev_price": 16.02,
+          "pnl": 0.0,
+          "weight": 0.047014
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 62.83,
+          "prev_price": 62.83,
+          "pnl": 0.0,
+          "weight": 0.031791
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 9.82,
+          "prev_price": 9.82,
+          "pnl": 0.0,
+          "weight": 0.0477
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.55,
+          "prev_price": 4.55,
+          "pnl": 0.0,
+          "weight": 0.048347
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.69,
+          "prev_price": 7.69,
+          "pnl": 0.0,
+          "weight": 0.049027
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.65,
+          "prev_price": 4.65,
+          "pnl": 0.0,
+          "weight": 0.047998
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 27.37,
+          "prev_price": 27.37,
+          "pnl": 0.0,
+          "weight": 0.047086
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 26.09,
+          "prev_price": 26.09,
+          "pnl": 0.0,
+          "weight": 0.044884
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.28,
+          "prev_price": 4.28,
+          "pnl": 0.0,
+          "weight": 0.048077
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 22.1,
+          "prev_price": 22.1,
+          "pnl": 0.0,
+          "weight": 0.046966
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 31.08,
+          "prev_price": 31.08,
+          "pnl": 0.0,
+          "weight": 0.047178
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 20.74,
+          "prev_price": 20.74,
+          "pnl": 0.0,
+          "weight": 0.046174
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 8.9,
+          "prev_price": 8.9,
+          "pnl": 0.0,
+          "weight": 0.048636
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.43,
+          "prev_price": 13.43,
+          "pnl": 0.0,
+          "weight": 0.047568
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 16.59,
+          "prev_price": 16.59,
+          "pnl": 0.0,
+          "weight": 0.047008
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 12.31,
+          "prev_price": 12.31,
+          "pnl": 0.0,
+          "weight": 0.047338
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.41,
+          "prev_price": 7.41,
+          "pnl": 0.0,
+          "weight": 0.047242
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 173.39,
+          "prev_price": 173.39,
+          "pnl": 0.0,
+          "weight": 0.017547
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 14.03,
+          "prev_price": 14.03,
+          "pnl": 0.0,
+          "weight": 0.046853
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-06",
+      "nav": 1.0055615299999998,
+      "total_value": 1005561.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 992453.0,
+      "drawdown": 0.01760330821971885,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.33,
+          "prev_price": 9.33,
+          "pnl": 0.0,
+          "weight": 0.04732
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 51.94,
+          "prev_price": 51.94,
+          "pnl": 0.0,
+          "weight": 0.036157
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.13,
+          "prev_price": 7.13,
+          "pnl": 0.0,
+          "weight": 0.050343
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 15.94,
+          "prev_price": 15.94,
+          "pnl": 0.0,
+          "weight": 0.04597
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 64.06,
+          "prev_price": 64.06,
+          "pnl": 0.0,
+          "weight": 0.031853
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 10.05,
+          "prev_price": 10.05,
+          "pnl": 0.0,
+          "weight": 0.047973
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.53,
+          "prev_price": 4.53,
+          "pnl": 0.0,
+          "weight": 0.047302
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.96,
+          "prev_price": 7.96,
+          "pnl": 0.0,
+          "weight": 0.049871
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.81,
+          "prev_price": 4.81,
+          "pnl": 0.0,
+          "weight": 0.048791
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 27.44,
+          "prev_price": 27.44,
+          "pnl": 0.0,
+          "weight": 0.04639
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 26.09,
+          "prev_price": 26.09,
+          "pnl": 0.0,
+          "weight": 0.044108
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.44,
+          "prev_price": 4.44,
+          "pnl": 0.0,
+          "weight": 0.049011
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 22.1,
+          "prev_price": 22.1,
+          "pnl": 0.0,
+          "weight": 0.046153
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 32.02,
+          "prev_price": 32.02,
+          "pnl": 0.0,
+          "weight": 0.047764
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 21.0,
+          "prev_price": 21.0,
+          "pnl": 0.0,
+          "weight": 0.045944
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 8.85,
+          "prev_price": 8.85,
+          "pnl": 0.0,
+          "weight": 0.047526
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.71,
+          "prev_price": 13.71,
+          "pnl": 0.0,
+          "weight": 0.04772
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.59,
+          "prev_price": 17.59,
+          "pnl": 0.0,
+          "weight": 0.04898
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 12.4,
+          "prev_price": 12.4,
+          "pnl": 0.0,
+          "weight": 0.046859
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.46,
+          "prev_price": 7.46,
+          "pnl": 0.0,
+          "weight": 0.046738
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 180.84,
+          "prev_price": 180.84,
+          "pnl": 0.0,
+          "weight": 0.017984
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 14.08,
+          "prev_price": 14.08,
+          "pnl": 0.0,
+          "weight": 0.046207
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-07",
+      "nav": 1.0030475299999997,
+      "total_value": 1003047.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 989939.0,
+      "drawdown": -0.0025000956430782785,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.32,
+          "prev_price": 9.32,
+          "pnl": 0.0,
+          "weight": 0.047388
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 51.49,
+          "prev_price": 51.49,
+          "pnl": 0.0,
+          "weight": 0.035933
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.14,
+          "prev_price": 7.14,
+          "pnl": 0.0,
+          "weight": 0.05054
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 16.04,
+          "prev_price": 16.04,
+          "pnl": 0.0,
+          "weight": 0.046375
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 64.15,
+          "prev_price": 64.15,
+          "pnl": 0.0,
+          "weight": 0.031978
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 10.01,
+          "prev_price": 10.01,
+          "pnl": 0.0,
+          "weight": 0.047902
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.52,
+          "prev_price": 4.52,
+          "pnl": 0.0,
+          "weight": 0.047316
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.88,
+          "prev_price": 7.88,
+          "pnl": 0.0,
+          "weight": 0.049493
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.44,
+          "prev_price": 4.44,
+          "pnl": 0.0,
+          "weight": 0.04515
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 27.11,
+          "prev_price": 27.11,
+          "pnl": 0.0,
+          "weight": 0.045947
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 26.0,
+          "prev_price": 26.0,
+          "pnl": 0.0,
+          "weight": 0.044066
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.35,
+          "prev_price": 4.35,
+          "pnl": 0.0,
+          "weight": 0.048138
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 23.27,
+          "prev_price": 23.27,
+          "pnl": 0.0,
+          "weight": 0.048719
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 32.02,
+          "prev_price": 32.02,
+          "pnl": 0.0,
+          "weight": 0.047884
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 20.73,
+          "prev_price": 20.73,
+          "pnl": 0.0,
+          "weight": 0.045467
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 8.93,
+          "prev_price": 8.93,
+          "pnl": 0.0,
+          "weight": 0.048075
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.84,
+          "prev_price": 13.84,
+          "pnl": 0.0,
+          "weight": 0.048293
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 18.21,
+          "prev_price": 18.21,
+          "pnl": 0.0,
+          "weight": 0.050833
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 12.37,
+          "prev_price": 12.37,
+          "pnl": 0.0,
+          "weight": 0.046863
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.52,
+          "prev_price": 7.52,
+          "pnl": 0.0,
+          "weight": 0.047232
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 180.91,
+          "prev_price": 180.91,
+          "pnl": 0.0,
+          "weight": 0.018036
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.77,
+          "prev_price": 13.77,
+          "pnl": 0.0,
+          "weight": 0.045303
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-08",
+      "nav": 0.9929895299999998,
+      "total_value": 992989.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 979881.0,
+      "drawdown": -0.012502467153849879,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.17,
+          "prev_price": 9.17,
+          "pnl": 0.0,
+          "weight": 0.047097
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 51.41,
+          "prev_price": 51.41,
+          "pnl": 0.0,
+          "weight": 0.036241
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.03,
+          "prev_price": 7.03,
+          "pnl": 0.0,
+          "weight": 0.050265
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 15.86,
+          "prev_price": 15.86,
+          "pnl": 0.0,
+          "weight": 0.046319
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 63.8,
+          "prev_price": 63.8,
+          "pnl": 0.0,
+          "weight": 0.032125
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 9.83,
+          "prev_price": 9.83,
+          "pnl": 0.0,
+          "weight": 0.047517
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.46,
+          "prev_price": 4.46,
+          "pnl": 0.0,
+          "weight": 0.047161
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.78,
+          "prev_price": 7.78,
+          "pnl": 0.0,
+          "weight": 0.04936
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.51,
+          "prev_price": 4.51,
+          "pnl": 0.0,
+          "weight": 0.046327
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 26.33,
+          "prev_price": 26.33,
+          "pnl": 0.0,
+          "weight": 0.045077
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 25.5,
+          "prev_price": 25.5,
+          "pnl": 0.0,
+          "weight": 0.043656
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.34,
+          "prev_price": 4.34,
+          "pnl": 0.0,
+          "weight": 0.048514
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 22.99,
+          "prev_price": 22.99,
+          "pnl": 0.0,
+          "weight": 0.04862
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 31.47,
+          "prev_price": 31.47,
+          "pnl": 0.0,
+          "weight": 0.047538
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 20.12,
+          "prev_price": 20.12,
+          "pnl": 0.0,
+          "weight": 0.044577
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.11,
+          "prev_price": 9.11,
+          "pnl": 0.0,
+          "weight": 0.049541
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.62,
+          "prev_price": 13.62,
+          "pnl": 0.0,
+          "weight": 0.048007
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 18.09,
+          "prev_price": 18.09,
+          "pnl": 0.0,
+          "weight": 0.05101
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 12.21,
+          "prev_price": 12.21,
+          "pnl": 0.0,
+          "weight": 0.046726
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.2,
+          "prev_price": 7.2,
+          "pnl": 0.0,
+          "weight": 0.04568
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 178.26,
+          "prev_price": 178.26,
+          "pnl": 0.0,
+          "weight": 0.017952
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 14.29,
+          "prev_price": 14.29,
+          "pnl": 0.0,
+          "weight": 0.04749
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-09",
+      "nav": 1.0139875299999999,
+      "total_value": 1013987.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 1000879.0,
+      "drawdown": 0.008379397728152991,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.2,
+          "prev_price": 9.2,
+          "pnl": 0.0,
+          "weight": 0.046273
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 51.0,
+          "prev_price": 51.0,
+          "pnl": 0.0,
+          "weight": 0.035208
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.67,
+          "prev_price": 7.67,
+          "pnl": 0.0,
+          "weight": 0.053706
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 16.59,
+          "prev_price": 16.59,
+          "pnl": 0.0,
+          "weight": 0.047447
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 64.9,
+          "prev_price": 64.9,
+          "pnl": 0.0,
+          "weight": 0.032002
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 9.93,
+          "prev_price": 9.93,
+          "pnl": 0.0,
+          "weight": 0.047006
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.49,
+          "prev_price": 4.49,
+          "pnl": 0.0,
+          "weight": 0.046495
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 8.26,
+          "prev_price": 8.26,
+          "pnl": 0.0,
+          "weight": 0.05132
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.57,
+          "prev_price": 4.57,
+          "pnl": 0.0,
+          "weight": 0.045971
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 26.77,
+          "prev_price": 26.77,
+          "pnl": 0.0,
+          "weight": 0.044881
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 25.89,
+          "prev_price": 25.89,
+          "pnl": 0.0,
+          "weight": 0.043406
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.31,
+          "prev_price": 4.31,
+          "pnl": 0.0,
+          "weight": 0.047181
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 24.23,
+          "prev_price": 24.23,
+          "pnl": 0.0,
+          "weight": 0.050181
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 31.9,
+          "prev_price": 31.9,
+          "pnl": 0.0,
+          "weight": 0.04719
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 20.69,
+          "prev_price": 20.69,
+          "pnl": 0.0,
+          "weight": 0.04489
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.33,
+          "prev_price": 9.33,
+          "pnl": 0.0,
+          "weight": 0.049687
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 14.05,
+          "prev_price": 14.05,
+          "pnl": 0.0,
+          "weight": 0.048497
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 18.15,
+          "prev_price": 18.15,
+          "pnl": 0.0,
+          "weight": 0.050119
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 12.27,
+          "prev_price": 12.27,
+          "pnl": 0.0,
+          "weight": 0.045983
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.3,
+          "prev_price": 7.3,
+          "pnl": 0.0,
+          "weight": 0.045356
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 177.85,
+          "prev_price": 177.85,
+          "pnl": 0.0,
+          "weight": 0.01754
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 14.36,
+          "prev_price": 14.36,
+          "pnl": 0.0,
+          "weight": 0.046734
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-10",
+      "nav": 1.0117125299999998,
+      "total_value": 1011712.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 998604.0,
+      "drawdown": -0.002243617335215185,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.38,
+          "prev_price": 9.38,
+          "pnl": 0.0,
+          "weight": 0.047284
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 50.11,
+          "prev_price": 50.11,
+          "pnl": 0.0,
+          "weight": 0.034671
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.67,
+          "prev_price": 7.67,
+          "pnl": 0.0,
+          "weight": 0.053827
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 16.42,
+          "prev_price": 16.42,
+          "pnl": 0.0,
+          "weight": 0.047067
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 64.93,
+          "prev_price": 64.93,
+          "pnl": 0.0,
+          "weight": 0.032089
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 9.89,
+          "prev_price": 9.89,
+          "pnl": 0.0,
+          "weight": 0.046922
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.54,
+          "prev_price": 4.54,
+          "pnl": 0.0,
+          "weight": 0.047118
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 8.17,
+          "prev_price": 8.17,
+          "pnl": 0.0,
+          "weight": 0.050875
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.57,
+          "prev_price": 4.57,
+          "pnl": 0.0,
+          "weight": 0.046074
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 26.69,
+          "prev_price": 26.69,
+          "pnl": 0.0,
+          "weight": 0.044848
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 25.44,
+          "prev_price": 25.44,
+          "pnl": 0.0,
+          "weight": 0.042747
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.3,
+          "prev_price": 4.3,
+          "pnl": 0.0,
+          "weight": 0.047177
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 24.08,
+          "prev_price": 24.08,
+          "pnl": 0.0,
+          "weight": 0.049983
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 31.55,
+          "prev_price": 31.55,
+          "pnl": 0.0,
+          "weight": 0.046777
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 20.19,
+          "prev_price": 20.19,
+          "pnl": 0.0,
+          "weight": 0.043904
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.38,
+          "prev_price": 9.38,
+          "pnl": 0.0,
+          "weight": 0.050066
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 14.14,
+          "prev_price": 14.14,
+          "pnl": 0.0,
+          "weight": 0.048917
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 18.14,
+          "prev_price": 18.14,
+          "pnl": 0.0,
+          "weight": 0.050204
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 12.31,
+          "prev_price": 12.31,
+          "pnl": 0.0,
+          "weight": 0.046236
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.56,
+          "prev_price": 7.56,
+          "pnl": 0.0,
+          "weight": 0.047077
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 174.23,
+          "prev_price": 174.23,
+          "pnl": 0.0,
+          "weight": 0.017221
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 14.09,
+          "prev_price": 14.09,
+          "pnl": 0.0,
+          "weight": 0.045959
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-13",
+      "nav": 1.0106945299999999,
+      "total_value": 1010694.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 997586.0,
+      "drawdown": -0.0032475744548850524,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.41,
+          "prev_price": 9.41,
+          "pnl": 0.0,
+          "weight": 0.047483
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 51.3,
+          "prev_price": 51.3,
+          "pnl": 0.0,
+          "weight": 0.03553
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.63,
+          "prev_price": 7.63,
+          "pnl": 0.0,
+          "weight": 0.0536
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 16.43,
+          "prev_price": 16.43,
+          "pnl": 0.0,
+          "weight": 0.047143
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 65.76,
+          "prev_price": 65.76,
+          "pnl": 0.0,
+          "weight": 0.032532
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 9.79,
+          "prev_price": 9.79,
+          "pnl": 0.0,
+          "weight": 0.046495
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.55,
+          "prev_price": 4.55,
+          "pnl": 0.0,
+          "weight": 0.047269
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 8.12,
+          "prev_price": 8.12,
+          "pnl": 0.0,
+          "weight": 0.050615
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.55,
+          "prev_price": 4.55,
+          "pnl": 0.0,
+          "weight": 0.045919
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 27.29,
+          "prev_price": 27.29,
+          "pnl": 0.0,
+          "weight": 0.045902
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 25.36,
+          "prev_price": 25.36,
+          "pnl": 0.0,
+          "weight": 0.042656
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.28,
+          "prev_price": 4.28,
+          "pnl": 0.0,
+          "weight": 0.047005
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 24.28,
+          "prev_price": 24.28,
+          "pnl": 0.0,
+          "weight": 0.050448
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 32.39,
+          "prev_price": 32.39,
+          "pnl": 0.0,
+          "weight": 0.048071
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 19.85,
+          "prev_price": 19.85,
+          "pnl": 0.0,
+          "weight": 0.043208
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.55,
+          "prev_price": 9.55,
+          "pnl": 0.0,
+          "weight": 0.051024
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.88,
+          "prev_price": 13.88,
+          "pnl": 0.0,
+          "weight": 0.048066
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 18.03,
+          "prev_price": 18.03,
+          "pnl": 0.0,
+          "weight": 0.04995
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 12.29,
+          "prev_price": 12.29,
+          "pnl": 0.0,
+          "weight": 0.046208
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.42,
+          "prev_price": 7.42,
+          "pnl": 0.0,
+          "weight": 0.046251
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 168.07,
+          "prev_price": 168.07,
+          "pnl": 0.0,
+          "weight": 0.016629
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.79,
+          "prev_price": 13.79,
+          "pnl": 0.0,
+          "weight": 0.045025
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-14",
+      "nav": 1.0108315299999997,
+      "total_value": 1010831.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 997723.0,
+      "drawdown": -0.0031124643120612728,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.35,
+          "prev_price": 9.35,
+          "pnl": 0.0,
+          "weight": 0.047174
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 52.84,
+          "prev_price": 52.84,
+          "pnl": 0.0,
+          "weight": 0.036592
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.53,
+          "prev_price": 7.53,
+          "pnl": 0.0,
+          "weight": 0.05289
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 16.29,
+          "prev_price": 16.29,
+          "pnl": 0.0,
+          "weight": 0.046735
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 63.89,
+          "prev_price": 63.89,
+          "pnl": 0.0,
+          "weight": 0.031603
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 9.68,
+          "prev_price": 9.68,
+          "pnl": 0.0,
+          "weight": 0.045966
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.56,
+          "prev_price": 4.56,
+          "pnl": 0.0,
+          "weight": 0.047367
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.9,
+          "prev_price": 7.9,
+          "pnl": 0.0,
+          "weight": 0.049237
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.5,
+          "prev_price": 4.5,
+          "pnl": 0.0,
+          "weight": 0.045408
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 27.39,
+          "prev_price": 27.39,
+          "pnl": 0.0,
+          "weight": 0.046064
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 25.92,
+          "prev_price": 25.92,
+          "pnl": 0.0,
+          "weight": 0.043592
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.3,
+          "prev_price": 4.3,
+          "pnl": 0.0,
+          "weight": 0.047219
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 24.17,
+          "prev_price": 24.17,
+          "pnl": 0.0,
+          "weight": 0.050213
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 32.38,
+          "prev_price": 32.38,
+          "pnl": 0.0,
+          "weight": 0.04805
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 20.13,
+          "prev_price": 20.13,
+          "pnl": 0.0,
+          "weight": 0.043811
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.65,
+          "prev_price": 9.65,
+          "pnl": 0.0,
+          "weight": 0.051552
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.94,
+          "prev_price": 13.94,
+          "pnl": 0.0,
+          "weight": 0.048267
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 18.09,
+          "prev_price": 18.09,
+          "pnl": 0.0,
+          "weight": 0.050109
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 12.31,
+          "prev_price": 12.31,
+          "pnl": 0.0,
+          "weight": 0.046277
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.46,
+          "prev_price": 7.46,
+          "pnl": 0.0,
+          "weight": 0.046494
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 169.22,
+          "prev_price": 169.22,
+          "pnl": 0.0,
+          "weight": 0.016741
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.99,
+          "prev_price": 13.99,
+          "pnl": 0.0,
+          "weight": 0.045672
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-15",
+      "nav": 1.0016115299999997,
+      "total_value": 1001611.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 988503.0,
+      "drawdown": -0.012205278303570623,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.27,
+          "prev_price": 9.27,
+          "pnl": 0.0,
+          "weight": 0.047201
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 52.13,
+          "prev_price": 52.13,
+          "pnl": 0.0,
+          "weight": 0.036432
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.43,
+          "prev_price": 7.43,
+          "pnl": 0.0,
+          "weight": 0.052668
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 16.61,
+          "prev_price": 16.61,
+          "pnl": 0.0,
+          "weight": 0.048091
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 65.79,
+          "prev_price": 65.79,
+          "pnl": 0.0,
+          "weight": 0.032842
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 9.63,
+          "prev_price": 9.63,
+          "pnl": 0.0,
+          "weight": 0.04615
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.46,
+          "prev_price": 4.46,
+          "pnl": 0.0,
+          "weight": 0.046755
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.86,
+          "prev_price": 7.86,
+          "pnl": 0.0,
+          "weight": 0.049438
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.44,
+          "prev_price": 4.44,
+          "pnl": 0.0,
+          "weight": 0.045215
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 26.88,
+          "prev_price": 26.88,
+          "pnl": 0.0,
+          "weight": 0.045622
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 25.79,
+          "prev_price": 25.79,
+          "pnl": 0.0,
+          "weight": 0.043772
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.25,
+          "prev_price": 4.25,
+          "pnl": 0.0,
+          "weight": 0.047099
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 23.77,
+          "prev_price": 23.77,
+          "pnl": 0.0,
+          "weight": 0.049837
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 31.76,
+          "prev_price": 31.76,
+          "pnl": 0.0,
+          "weight": 0.047563
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 20.1,
+          "prev_price": 20.1,
+          "pnl": 0.0,
+          "weight": 0.044149
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.48,
+          "prev_price": 9.48,
+          "pnl": 0.0,
+          "weight": 0.05111
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.43,
+          "prev_price": 13.43,
+          "pnl": 0.0,
+          "weight": 0.046929
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.84,
+          "prev_price": 17.84,
+          "pnl": 0.0,
+          "weight": 0.049872
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 12.13,
+          "prev_price": 12.13,
+          "pnl": 0.0,
+          "weight": 0.04602
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.73,
+          "prev_price": 7.73,
+          "pnl": 0.0,
+          "weight": 0.048621
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 168.11,
+          "prev_price": 168.11,
+          "pnl": 0.0,
+          "weight": 0.016784
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.58,
+          "prev_price": 13.58,
+          "pnl": 0.0,
+          "weight": 0.044742
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-16",
+      "nav": 1.0088405299999998,
+      "total_value": 1008840.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 995732.0,
+      "drawdown": -0.005075999307407669,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.61,
+          "prev_price": 9.61,
+          "pnl": 0.0,
+          "weight": 0.048582
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 51.82,
+          "prev_price": 51.82,
+          "pnl": 0.0,
+          "weight": 0.035956
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.55,
+          "prev_price": 7.55,
+          "pnl": 0.0,
+          "weight": 0.053135
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 16.08,
+          "prev_price": 16.08,
+          "pnl": 0.0,
+          "weight": 0.046223
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 65.37,
+          "prev_price": 65.37,
+          "pnl": 0.0,
+          "weight": 0.032399
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 9.56,
+          "prev_price": 9.56,
+          "pnl": 0.0,
+          "weight": 0.045486
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.45,
+          "prev_price": 4.45,
+          "pnl": 0.0,
+          "weight": 0.046316
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.79,
+          "prev_price": 7.79,
+          "pnl": 0.0,
+          "weight": 0.048647
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.42,
+          "prev_price": 4.42,
+          "pnl": 0.0,
+          "weight": 0.044689
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 27.23,
+          "prev_price": 27.23,
+          "pnl": 0.0,
+          "weight": 0.045885
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 25.78,
+          "prev_price": 25.78,
+          "pnl": 0.0,
+          "weight": 0.043442
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.22,
+          "prev_price": 4.22,
+          "pnl": 0.0,
+          "weight": 0.046432
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 23.68,
+          "prev_price": 23.68,
+          "pnl": 0.0,
+          "weight": 0.049292
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 31.44,
+          "prev_price": 31.44,
+          "pnl": 0.0,
+          "weight": 0.046747
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 21.98,
+          "prev_price": 21.98,
+          "pnl": 0.0,
+          "weight": 0.047932
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.59,
+          "prev_price": 9.59,
+          "pnl": 0.0,
+          "weight": 0.051332
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.65,
+          "prev_price": 13.65,
+          "pnl": 0.0,
+          "weight": 0.047356
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.68,
+          "prev_price": 17.68,
+          "pnl": 0.0,
+          "weight": 0.04907
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 12.14,
+          "prev_price": 12.14,
+          "pnl": 0.0,
+          "weight": 0.045728
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 8.18,
+          "prev_price": 8.18,
+          "pnl": 0.0,
+          "weight": 0.051082
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 172.67,
+          "prev_price": 172.67,
+          "pnl": 0.0,
+          "weight": 0.017116
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.5,
+          "prev_price": 13.5,
+          "pnl": 0.0,
+          "weight": 0.04416
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-17",
+      "nav": 1.0199505299999998,
+      "total_value": 1019950.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 1006842.0,
+      "drawdown": 0.005880742931818838,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.86,
+          "prev_price": 9.86,
+          "pnl": 0.0,
+          "weight": 0.049302
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 51.89,
+          "prev_price": 51.89,
+          "pnl": 0.0,
+          "weight": 0.035613
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.47,
+          "prev_price": 7.47,
+          "pnl": 0.0,
+          "weight": 0.052
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 15.82,
+          "prev_price": 15.82,
+          "pnl": 0.0,
+          "weight": 0.044981
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 64.06,
+          "prev_price": 64.06,
+          "pnl": 0.0,
+          "weight": 0.031403
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 9.69,
+          "prev_price": 9.69,
+          "pnl": 0.0,
+          "weight": 0.045602
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.51,
+          "prev_price": 4.51,
+          "pnl": 0.0,
+          "weight": 0.046429
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.56,
+          "prev_price": 7.56,
+          "pnl": 0.0,
+          "weight": 0.046696
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.52,
+          "prev_price": 4.52,
+          "pnl": 0.0,
+          "weight": 0.045202
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 27.05,
+          "prev_price": 27.05,
+          "pnl": 0.0,
+          "weight": 0.045086
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 25.61,
+          "prev_price": 25.61,
+          "pnl": 0.0,
+          "weight": 0.042685
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.33,
+          "prev_price": 4.33,
+          "pnl": 0.0,
+          "weight": 0.047123
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 24.0,
+          "prev_price": 24.0,
+          "pnl": 0.0,
+          "weight": 0.049414
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 31.39,
+          "prev_price": 31.39,
+          "pnl": 0.0,
+          "weight": 0.046164
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 21.75,
+          "prev_price": 21.75,
+          "pnl": 0.0,
+          "weight": 0.046914
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.91,
+          "prev_price": 9.91,
+          "pnl": 0.0,
+          "weight": 0.052467
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.93,
+          "prev_price": 13.93,
+          "pnl": 0.0,
+          "weight": 0.047801
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 18.03,
+          "prev_price": 18.03,
+          "pnl": 0.0,
+          "weight": 0.049497
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 12.33,
+          "prev_price": 12.33,
+          "pnl": 0.0,
+          "weight": 0.045938
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 9.0,
+          "prev_price": 9.0,
+          "pnl": 0.0,
+          "weight": 0.055591
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 177.14,
+          "prev_price": 177.14,
+          "pnl": 0.0,
+          "weight": 0.017368
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.56,
+          "prev_price": 13.56,
+          "pnl": 0.0,
+          "weight": 0.043873
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-20",
+      "nav": 1.0233535299999998,
+      "total_value": 1023353.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 1010245.0,
+      "drawdown": 0.003336436326965824,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.82,
+          "prev_price": 9.82,
+          "pnl": 0.0,
+          "weight": 0.048939
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 51.58,
+          "prev_price": 51.58,
+          "pnl": 0.0,
+          "weight": 0.035282
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.31,
+          "prev_price": 7.31,
+          "pnl": 0.0,
+          "weight": 0.050717
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 15.21,
+          "prev_price": 15.21,
+          "pnl": 0.0,
+          "weight": 0.043102
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 62.6,
+          "prev_price": 62.6,
+          "pnl": 0.0,
+          "weight": 0.030586
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 9.62,
+          "prev_price": 9.62,
+          "pnl": 0.0,
+          "weight": 0.045122
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.5,
+          "prev_price": 4.5,
+          "pnl": 0.0,
+          "weight": 0.046172
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.62,
+          "prev_price": 7.62,
+          "pnl": 0.0,
+          "weight": 0.04691
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.34,
+          "prev_price": 4.34,
+          "pnl": 0.0,
+          "weight": 0.043258
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 26.53,
+          "prev_price": 26.53,
+          "pnl": 0.0,
+          "weight": 0.044072
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 26.51,
+          "prev_price": 26.51,
+          "pnl": 0.0,
+          "weight": 0.044039
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.26,
+          "prev_price": 4.26,
+          "pnl": 0.0,
+          "weight": 0.046207
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 24.72,
+          "prev_price": 24.72,
+          "pnl": 0.0,
+          "weight": 0.050727
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 31.49,
+          "prev_price": 31.49,
+          "pnl": 0.0,
+          "weight": 0.046157
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 22.07,
+          "prev_price": 22.07,
+          "pnl": 0.0,
+          "weight": 0.047446
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 10.5,
+          "prev_price": 10.5,
+          "pnl": 0.0,
+          "weight": 0.055406
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 14.51,
+          "prev_price": 14.51,
+          "pnl": 0.0,
+          "weight": 0.049626
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.98,
+          "prev_price": 17.98,
+          "pnl": 0.0,
+          "weight": 0.049195
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 12.39,
+          "prev_price": 12.39,
+          "pnl": 0.0,
+          "weight": 0.046008
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 9.18,
+          "prev_price": 9.18,
+          "pnl": 0.0,
+          "weight": 0.056514
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 180.03,
+          "prev_price": 180.03,
+          "pnl": 0.0,
+          "weight": 0.017592
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.68,
+          "prev_price": 13.68,
+          "pnl": 0.0,
+          "weight": 0.044114
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-21",
+      "nav": 1.0206675299999999,
+      "total_value": 1020667.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 1007559.0,
+      "drawdown": -0.0026247038987591773,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.99,
+          "prev_price": 9.99,
+          "pnl": 0.0,
+          "weight": 0.049917
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 51.78,
+          "prev_price": 51.78,
+          "pnl": 0.0,
+          "weight": 0.035512
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.32,
+          "prev_price": 7.32,
+          "pnl": 0.0,
+          "weight": 0.05092
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 15.43,
+          "prev_price": 15.43,
+          "pnl": 0.0,
+          "weight": 0.043841
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 62.58,
+          "prev_price": 62.58,
+          "pnl": 0.0,
+          "weight": 0.030656
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 9.4,
+          "prev_price": 9.4,
+          "pnl": 0.0,
+          "weight": 0.044206
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.49,
+          "prev_price": 4.49,
+          "pnl": 0.0,
+          "weight": 0.04619
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.63,
+          "prev_price": 7.63,
+          "pnl": 0.0,
+          "weight": 0.047096
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.37,
+          "prev_price": 4.37,
+          "pnl": 0.0,
+          "weight": 0.043671
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 26.11,
+          "prev_price": 26.11,
+          "pnl": 0.0,
+          "weight": 0.043488
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 25.97,
+          "prev_price": 25.97,
+          "pnl": 0.0,
+          "weight": 0.043255
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.28,
+          "prev_price": 4.28,
+          "pnl": 0.0,
+          "weight": 0.046546
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 24.51,
+          "prev_price": 24.51,
+          "pnl": 0.0,
+          "weight": 0.050429
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 30.98,
+          "prev_price": 30.98,
+          "pnl": 0.0,
+          "weight": 0.045529
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 22.34,
+          "prev_price": 22.34,
+          "pnl": 0.0,
+          "weight": 0.048153
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 10.58,
+          "prev_price": 10.58,
+          "pnl": 0.0,
+          "weight": 0.055975
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.8,
+          "prev_price": 13.8,
+          "pnl": 0.0,
+          "weight": 0.047322
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 18.06,
+          "prev_price": 18.06,
+          "pnl": 0.0,
+          "weight": 0.049544
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 12.32,
+          "prev_price": 12.32,
+          "pnl": 0.0,
+          "weight": 0.045868
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 9.19,
+          "prev_price": 9.19,
+          "pnl": 0.0,
+          "weight": 0.056725
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 178.96,
+          "prev_price": 178.96,
+          "pnl": 0.0,
+          "weight": 0.017534
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.85,
+          "prev_price": 13.85,
+          "pnl": 0.0,
+          "weight": 0.04478
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-22",
+      "nav": 1.01886153,
+      "total_value": 1018861.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 1005753.0,
+      "drawdown": -0.004389489915571934,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 10.0,
+          "prev_price": 10.0,
+          "pnl": 0.0,
+          "weight": 0.050056
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 51.09,
+          "prev_price": 51.09,
+          "pnl": 0.0,
+          "weight": 0.035101
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.31,
+          "prev_price": 7.31,
+          "pnl": 0.0,
+          "weight": 0.05094
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 15.17,
+          "prev_price": 15.17,
+          "pnl": 0.0,
+          "weight": 0.043179
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 61.44,
+          "prev_price": 61.44,
+          "pnl": 0.0,
+          "weight": 0.030151
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 9.51,
+          "prev_price": 9.51,
+          "pnl": 0.0,
+          "weight": 0.044803
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.49,
+          "prev_price": 4.49,
+          "pnl": 0.0,
+          "weight": 0.046272
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.49,
+          "prev_price": 7.49,
+          "pnl": 0.0,
+          "weight": 0.046313
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.47,
+          "prev_price": 4.47,
+          "pnl": 0.0,
+          "weight": 0.04475
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 26.18,
+          "prev_price": 26.18,
+          "pnl": 0.0,
+          "weight": 0.043682
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 24.35,
+          "prev_price": 24.35,
+          "pnl": 0.0,
+          "weight": 0.040629
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.29,
+          "prev_price": 4.29,
+          "pnl": 0.0,
+          "weight": 0.046737
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 24.22,
+          "prev_price": 24.22,
+          "pnl": 0.0,
+          "weight": 0.04992
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 30.75,
+          "prev_price": 30.75,
+          "pnl": 0.0,
+          "weight": 0.045271
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 23.19,
+          "prev_price": 23.19,
+          "pnl": 0.0,
+          "weight": 0.050074
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 10.62,
+          "prev_price": 10.62,
+          "pnl": 0.0,
+          "weight": 0.056286
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.75,
+          "prev_price": 13.75,
+          "pnl": 0.0,
+          "weight": 0.047234
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.93,
+          "prev_price": 17.93,
+          "pnl": 0.0,
+          "weight": 0.049275
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 12.32,
+          "prev_price": 12.32,
+          "pnl": 0.0,
+          "weight": 0.045949
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 9.4,
+          "prev_price": 9.4,
+          "pnl": 0.0,
+          "weight": 0.058124
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 174.3,
+          "prev_price": 174.3,
+          "pnl": 0.0,
+          "weight": 0.017107
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.98,
+          "prev_price": 13.98,
+          "pnl": 0.0,
+          "weight": 0.04528
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-23",
+      "nav": 1.0029025299999998,
+      "total_value": 1002902.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 989794.0,
+      "drawdown": -0.019984296140552717,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.84,
+          "prev_price": 9.84,
+          "pnl": 0.0,
+          "weight": 0.050039
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 50.61,
+          "prev_price": 50.61,
+          "pnl": 0.0,
+          "weight": 0.035324
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.29,
+          "prev_price": 7.29,
+          "pnl": 0.0,
+          "weight": 0.051609
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 14.87,
+          "prev_price": 14.87,
+          "pnl": 0.0,
+          "weight": 0.042998
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 61.77,
+          "prev_price": 61.77,
+          "pnl": 0.0,
+          "weight": 0.030796
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 9.28,
+          "prev_price": 9.28,
+          "pnl": 0.0,
+          "weight": 0.044415
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.44,
+          "prev_price": 4.44,
+          "pnl": 0.0,
+          "weight": 0.046485
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.32,
+          "prev_price": 7.32,
+          "pnl": 0.0,
+          "weight": 0.045983
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.38,
+          "prev_price": 4.38,
+          "pnl": 0.0,
+          "weight": 0.044547
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 25.7,
+          "prev_price": 25.7,
+          "pnl": 0.0,
+          "weight": 0.043564
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 23.61,
+          "prev_price": 23.61,
+          "pnl": 0.0,
+          "weight": 0.040021
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.18,
+          "prev_price": 4.18,
+          "pnl": 0.0,
+          "weight": 0.046264
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 23.8,
+          "prev_price": 23.8,
+          "pnl": 0.0,
+          "weight": 0.049835
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 29.76,
+          "prev_price": 29.76,
+          "pnl": 0.0,
+          "weight": 0.044511
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 23.48,
+          "prev_price": 23.48,
+          "pnl": 0.0,
+          "weight": 0.051507
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 10.36,
+          "prev_price": 10.36,
+          "pnl": 0.0,
+          "weight": 0.055782
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.16,
+          "prev_price": 13.16,
+          "pnl": 0.0,
+          "weight": 0.045927
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.37,
+          "prev_price": 17.37,
+          "pnl": 0.0,
+          "weight": 0.048495
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 12.13,
+          "prev_price": 12.13,
+          "pnl": 0.0,
+          "weight": 0.045961
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 9.56,
+          "prev_price": 9.56,
+          "pnl": 0.0,
+          "weight": 0.060054
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 170.94,
+          "prev_price": 170.94,
+          "pnl": 0.0,
+          "weight": 0.017045
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.91,
+          "prev_price": 13.91,
+          "pnl": 0.0,
+          "weight": 0.04577
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-24",
+      "nav": 0.9938305299999998,
+      "total_value": 993830.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 980722.0,
+      "drawdown": -0.028849267759891425,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.75,
+          "prev_price": 9.75,
+          "pnl": 0.0,
+          "weight": 0.050034
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 50.5,
+          "prev_price": 50.5,
+          "pnl": 0.0,
+          "weight": 0.035569
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.5,
+          "prev_price": 7.5,
+          "pnl": 0.0,
+          "weight": 0.053581
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 14.85,
+          "prev_price": 14.85,
+          "pnl": 0.0,
+          "weight": 0.043332
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 62.65,
+          "prev_price": 62.65,
+          "pnl": 0.0,
+          "weight": 0.031519
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 9.15,
+          "prev_price": 9.15,
+          "pnl": 0.0,
+          "weight": 0.044193
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.39,
+          "prev_price": 4.39,
+          "pnl": 0.0,
+          "weight": 0.046381
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.43,
+          "prev_price": 7.43,
+          "pnl": 0.0,
+          "weight": 0.0471
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.3,
+          "prev_price": 4.3,
+          "pnl": 0.0,
+          "weight": 0.044132
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 25.5,
+          "prev_price": 25.5,
+          "pnl": 0.0,
+          "weight": 0.043619
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 24.07,
+          "prev_price": 24.07,
+          "pnl": 0.0,
+          "weight": 0.041173
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.15,
+          "prev_price": 4.15,
+          "pnl": 0.0,
+          "weight": 0.046351
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 23.33,
+          "prev_price": 23.33,
+          "pnl": 0.0,
+          "weight": 0.049297
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 29.43,
+          "prev_price": 29.43,
+          "pnl": 0.0,
+          "weight": 0.044419
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 22.22,
+          "prev_price": 22.22,
+          "pnl": 0.0,
+          "weight": 0.049187
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 10.44,
+          "prev_price": 10.44,
+          "pnl": 0.0,
+          "weight": 0.056726
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.13,
+          "prev_price": 13.13,
+          "pnl": 0.0,
+          "weight": 0.04624
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.19,
+          "prev_price": 17.19,
+          "pnl": 0.0,
+          "weight": 0.048431
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 12.0,
+          "prev_price": 12.0,
+          "pnl": 0.0,
+          "weight": 0.045883
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 8.99,
+          "prev_price": 8.99,
+          "pnl": 0.0,
+          "weight": 0.056989
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 168.59,
+          "prev_price": 168.59,
+          "pnl": 0.0,
+          "weight": 0.016964
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.76,
+          "prev_price": 13.76,
+          "pnl": 0.0,
+          "weight": 0.04569
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-27",
+      "nav": 1.0039695299999998,
+      "total_value": 1003969.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 990861.0,
+      "drawdown": -0.018941645708692743,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.95,
+          "prev_price": 9.95,
+          "pnl": 0.0,
+          "weight": 0.050544
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 50.95,
+          "prev_price": 50.95,
+          "pnl": 0.0,
+          "weight": 0.035524
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.63,
+          "prev_price": 7.63,
+          "pnl": 0.0,
+          "weight": 0.053959
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 15.22,
+          "prev_price": 15.22,
+          "pnl": 0.0,
+          "weight": 0.043963
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 63.62,
+          "prev_price": 63.62,
+          "pnl": 0.0,
+          "weight": 0.031684
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 9.04,
+          "prev_price": 9.04,
+          "pnl": 0.0,
+          "weight": 0.04322
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.45,
+          "prev_price": 4.45,
+          "pnl": 0.0,
+          "weight": 0.04654
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.48,
+          "prev_price": 7.48,
+          "pnl": 0.0,
+          "weight": 0.046938
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.33,
+          "prev_price": 4.33,
+          "pnl": 0.0,
+          "weight": 0.043991
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 25.96,
+          "prev_price": 25.96,
+          "pnl": 0.0,
+          "weight": 0.043958
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 24.1,
+          "prev_price": 24.1,
+          "pnl": 0.0,
+          "weight": 0.040808
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.21,
+          "prev_price": 4.21,
+          "pnl": 0.0,
+          "weight": 0.046546
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 23.57,
+          "prev_price": 23.57,
+          "pnl": 0.0,
+          "weight": 0.049301
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 30.07,
+          "prev_price": 30.07,
+          "pnl": 0.0,
+          "weight": 0.044927
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 22.77,
+          "prev_price": 22.77,
+          "pnl": 0.0,
+          "weight": 0.049896
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 10.38,
+          "prev_price": 10.38,
+          "pnl": 0.0,
+          "weight": 0.05583
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.47,
+          "prev_price": 13.47,
+          "pnl": 0.0,
+          "weight": 0.046959
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.49,
+          "prev_price": 17.49,
+          "pnl": 0.0,
+          "weight": 0.048778
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 12.08,
+          "prev_price": 12.08,
+          "pnl": 0.0,
+          "weight": 0.045723
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 8.87,
+          "prev_price": 8.87,
+          "pnl": 0.0,
+          "weight": 0.05566
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 168.01,
+          "prev_price": 168.01,
+          "pnl": 0.0,
+          "weight": 0.016735
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.83,
+          "prev_price": 13.83,
+          "pnl": 0.0,
+          "weight": 0.045459
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-28",
+      "nav": 0.9841205299999998,
+      "total_value": 984120.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 971012.0,
+      "drawdown": -0.03833767984364121,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.84,
+          "prev_price": 9.84,
+          "pnl": 0.0,
+          "weight": 0.050994
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 50.7,
+          "prev_price": 50.7,
+          "pnl": 0.0,
+          "weight": 0.036063
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.3,
+          "prev_price": 7.3,
+          "pnl": 0.0,
+          "weight": 0.052666
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 14.83,
+          "prev_price": 14.83,
+          "pnl": 0.0,
+          "weight": 0.043701
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 63.06,
+          "prev_price": 63.06,
+          "pnl": 0.0,
+          "weight": 0.032039
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 8.88,
+          "prev_price": 8.88,
+          "pnl": 0.0,
+          "weight": 0.043312
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.4,
+          "prev_price": 4.4,
+          "pnl": 0.0,
+          "weight": 0.046945
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.34,
+          "prev_price": 7.34,
+          "pnl": 0.0,
+          "weight": 0.046988
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.17,
+          "prev_price": 4.17,
+          "pnl": 0.0,
+          "weight": 0.04322
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 25.68,
+          "prev_price": 25.68,
+          "pnl": 0.0,
+          "weight": 0.04436
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 23.91,
+          "prev_price": 23.91,
+          "pnl": 0.0,
+          "weight": 0.041303
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.01,
+          "prev_price": 4.01,
+          "pnl": 0.0,
+          "weight": 0.045229
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 23.91,
+          "prev_price": 23.91,
+          "pnl": 0.0,
+          "weight": 0.051021
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 29.62,
+          "prev_price": 29.62,
+          "pnl": 0.0,
+          "weight": 0.045147
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 21.66,
+          "prev_price": 21.66,
+          "pnl": 0.0,
+          "weight": 0.048421
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 10.08,
+          "prev_price": 10.08,
+          "pnl": 0.0,
+          "weight": 0.05531
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.54,
+          "prev_price": 13.54,
+          "pnl": 0.0,
+          "weight": 0.048155
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.39,
+          "prev_price": 17.39,
+          "pnl": 0.0,
+          "weight": 0.049478
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.97,
+          "prev_price": 11.97,
+          "pnl": 0.0,
+          "weight": 0.04622
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 8.52,
+          "prev_price": 8.52,
+          "pnl": 0.0,
+          "weight": 0.054542
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 167.64,
+          "prev_price": 167.64,
+          "pnl": 0.0,
+          "weight": 0.017034
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.28,
+          "prev_price": 13.28,
+          "pnl": 0.0,
+          "weight": 0.044531
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-29",
+      "nav": 0.9833635299999998,
+      "total_value": 983363.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 970255.0,
+      "drawdown": -0.0390774046579974,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.7,
+          "prev_price": 9.7,
+          "pnl": 0.0,
+          "weight": 0.050307
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 50.25,
+          "prev_price": 50.25,
+          "pnl": 0.0,
+          "weight": 0.03577
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.08,
+          "prev_price": 7.08,
+          "pnl": 0.0,
+          "weight": 0.051118
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 14.73,
+          "prev_price": 14.73,
+          "pnl": 0.0,
+          "weight": 0.04344
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 61.88,
+          "prev_price": 61.88,
+          "pnl": 0.0,
+          "weight": 0.031463
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 8.96,
+          "prev_price": 8.96,
+          "pnl": 0.0,
+          "weight": 0.043736
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.41,
+          "prev_price": 4.41,
+          "pnl": 0.0,
+          "weight": 0.047088
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.21,
+          "prev_price": 7.21,
+          "pnl": 0.0,
+          "weight": 0.046191
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.19,
+          "prev_price": 4.19,
+          "pnl": 0.0,
+          "weight": 0.043461
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 25.51,
+          "prev_price": 25.51,
+          "pnl": 0.0,
+          "weight": 0.044101
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 24.33,
+          "prev_price": 24.33,
+          "pnl": 0.0,
+          "weight": 0.042061
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.01,
+          "prev_price": 4.01,
+          "pnl": 0.0,
+          "weight": 0.045264
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 23.88,
+          "prev_price": 23.88,
+          "pnl": 0.0,
+          "weight": 0.050996
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 30.05,
+          "prev_price": 30.05,
+          "pnl": 0.0,
+          "weight": 0.045838
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 21.56,
+          "prev_price": 21.56,
+          "pnl": 0.0,
+          "weight": 0.048234
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 10.21,
+          "prev_price": 10.21,
+          "pnl": 0.0,
+          "weight": 0.056067
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 14.0,
+          "prev_price": 14.0,
+          "pnl": 0.0,
+          "weight": 0.049829
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.37,
+          "prev_price": 17.37,
+          "pnl": 0.0,
+          "weight": 0.049459
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 12.0,
+          "prev_price": 12.0,
+          "pnl": 0.0,
+          "weight": 0.046371
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 8.58,
+          "prev_price": 8.58,
+          "pnl": 0.0,
+          "weight": 0.054968
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 166.3,
+          "prev_price": 166.3,
+          "pnl": 0.0,
+          "weight": 0.016911
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.11,
+          "prev_price": 13.11,
+          "pnl": 0.0,
+          "weight": 0.043995
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-30",
+      "nav": 0.9769245299999998,
+      "total_value": 976924.5299999998,
+      "cash": 13108.529999999853,
+      "position_value": 963816.0,
+      "drawdown": -0.045369462887375846,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.56,
+          "prev_price": 9.56,
+          "pnl": 0.0,
+          "weight": 0.049908
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 49.72,
+          "prev_price": 49.72,
+          "pnl": 0.0,
+          "weight": 0.035626
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.0,
+          "prev_price": 7.0,
+          "pnl": 0.0,
+          "weight": 0.050874
+        },
+        "000338.SZ": {
+          "shares": 2900,
+          "price": 14.84,
+          "prev_price": 14.84,
+          "pnl": 0.0,
+          "weight": 0.044053
+        },
+        "000333.SZ": {
+          "shares": 500,
+          "price": 61.21,
+          "prev_price": 61.21,
+          "pnl": 0.0,
+          "weight": 0.031328
+        },
+        "000301.SZ": {
+          "shares": 4800,
+          "price": 8.95,
+          "prev_price": 8.95,
+          "pnl": 0.0,
+          "weight": 0.043975
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.4,
+          "prev_price": 4.4,
+          "pnl": 0.0,
+          "weight": 0.047291
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.05,
+          "prev_price": 7.05,
+          "pnl": 0.0,
+          "weight": 0.045464
+        },
+        "000100.SZ": {
+          "shares": 10200,
+          "price": 4.19,
+          "prev_price": 4.19,
+          "pnl": 0.0,
+          "weight": 0.043747
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 25.55,
+          "prev_price": 25.55,
+          "pnl": 0.0,
+          "weight": 0.044461
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 23.74,
+          "prev_price": 23.74,
+          "pnl": 0.0,
+          "weight": 0.041311
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.03,
+          "prev_price": 4.03,
+          "pnl": 0.0,
+          "weight": 0.04579
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 24.12,
+          "prev_price": 24.12,
+          "pnl": 0.0,
+          "weight": 0.051848
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 30.41,
+          "prev_price": 30.41,
+          "pnl": 0.0,
+          "weight": 0.046692
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 21.6,
+          "prev_price": 21.6,
+          "pnl": 0.0,
+          "weight": 0.048642
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 10.07,
+          "prev_price": 10.07,
+          "pnl": 0.0,
+          "weight": 0.055662
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.61,
+          "prev_price": 13.61,
+          "pnl": 0.0,
+          "weight": 0.04876
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.52,
+          "prev_price": 17.52,
+          "pnl": 0.0,
+          "weight": 0.050215
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.97,
+          "prev_price": 11.97,
+          "pnl": 0.0,
+          "weight": 0.04656
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 8.27,
+          "prev_price": 8.27,
+          "pnl": 0.0,
+          "weight": 0.053332
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 161.39,
+          "prev_price": 161.39,
+          "pnl": 0.0,
+          "weight": 0.01652
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.18,
+          "prev_price": 13.18,
+          "pnl": 0.0,
+          "weight": 0.044521
+        }
+      }
+    },
+    {
+      "trade_date": "2024-05-31",
+      "nav": 0.9735630999999999,
+      "total_value": 973563.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 973390.0,
+      "drawdown": -0.04865418307591116,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.55,
+          "prev_price": 9.55,
+          "pnl": 0.0,
+          "weight": 0.050028
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 49.46,
+          "prev_price": 49.46,
+          "pnl": 0.0,
+          "weight": 0.035562
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 6.9,
+          "prev_price": 6.9,
+          "pnl": 0.0,
+          "weight": 0.05032
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 14.54,
+          "prev_price": 14.54,
+          "pnl": 0.0,
+          "weight": 0.046298
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 60.79,
+          "prev_price": 60.79,
+          "pnl": 0.0,
+          "weight": 0.037464
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 8.84,
+          "prev_price": 8.84,
+          "pnl": 0.0,
+          "weight": 0.047216
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.4,
+          "prev_price": 4.4,
+          "pnl": 0.0,
+          "weight": 0.047455
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.21,
+          "prev_price": 7.21,
+          "pnl": 0.0,
+          "weight": 0.046656
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.15,
+          "prev_price": 4.15,
+          "pnl": 0.0,
+          "weight": 0.043906
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 25.66,
+          "prev_price": 25.66,
+          "pnl": 0.0,
+          "weight": 0.044807
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 23.34,
+          "prev_price": 23.34,
+          "pnl": 0.0,
+          "weight": 0.040755
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.0,
+          "prev_price": 4.0,
+          "pnl": 0.0,
+          "weight": 0.045606
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 23.95,
+          "prev_price": 23.95,
+          "pnl": 0.0,
+          "weight": 0.051661
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 30.35,
+          "prev_price": 30.35,
+          "pnl": 0.0,
+          "weight": 0.046761
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 21.81,
+          "prev_price": 21.81,
+          "pnl": 0.0,
+          "weight": 0.049285
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 10.0,
+          "prev_price": 10.0,
+          "pnl": 0.0,
+          "weight": 0.055466
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.49,
+          "prev_price": 13.49,
+          "pnl": 0.0,
+          "weight": 0.048497
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.29,
+          "prev_price": 17.29,
+          "pnl": 0.0,
+          "weight": 0.049727
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.97,
+          "prev_price": 11.97,
+          "pnl": 0.0,
+          "weight": 0.046721
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 8.25,
+          "prev_price": 8.25,
+          "pnl": 0.0,
+          "weight": 0.053386
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 162.14,
+          "prev_price": 162.14,
+          "pnl": 0.0,
+          "weight": 0.016654
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.45,
+          "prev_price": 13.45,
+          "pnl": 0.0,
+          "weight": 0.04559
+        }
+      }
+    },
+    {
+      "trade_date": "2024-06-03",
+      "nav": 0.9705790999999998,
+      "total_value": 970579.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 970406.0,
+      "drawdown": -0.051570086439238695,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.42,
+          "prev_price": 9.42,
+          "pnl": 0.0,
+          "weight": 0.049498
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 49.49,
+          "prev_price": 49.49,
+          "pnl": 0.0,
+          "weight": 0.035693
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 6.85,
+          "prev_price": 6.85,
+          "pnl": 0.0,
+          "weight": 0.050109
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 14.2,
+          "prev_price": 14.2,
+          "pnl": 0.0,
+          "weight": 0.045354
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 61.05,
+          "prev_price": 61.05,
+          "pnl": 0.0,
+          "weight": 0.03774
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 8.67,
+          "prev_price": 8.67,
+          "pnl": 0.0,
+          "weight": 0.046451
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.41,
+          "prev_price": 4.41,
+          "pnl": 0.0,
+          "weight": 0.047709
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.26,
+          "prev_price": 7.26,
+          "pnl": 0.0,
+          "weight": 0.047124
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.2,
+          "prev_price": 4.2,
+          "pnl": 0.0,
+          "weight": 0.044571
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 25.93,
+          "prev_price": 25.93,
+          "pnl": 0.0,
+          "weight": 0.045417
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 23.23,
+          "prev_price": 23.23,
+          "pnl": 0.0,
+          "weight": 0.040688
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.01,
+          "prev_price": 4.01,
+          "pnl": 0.0,
+          "weight": 0.04586
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 23.79,
+          "prev_price": 23.79,
+          "pnl": 0.0,
+          "weight": 0.051473
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 30.37,
+          "prev_price": 30.37,
+          "pnl": 0.0,
+          "weight": 0.046936
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 21.92,
+          "prev_price": 21.92,
+          "pnl": 0.0,
+          "weight": 0.049686
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 10.08,
+          "prev_price": 10.08,
+          "pnl": 0.0,
+          "weight": 0.056082
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.61,
+          "prev_price": 13.61,
+          "pnl": 0.0,
+          "weight": 0.049079
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.26,
+          "prev_price": 17.26,
+          "pnl": 0.0,
+          "weight": 0.049793
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.9,
+          "prev_price": 11.9,
+          "pnl": 0.0,
+          "weight": 0.046591
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 8.09,
+          "prev_price": 8.09,
+          "pnl": 0.0,
+          "weight": 0.052512
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 161.52,
+          "prev_price": 161.52,
+          "pnl": 0.0,
+          "weight": 0.016642
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.18,
+          "prev_price": 13.18,
+          "pnl": 0.0,
+          "weight": 0.044812
+        }
+      }
+    },
+    {
+      "trade_date": "2024-06-04",
+      "nav": 0.9826150999999999,
+      "total_value": 982615.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 982442.0,
+      "drawdown": -0.039808755044798645,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.46,
+          "prev_price": 9.46,
+          "pnl": 0.0,
+          "weight": 0.0491
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 50.48,
+          "prev_price": 50.48,
+          "pnl": 0.0,
+          "weight": 0.035961
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.03,
+          "prev_price": 7.03,
+          "pnl": 0.0,
+          "weight": 0.050796
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 14.53,
+          "prev_price": 14.53,
+          "pnl": 0.0,
+          "weight": 0.04584
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 60.71,
+          "prev_price": 60.71,
+          "pnl": 0.0,
+          "weight": 0.03707
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 8.75,
+          "prev_price": 8.75,
+          "pnl": 0.0,
+          "weight": 0.046305
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.33,
+          "prev_price": 4.33,
+          "pnl": 0.0,
+          "weight": 0.046269
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.4,
+          "prev_price": 7.4,
+          "pnl": 0.0,
+          "weight": 0.047445
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.36,
+          "prev_price": 4.36,
+          "pnl": 0.0,
+          "weight": 0.045703
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 25.96,
+          "prev_price": 25.96,
+          "pnl": 0.0,
+          "weight": 0.044913
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 23.35,
+          "prev_price": 23.35,
+          "pnl": 0.0,
+          "weight": 0.040397
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.06,
+          "prev_price": 4.06,
+          "pnl": 0.0,
+          "weight": 0.045863
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 24.13,
+          "prev_price": 24.13,
+          "pnl": 0.0,
+          "weight": 0.05157
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 31.18,
+          "prev_price": 31.18,
+          "pnl": 0.0,
+          "weight": 0.047597
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 21.69,
+          "prev_price": 21.69,
+          "pnl": 0.0,
+          "weight": 0.048562
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 10.05,
+          "prev_price": 10.05,
+          "pnl": 0.0,
+          "weight": 0.05523
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 14.08,
+          "prev_price": 14.08,
+          "pnl": 0.0,
+          "weight": 0.050152
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.48,
+          "prev_price": 17.48,
+          "pnl": 0.0,
+          "weight": 0.04981
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.93,
+          "prev_price": 11.93,
+          "pnl": 0.0,
+          "weight": 0.046136
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 8.36,
+          "prev_price": 8.36,
+          "pnl": 0.0,
+          "weight": 0.0536
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 162.81,
+          "prev_price": 162.81,
+          "pnl": 0.0,
+          "weight": 0.016569
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.38,
+          "prev_price": 13.38,
+          "pnl": 0.0,
+          "weight": 0.044935
+        }
+      }
+    },
+    {
+      "trade_date": "2024-06-05",
+      "nav": 0.9714040999999999,
+      "total_value": 971404.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 971231.0,
+      "drawdown": -0.05076391342491384,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.31,
+          "prev_price": 9.31,
+          "pnl": 0.0,
+          "weight": 0.048879
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 50.35,
+          "prev_price": 50.35,
+          "pnl": 0.0,
+          "weight": 0.036283
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 6.87,
+          "prev_price": 6.87,
+          "pnl": 0.0,
+          "weight": 0.050213
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 14.37,
+          "prev_price": 14.37,
+          "pnl": 0.0,
+          "weight": 0.045858
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 59.95,
+          "prev_price": 59.95,
+          "pnl": 0.0,
+          "weight": 0.037029
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 8.59,
+          "prev_price": 8.59,
+          "pnl": 0.0,
+          "weight": 0.045983
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.34,
+          "prev_price": 4.34,
+          "pnl": 0.0,
+          "weight": 0.046911
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.11,
+          "prev_price": 7.11,
+          "pnl": 0.0,
+          "weight": 0.046112
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.37,
+          "prev_price": 4.37,
+          "pnl": 0.0,
+          "weight": 0.046336
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 25.86,
+          "prev_price": 25.86,
+          "pnl": 0.0,
+          "weight": 0.045256
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 22.7,
+          "prev_price": 22.7,
+          "pnl": 0.0,
+          "weight": 0.039726
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.03,
+          "prev_price": 4.03,
+          "pnl": 0.0,
+          "weight": 0.04605
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 25.01,
+          "prev_price": 25.01,
+          "pnl": 0.0,
+          "weight": 0.054067
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 30.93,
+          "prev_price": 30.93,
+          "pnl": 0.0,
+          "weight": 0.047761
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 21.71,
+          "prev_price": 21.71,
+          "pnl": 0.0,
+          "weight": 0.049168
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.83,
+          "prev_price": 9.83,
+          "pnl": 0.0,
+          "weight": 0.054645
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.74,
+          "prev_price": 13.74,
+          "pnl": 0.0,
+          "weight": 0.049506
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.24,
+          "prev_price": 17.24,
+          "pnl": 0.0,
+          "weight": 0.049693
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.89,
+          "prev_price": 11.89,
+          "pnl": 0.0,
+          "weight": 0.046512
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 8.11,
+          "prev_price": 8.11,
+          "pnl": 0.0,
+          "weight": 0.052597
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 159.27,
+          "prev_price": 159.27,
+          "pnl": 0.0,
+          "weight": 0.016396
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.2,
+          "prev_price": 13.2,
+          "pnl": 0.0,
+          "weight": 0.044842
+        }
+      }
+    },
+    {
+      "trade_date": "2024-06-06",
+      "nav": 0.9715950999999998,
+      "total_value": 971595.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 971422.0,
+      "drawdown": -0.05057727215735507,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.34,
+          "prev_price": 9.34,
+          "pnl": 0.0,
+          "weight": 0.049027
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 50.46,
+          "prev_price": 50.46,
+          "pnl": 0.0,
+          "weight": 0.036355
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.03,
+          "prev_price": 7.03,
+          "pnl": 0.0,
+          "weight": 0.051372
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 14.63,
+          "prev_price": 14.63,
+          "pnl": 0.0,
+          "weight": 0.046679
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 61.79,
+          "prev_price": 61.79,
+          "pnl": 0.0,
+          "weight": 0.038158
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 8.45,
+          "prev_price": 8.45,
+          "pnl": 0.0,
+          "weight": 0.045225
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.32,
+          "prev_price": 4.32,
+          "pnl": 0.0,
+          "weight": 0.046686
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.17,
+          "prev_price": 7.17,
+          "pnl": 0.0,
+          "weight": 0.046492
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.42,
+          "prev_price": 4.42,
+          "pnl": 0.0,
+          "weight": 0.046857
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 25.94,
+          "prev_price": 25.94,
+          "pnl": 0.0,
+          "weight": 0.045387
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 22.86,
+          "prev_price": 22.86,
+          "pnl": 0.0,
+          "weight": 0.039998
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.01,
+          "prev_price": 4.01,
+          "pnl": 0.0,
+          "weight": 0.045812
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 24.54,
+          "prev_price": 24.54,
+          "pnl": 0.0,
+          "weight": 0.053041
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 30.66,
+          "prev_price": 30.66,
+          "pnl": 0.0,
+          "weight": 0.047335
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 22.47,
+          "prev_price": 22.47,
+          "pnl": 0.0,
+          "weight": 0.050879
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.67,
+          "prev_price": 9.67,
+          "pnl": 0.0,
+          "weight": 0.053745
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.96,
+          "prev_price": 13.96,
+          "pnl": 0.0,
+          "weight": 0.050288
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.11,
+          "prev_price": 17.11,
+          "pnl": 0.0,
+          "weight": 0.049309
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.62,
+          "prev_price": 11.62,
+          "pnl": 0.0,
+          "weight": 0.045447
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 8.02,
+          "prev_price": 8.02,
+          "pnl": 0.0,
+          "weight": 0.052003
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 156.27,
+          "prev_price": 156.27,
+          "pnl": 0.0,
+          "weight": 0.016084
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 12.85,
+          "prev_price": 12.85,
+          "pnl": 0.0,
+          "weight": 0.043645
+        }
+      }
+    },
+    {
+      "trade_date": "2024-06-07",
+      "nav": 0.9759690999999998,
+      "total_value": 975969.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 975796.0,
+      "drawdown": -0.04630308941231682,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.43,
+          "prev_price": 9.43,
+          "pnl": 0.0,
+          "weight": 0.049277
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 50.69,
+          "prev_price": 50.69,
+          "pnl": 0.0,
+          "weight": 0.036357
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.11,
+          "prev_price": 7.11,
+          "pnl": 0.0,
+          "weight": 0.051724
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 14.7,
+          "prev_price": 14.7,
+          "pnl": 0.0,
+          "weight": 0.046692
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 61.19,
+          "prev_price": 61.19,
+          "pnl": 0.0,
+          "weight": 0.037618
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 8.44,
+          "prev_price": 8.44,
+          "pnl": 0.0,
+          "weight": 0.044969
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.34,
+          "prev_price": 4.34,
+          "pnl": 0.0,
+          "weight": 0.046692
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.29,
+          "prev_price": 7.29,
+          "pnl": 0.0,
+          "weight": 0.047058
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.42,
+          "prev_price": 4.42,
+          "pnl": 0.0,
+          "weight": 0.046647
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 25.49,
+          "prev_price": 25.49,
+          "pnl": 0.0,
+          "weight": 0.0444
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 22.91,
+          "prev_price": 22.91,
+          "pnl": 0.0,
+          "weight": 0.039906
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.06,
+          "prev_price": 4.06,
+          "pnl": 0.0,
+          "weight": 0.046176
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 25.27,
+          "prev_price": 25.27,
+          "pnl": 0.0,
+          "weight": 0.054374
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 30.09,
+          "prev_price": 30.09,
+          "pnl": 0.0,
+          "weight": 0.046246
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 22.71,
+          "prev_price": 22.71,
+          "pnl": 0.0,
+          "weight": 0.051192
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.7,
+          "prev_price": 9.7,
+          "pnl": 0.0,
+          "weight": 0.05367
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.99,
+          "prev_price": 13.99,
+          "pnl": 0.0,
+          "weight": 0.050171
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.18,
+          "prev_price": 17.18,
+          "pnl": 0.0,
+          "weight": 0.049288
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.57,
+          "prev_price": 11.57,
+          "pnl": 0.0,
+          "weight": 0.045049
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 8.17,
+          "prev_price": 8.17,
+          "pnl": 0.0,
+          "weight": 0.052738
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 153.47,
+          "prev_price": 153.47,
+          "pnl": 0.0,
+          "weight": 0.015725
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 12.97,
+          "prev_price": 12.97,
+          "pnl": 0.0,
+          "weight": 0.043855
+        }
+      }
+    },
+    {
+      "trade_date": "2024-06-11",
+      "nav": 0.9711070999999999,
+      "total_value": 971107.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 970934.0,
+      "drawdown": -0.05105413571007075,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.31,
+          "prev_price": 9.31,
+          "pnl": 0.0,
+          "weight": 0.048894
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 50.7,
+          "prev_price": 50.7,
+          "pnl": 0.0,
+          "weight": 0.036546
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.02,
+          "prev_price": 7.02,
+          "pnl": 0.0,
+          "weight": 0.051325
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 14.32,
+          "prev_price": 14.32,
+          "pnl": 0.0,
+          "weight": 0.045713
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 61.03,
+          "prev_price": 61.03,
+          "pnl": 0.0,
+          "weight": 0.037707
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 8.45,
+          "prev_price": 8.45,
+          "pnl": 0.0,
+          "weight": 0.045247
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.3,
+          "prev_price": 4.3,
+          "pnl": 0.0,
+          "weight": 0.046493
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.15,
+          "prev_price": 7.15,
+          "pnl": 0.0,
+          "weight": 0.046385
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.42,
+          "prev_price": 4.42,
+          "pnl": 0.0,
+          "weight": 0.046881
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 25.63,
+          "prev_price": 25.63,
+          "pnl": 0.0,
+          "weight": 0.044867
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 22.57,
+          "prev_price": 22.57,
+          "pnl": 0.0,
+          "weight": 0.039511
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.04,
+          "prev_price": 4.04,
+          "pnl": 0.0,
+          "weight": 0.046178
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 25.31,
+          "prev_price": 25.31,
+          "pnl": 0.0,
+          "weight": 0.054732
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 30.49,
+          "prev_price": 30.49,
+          "pnl": 0.0,
+          "weight": 0.047096
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 23.05,
+          "prev_price": 23.05,
+          "pnl": 0.0,
+          "weight": 0.052219
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.89,
+          "prev_price": 9.89,
+          "pnl": 0.0,
+          "weight": 0.054995
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.63,
+          "prev_price": 13.63,
+          "pnl": 0.0,
+          "weight": 0.049124
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.23,
+          "prev_price": 17.23,
+          "pnl": 0.0,
+          "weight": 0.049679
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.53,
+          "prev_price": 11.53,
+          "pnl": 0.0,
+          "weight": 0.045118
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 8.01,
+          "prev_price": 8.01,
+          "pnl": 0.0,
+          "weight": 0.051964
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 146.7,
+          "prev_price": 146.7,
+          "pnl": 0.0,
+          "weight": 0.015106
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 12.96,
+          "prev_price": 12.96,
+          "pnl": 0.0,
+          "weight": 0.04404
+        }
+      }
+    },
+    {
+      "trade_date": "2024-06-12",
+      "nav": 0.9716800999999998,
+      "total_value": 971680.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 971507.0,
+      "drawdown": -0.05049421190739434,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.32,
+          "prev_price": 9.32,
+          "pnl": 0.0,
+          "weight": 0.048917
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 49.9,
+          "prev_price": 49.9,
+          "pnl": 0.0,
+          "weight": 0.035948
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.22,
+          "prev_price": 7.22,
+          "pnl": 0.0,
+          "weight": 0.052756
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 14.42,
+          "prev_price": 14.42,
+          "pnl": 0.0,
+          "weight": 0.046005
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 61.19,
+          "prev_price": 61.19,
+          "pnl": 0.0,
+          "weight": 0.037784
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 8.54,
+          "prev_price": 8.54,
+          "pnl": 0.0,
+          "weight": 0.045702
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.28,
+          "prev_price": 4.28,
+          "pnl": 0.0,
+          "weight": 0.04625
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.25,
+          "prev_price": 7.25,
+          "pnl": 0.0,
+          "weight": 0.047006
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.35,
+          "prev_price": 4.35,
+          "pnl": 0.0,
+          "weight": 0.046111
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 26.22,
+          "prev_price": 26.22,
+          "pnl": 0.0,
+          "weight": 0.045873
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 22.57,
+          "prev_price": 22.57,
+          "pnl": 0.0,
+          "weight": 0.039487
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.0,
+          "prev_price": 4.0,
+          "pnl": 0.0,
+          "weight": 0.045694
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 24.78,
+          "prev_price": 24.78,
+          "pnl": 0.0,
+          "weight": 0.053555
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 30.25,
+          "prev_price": 30.25,
+          "pnl": 0.0,
+          "weight": 0.046697
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 22.78,
+          "prev_price": 22.78,
+          "pnl": 0.0,
+          "weight": 0.051577
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.74,
+          "prev_price": 9.74,
+          "pnl": 0.0,
+          "weight": 0.054129
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.99,
+          "prev_price": 13.99,
+          "pnl": 0.0,
+          "weight": 0.050392
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.43,
+          "prev_price": 17.43,
+          "pnl": 0.0,
+          "weight": 0.050226
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.58,
+          "prev_price": 11.58,
+          "pnl": 0.0,
+          "weight": 0.045287
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.89,
+          "prev_price": 7.89,
+          "pnl": 0.0,
+          "weight": 0.051156
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 145.59,
+          "prev_price": 145.59,
+          "pnl": 0.0,
+          "weight": 0.014983
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.04,
+          "prev_price": 13.04,
+          "pnl": 0.0,
+          "weight": 0.044286
+        }
+      }
+    },
+    {
+      "trade_date": "2024-06-13",
+      "nav": 0.9602050999999998,
+      "total_value": 960205.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 960032.0,
+      "drawdown": -0.06170734565209351,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.24,
+          "prev_price": 9.24,
+          "pnl": 0.0,
+          "weight": 0.049077
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 48.56,
+          "prev_price": 48.56,
+          "pnl": 0.0,
+          "weight": 0.035401
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 6.99,
+          "prev_price": 6.99,
+          "pnl": 0.0,
+          "weight": 0.051686
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 14.15,
+          "prev_price": 14.15,
+          "pnl": 0.0,
+          "weight": 0.045683
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 59.95,
+          "prev_price": 59.95,
+          "pnl": 0.0,
+          "weight": 0.037461
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 8.4,
+          "prev_price": 8.4,
+          "pnl": 0.0,
+          "weight": 0.04549
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.3,
+          "prev_price": 4.3,
+          "pnl": 0.0,
+          "weight": 0.047021
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.09,
+          "prev_price": 7.09,
+          "pnl": 0.0,
+          "weight": 0.046518
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.29,
+          "prev_price": 4.29,
+          "pnl": 0.0,
+          "weight": 0.046018
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 26.4,
+          "prev_price": 26.4,
+          "pnl": 0.0,
+          "weight": 0.04674
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 22.19,
+          "prev_price": 22.19,
+          "pnl": 0.0,
+          "weight": 0.039286
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 3.94,
+          "prev_price": 3.94,
+          "pnl": 0.0,
+          "weight": 0.045547
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 24.74,
+          "prev_price": 24.74,
+          "pnl": 0.0,
+          "weight": 0.054107
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 29.92,
+          "prev_price": 29.92,
+          "pnl": 0.0,
+          "weight": 0.04674
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 23.23,
+          "prev_price": 23.23,
+          "pnl": 0.0,
+          "weight": 0.053224
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.35,
+          "prev_price": 9.35,
+          "pnl": 0.0,
+          "weight": 0.052583
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.81,
+          "prev_price": 13.81,
+          "pnl": 0.0,
+          "weight": 0.050338
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.31,
+          "prev_price": 17.31,
+          "pnl": 0.0,
+          "weight": 0.050477
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.66,
+          "prev_price": 11.66,
+          "pnl": 0.0,
+          "weight": 0.046144
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.71,
+          "prev_price": 7.71,
+          "pnl": 0.0,
+          "weight": 0.050586
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 143.18,
+          "prev_price": 143.18,
+          "pnl": 0.0,
+          "weight": 0.014911
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.03,
+          "prev_price": 13.03,
+          "pnl": 0.0,
+          "weight": 0.044781
+        }
+      }
+    },
+    {
+      "trade_date": "2024-06-14",
+      "nav": 0.9627740999999999,
+      "total_value": 962774.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 962601.0,
+      "drawdown": -0.05919697174445668,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.34,
+          "prev_price": 9.34,
+          "pnl": 0.0,
+          "weight": 0.049476
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 49.4,
+          "prev_price": 49.4,
+          "pnl": 0.0,
+          "weight": 0.035917
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 6.86,
+          "prev_price": 6.86,
+          "pnl": 0.0,
+          "weight": 0.050589
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 14.59,
+          "prev_price": 14.59,
+          "pnl": 0.0,
+          "weight": 0.046978
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 61.64,
+          "prev_price": 61.64,
+          "pnl": 0.0,
+          "weight": 0.038414
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 8.32,
+          "prev_price": 8.32,
+          "pnl": 0.0,
+          "weight": 0.044937
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.35,
+          "prev_price": 4.35,
+          "pnl": 0.0,
+          "weight": 0.047441
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.16,
+          "prev_price": 7.16,
+          "pnl": 0.0,
+          "weight": 0.046852
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.29,
+          "prev_price": 4.29,
+          "pnl": 0.0,
+          "weight": 0.045896
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 26.52,
+          "prev_price": 26.52,
+          "pnl": 0.0,
+          "weight": 0.046827
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 22.56,
+          "prev_price": 22.56,
+          "pnl": 0.0,
+          "weight": 0.039835
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 3.99,
+          "prev_price": 3.99,
+          "pnl": 0.0,
+          "weight": 0.046001
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 24.02,
+          "prev_price": 24.02,
+          "pnl": 0.0,
+          "weight": 0.052392
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 29.68,
+          "prev_price": 29.68,
+          "pnl": 0.0,
+          "weight": 0.046241
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 22.86,
+          "prev_price": 22.86,
+          "pnl": 0.0,
+          "weight": 0.052237
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.42,
+          "prev_price": 9.42,
+          "pnl": 0.0,
+          "weight": 0.052835
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 13.38,
+          "prev_price": 13.38,
+          "pnl": 0.0,
+          "weight": 0.048641
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.06,
+          "prev_price": 17.06,
+          "pnl": 0.0,
+          "weight": 0.049615
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.81,
+          "prev_price": 11.81,
+          "pnl": 0.0,
+          "weight": 0.046613
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.94,
+          "prev_price": 7.94,
+          "pnl": 0.0,
+          "weight": 0.051956
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 143.29,
+          "prev_price": 143.29,
+          "pnl": 0.0,
+          "weight": 0.014883
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.2,
+          "prev_price": 13.2,
+          "pnl": 0.0,
+          "weight": 0.045244
+        }
+      }
+    },
+    {
+      "trade_date": "2024-06-17",
+      "nav": 0.9566460999999998,
+      "total_value": 956646.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 956473.0,
+      "drawdown": -0.06518512717692,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.26,
+          "prev_price": 9.26,
+          "pnl": 0.0,
+          "weight": 0.049366
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 49.28,
+          "prev_price": 49.28,
+          "pnl": 0.0,
+          "weight": 0.036059
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 6.88,
+          "prev_price": 6.88,
+          "pnl": 0.0,
+          "weight": 0.051062
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 14.37,
+          "prev_price": 14.37,
+          "pnl": 0.0,
+          "weight": 0.046566
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 60.56,
+          "prev_price": 60.56,
+          "pnl": 0.0,
+          "weight": 0.037983
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 8.15,
+          "prev_price": 8.15,
+          "pnl": 0.0,
+          "weight": 0.044301
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.4,
+          "prev_price": 4.4,
+          "pnl": 0.0,
+          "weight": 0.048294
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 6.97,
+          "prev_price": 6.97,
+          "pnl": 0.0,
+          "weight": 0.045901
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.25,
+          "prev_price": 4.25,
+          "pnl": 0.0,
+          "weight": 0.045759
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 26.45,
+          "prev_price": 26.45,
+          "pnl": 0.0,
+          "weight": 0.047003
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 22.44,
+          "prev_price": 22.44,
+          "pnl": 0.0,
+          "weight": 0.039877
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.0,
+          "prev_price": 4.0,
+          "pnl": 0.0,
+          "weight": 0.046412
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 24.36,
+          "prev_price": 24.36,
+          "pnl": 0.0,
+          "weight": 0.053474
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 29.51,
+          "prev_price": 29.51,
+          "pnl": 0.0,
+          "weight": 0.046271
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 22.42,
+          "prev_price": 22.42,
+          "pnl": 0.0,
+          "weight": 0.051559
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.45,
+          "prev_price": 9.45,
+          "pnl": 0.0,
+          "weight": 0.053343
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 12.94,
+          "prev_price": 12.94,
+          "pnl": 0.0,
+          "weight": 0.047342
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.0,
+          "prev_price": 17.0,
+          "pnl": 0.0,
+          "weight": 0.049757
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.82,
+          "prev_price": 11.82,
+          "pnl": 0.0,
+          "weight": 0.046952
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.65,
+          "prev_price": 7.65,
+          "pnl": 0.0,
+          "weight": 0.050379
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 144.53,
+          "prev_price": 144.53,
+          "pnl": 0.0,
+          "weight": 0.015108
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.64,
+          "prev_price": 13.64,
+          "pnl": 0.0,
+          "weight": 0.047052
+        }
+      }
+    },
+    {
+      "trade_date": "2024-06-18",
+      "nav": 0.9647350999999998,
+      "total_value": 964735.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 964562.0,
+      "drawdown": -0.057280722918891976,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.24,
+          "prev_price": 9.24,
+          "pnl": 0.0,
+          "weight": 0.048847
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 49.54,
+          "prev_price": 49.54,
+          "pnl": 0.0,
+          "weight": 0.035946
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.02,
+          "prev_price": 7.02,
+          "pnl": 0.0,
+          "weight": 0.051664
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 14.42,
+          "prev_price": 14.42,
+          "pnl": 0.0,
+          "weight": 0.046336
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 60.87,
+          "prev_price": 60.87,
+          "pnl": 0.0,
+          "weight": 0.037857
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 8.22,
+          "prev_price": 8.22,
+          "pnl": 0.0,
+          "weight": 0.044306
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.39,
+          "prev_price": 4.39,
+          "pnl": 0.0,
+          "weight": 0.04778
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.11,
+          "prev_price": 7.11,
+          "pnl": 0.0,
+          "weight": 0.04643
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.35,
+          "prev_price": 4.35,
+          "pnl": 0.0,
+          "weight": 0.046443
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 27.02,
+          "prev_price": 27.02,
+          "pnl": 0.0,
+          "weight": 0.047613
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 22.35,
+          "prev_price": 22.35,
+          "pnl": 0.0,
+          "weight": 0.039384
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.06,
+          "prev_price": 4.06,
+          "pnl": 0.0,
+          "weight": 0.046713
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 24.42,
+          "prev_price": 24.42,
+          "pnl": 0.0,
+          "weight": 0.053157
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 29.16,
+          "prev_price": 29.16,
+          "pnl": 0.0,
+          "weight": 0.045339
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 23.94,
+          "prev_price": 23.94,
+          "pnl": 0.0,
+          "weight": 0.054593
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.47,
+          "prev_price": 9.47,
+          "pnl": 0.0,
+          "weight": 0.053007
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 12.91,
+          "prev_price": 12.91,
+          "pnl": 0.0,
+          "weight": 0.046837
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.05,
+          "prev_price": 17.05,
+          "pnl": 0.0,
+          "weight": 0.049485
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.83,
+          "prev_price": 11.83,
+          "pnl": 0.0,
+          "weight": 0.046597
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.53,
+          "prev_price": 7.53,
+          "pnl": 0.0,
+          "weight": 0.049173
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 141.47,
+          "prev_price": 141.47,
+          "pnl": 0.0,
+          "weight": 0.014664
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.93,
+          "prev_price": 13.93,
+          "pnl": 0.0,
+          "weight": 0.047649
+        }
+      }
+    },
+    {
+      "trade_date": "2024-06-19",
+      "nav": 0.9562740999999999,
+      "total_value": 956274.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 956101.0,
+      "drawdown": -0.06554863791792456,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.31,
+          "prev_price": 9.31,
+          "pnl": 0.0,
+          "weight": 0.049652
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 49.12,
+          "prev_price": 49.12,
+          "pnl": 0.0,
+          "weight": 0.035956
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 6.97,
+          "prev_price": 6.97,
+          "pnl": 0.0,
+          "weight": 0.05175
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 14.18,
+          "prev_price": 14.18,
+          "pnl": 0.0,
+          "weight": 0.045968
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 60.03,
+          "prev_price": 60.03,
+          "pnl": 0.0,
+          "weight": 0.037665
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 8.12,
+          "prev_price": 8.12,
+          "pnl": 0.0,
+          "weight": 0.044155
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.39,
+          "prev_price": 4.39,
+          "pnl": 0.0,
+          "weight": 0.048203
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.02,
+          "prev_price": 7.02,
+          "pnl": 0.0,
+          "weight": 0.046248
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.29,
+          "prev_price": 4.29,
+          "pnl": 0.0,
+          "weight": 0.046207
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 26.93,
+          "prev_price": 26.93,
+          "pnl": 0.0,
+          "weight": 0.047874
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 22.27,
+          "prev_price": 22.27,
+          "pnl": 0.0,
+          "weight": 0.03959
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.06,
+          "prev_price": 4.06,
+          "pnl": 0.0,
+          "weight": 0.047127
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 24.13,
+          "prev_price": 24.13,
+          "pnl": 0.0,
+          "weight": 0.05299
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 28.63,
+          "prev_price": 28.63,
+          "pnl": 0.0,
+          "weight": 0.044909
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 23.72,
+          "prev_price": 23.72,
+          "pnl": 0.0,
+          "weight": 0.05457
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.34,
+          "prev_price": 9.34,
+          "pnl": 0.0,
+          "weight": 0.052742
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 12.85,
+          "prev_price": 12.85,
+          "pnl": 0.0,
+          "weight": 0.047031
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 16.78,
+          "prev_price": 16.78,
+          "pnl": 0.0,
+          "weight": 0.049132
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.73,
+          "prev_price": 11.73,
+          "pnl": 0.0,
+          "weight": 0.046612
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.47,
+          "prev_price": 7.47,
+          "pnl": 0.0,
+          "weight": 0.049213
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 140.62,
+          "prev_price": 140.62,
+          "pnl": 0.0,
+          "weight": 0.014705
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.77,
+          "prev_price": 13.77,
+          "pnl": 0.0,
+          "weight": 0.047519
+        }
+      }
+    },
+    {
+      "trade_date": "2024-06-20",
+      "nav": 0.9407210999999999,
+      "total_value": 940721.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 940548.0,
+      "drawdown": -0.08074670930191641,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.21,
+          "prev_price": 9.21,
+          "pnl": 0.0,
+          "weight": 0.049931
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 48.14,
+          "prev_price": 48.14,
+          "pnl": 0.0,
+          "weight": 0.035821
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 6.89,
+          "prev_price": 6.89,
+          "pnl": 0.0,
+          "weight": 0.052002
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 13.94,
+          "prev_price": 13.94,
+          "pnl": 0.0,
+          "weight": 0.045937
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 60.5,
+          "prev_price": 60.5,
+          "pnl": 0.0,
+          "weight": 0.038587
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 8.0,
+          "prev_price": 8.0,
+          "pnl": 0.0,
+          "weight": 0.044221
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.35,
+          "prev_price": 4.35,
+          "pnl": 0.0,
+          "weight": 0.048553
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 6.96,
+          "prev_price": 6.96,
+          "pnl": 0.0,
+          "weight": 0.046611
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.15,
+          "prev_price": 4.15,
+          "pnl": 0.0,
+          "weight": 0.045439
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 26.17,
+          "prev_price": 26.17,
+          "pnl": 0.0,
+          "weight": 0.047292
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 22.19,
+          "prev_price": 22.19,
+          "pnl": 0.0,
+          "weight": 0.0401
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 3.98,
+          "prev_price": 3.98,
+          "pnl": 0.0,
+          "weight": 0.046962
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 23.37,
+          "prev_price": 23.37,
+          "pnl": 0.0,
+          "weight": 0.05217
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 27.72,
+          "prev_price": 27.72,
+          "pnl": 0.0,
+          "weight": 0.0442
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 22.98,
+          "prev_price": 22.98,
+          "pnl": 0.0,
+          "weight": 0.053742
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.36,
+          "prev_price": 9.36,
+          "pnl": 0.0,
+          "weight": 0.053729
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 12.85,
+          "prev_price": 12.85,
+          "pnl": 0.0,
+          "weight": 0.047809
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 16.58,
+          "prev_price": 16.58,
+          "pnl": 0.0,
+          "weight": 0.049349
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.59,
+          "prev_price": 11.59,
+          "pnl": 0.0,
+          "weight": 0.046817
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.21,
+          "prev_price": 7.21,
+          "pnl": 0.0,
+          "weight": 0.048285
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 138.85,
+          "prev_price": 138.85,
+          "pnl": 0.0,
+          "weight": 0.01476
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.54,
+          "prev_price": 13.54,
+          "pnl": 0.0,
+          "weight": 0.047498
+        }
+      }
+    },
+    {
+      "trade_date": "2024-06-21",
+      "nav": 0.9477780999999998,
+      "total_value": 947778.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 947605.0,
+      "drawdown": -0.07385075419635286,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.16,
+          "prev_price": 9.16,
+          "pnl": 0.0,
+          "weight": 0.04929
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 48.14,
+          "prev_price": 48.14,
+          "pnl": 0.0,
+          "weight": 0.035555
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.02,
+          "prev_price": 7.02,
+          "pnl": 0.0,
+          "weight": 0.052588
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 14.02,
+          "prev_price": 14.02,
+          "pnl": 0.0,
+          "weight": 0.045857
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 59.98,
+          "prev_price": 59.98,
+          "pnl": 0.0,
+          "weight": 0.037971
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 8.02,
+          "prev_price": 8.02,
+          "pnl": 0.0,
+          "weight": 0.044002
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.32,
+          "prev_price": 4.32,
+          "pnl": 0.0,
+          "weight": 0.047859
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.07,
+          "prev_price": 7.07,
+          "pnl": 0.0,
+          "weight": 0.046995
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.19,
+          "prev_price": 4.19,
+          "pnl": 0.0,
+          "weight": 0.045535
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 26.66,
+          "prev_price": 26.66,
+          "pnl": 0.0,
+          "weight": 0.047819
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 21.98,
+          "prev_price": 21.98,
+          "pnl": 0.0,
+          "weight": 0.039425
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.0,
+          "prev_price": 4.0,
+          "pnl": 0.0,
+          "weight": 0.046846
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 23.91,
+          "prev_price": 23.91,
+          "pnl": 0.0,
+          "weight": 0.052978
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 27.55,
+          "prev_price": 27.55,
+          "pnl": 0.0,
+          "weight": 0.043602
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 23.19,
+          "prev_price": 23.19,
+          "pnl": 0.0,
+          "weight": 0.053829
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.59,
+          "prev_price": 9.59,
+          "pnl": 0.0,
+          "weight": 0.054639
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 12.75,
+          "prev_price": 12.75,
+          "pnl": 0.0,
+          "weight": 0.047084
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.5,
+          "prev_price": 17.5,
+          "pnl": 0.0,
+          "weight": 0.0517
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.58,
+          "prev_price": 11.58,
+          "pnl": 0.0,
+          "weight": 0.046429
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.19,
+          "prev_price": 7.19,
+          "pnl": 0.0,
+          "weight": 0.047793
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 137.38,
+          "prev_price": 137.38,
+          "pnl": 0.0,
+          "weight": 0.014495
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.65,
+          "prev_price": 13.65,
+          "pnl": 0.0,
+          "weight": 0.047527
+        }
+      }
+    },
+    {
+      "trade_date": "2024-06-24",
+      "nav": 0.9310030999999999,
+      "total_value": 931003.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 930830.0,
+      "drawdown": -0.09024293882095662,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.14,
+          "prev_price": 9.14,
+          "pnl": 0.0,
+          "weight": 0.050069
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 47.84,
+          "prev_price": 47.84,
+          "pnl": 0.0,
+          "weight": 0.03597
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 6.97,
+          "prev_price": 6.97,
+          "pnl": 0.0,
+          "weight": 0.053154
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 13.88,
+          "prev_price": 13.88,
+          "pnl": 0.0,
+          "weight": 0.046217
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 60.91,
+          "prev_price": 60.91,
+          "pnl": 0.0,
+          "weight": 0.039254
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 7.88,
+          "prev_price": 7.88,
+          "pnl": 0.0,
+          "weight": 0.044013
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.25,
+          "prev_price": 4.25,
+          "pnl": 0.0,
+          "weight": 0.047932
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 6.97,
+          "prev_price": 6.97,
+          "pnl": 0.0,
+          "weight": 0.047165
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.18,
+          "prev_price": 4.18,
+          "pnl": 0.0,
+          "weight": 0.046245
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 25.7,
+          "prev_price": 25.7,
+          "pnl": 0.0,
+          "weight": 0.046928
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 21.77,
+          "prev_price": 21.77,
+          "pnl": 0.0,
+          "weight": 0.039752
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 3.91,
+          "prev_price": 3.91,
+          "pnl": 0.0,
+          "weight": 0.046617
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 23.48,
+          "prev_price": 23.48,
+          "pnl": 0.0,
+          "weight": 0.052962
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 27.48,
+          "prev_price": 27.48,
+          "pnl": 0.0,
+          "weight": 0.044275
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 22.04,
+          "prev_price": 22.04,
+          "pnl": 0.0,
+          "weight": 0.052081
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.23,
+          "prev_price": 9.23,
+          "pnl": 0.0,
+          "weight": 0.053536
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 12.59,
+          "prev_price": 12.59,
+          "pnl": 0.0,
+          "weight": 0.047331
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 16.94,
+          "prev_price": 16.94,
+          "pnl": 0.0,
+          "weight": 0.050947
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.5,
+          "prev_price": 11.5,
+          "pnl": 0.0,
+          "weight": 0.046939
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 6.99,
+          "prev_price": 6.99,
+          "pnl": 0.0,
+          "weight": 0.047301
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 136.79,
+          "prev_price": 136.79,
+          "pnl": 0.0,
+          "weight": 0.014693
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.1,
+          "prev_price": 13.1,
+          "pnl": 0.0,
+          "weight": 0.046434
+        }
+      }
+    },
+    {
+      "trade_date": "2024-06-25",
+      "nav": 0.9297880999999999,
+      "total_value": 929788.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 929615.0,
+      "drawdown": -0.09143021180568944,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.24,
+          "prev_price": 9.24,
+          "pnl": 0.0,
+          "weight": 0.050683
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 47.99,
+          "prev_price": 47.99,
+          "pnl": 0.0,
+          "weight": 0.03613
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.1,
+          "prev_price": 7.1,
+          "pnl": 0.0,
+          "weight": 0.054217
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 14.53,
+          "prev_price": 14.53,
+          "pnl": 0.0,
+          "weight": 0.048444
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 61.32,
+          "prev_price": 61.32,
+          "pnl": 0.0,
+          "weight": 0.03957
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 7.93,
+          "prev_price": 7.93,
+          "pnl": 0.0,
+          "weight": 0.04435
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.18,
+          "prev_price": 4.18,
+          "pnl": 0.0,
+          "weight": 0.047204
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 7.01,
+          "prev_price": 7.01,
+          "pnl": 0.0,
+          "weight": 0.047498
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.16,
+          "prev_price": 4.16,
+          "pnl": 0.0,
+          "weight": 0.046084
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 25.16,
+          "prev_price": 25.16,
+          "pnl": 0.0,
+          "weight": 0.046002
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 21.44,
+          "prev_price": 21.44,
+          "pnl": 0.0,
+          "weight": 0.0392
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 3.86,
+          "prev_price": 3.86,
+          "pnl": 0.0,
+          "weight": 0.046081
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 23.08,
+          "prev_price": 23.08,
+          "pnl": 0.0,
+          "weight": 0.052128
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 27.38,
+          "prev_price": 27.38,
+          "pnl": 0.0,
+          "weight": 0.044171
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 21.38,
+          "prev_price": 21.38,
+          "pnl": 0.0,
+          "weight": 0.050588
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.18,
+          "prev_price": 9.18,
+          "pnl": 0.0,
+          "weight": 0.053315
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 12.8,
+          "prev_price": 12.8,
+          "pnl": 0.0,
+          "weight": 0.048183
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 16.79,
+          "prev_price": 16.79,
+          "pnl": 0.0,
+          "weight": 0.050562
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.35,
+          "prev_price": 11.35,
+          "pnl": 0.0,
+          "weight": 0.046387
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.11,
+          "prev_price": 7.11,
+          "pnl": 0.0,
+          "weight": 0.048175
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 137.68,
+          "prev_price": 137.68,
+          "pnl": 0.0,
+          "weight": 0.014808
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 12.97,
+          "prev_price": 12.97,
+          "pnl": 0.0,
+          "weight": 0.046033
+        }
+      }
+    },
+    {
+      "trade_date": "2024-06-26",
+      "nav": 0.9428870999999999,
+      "total_value": 942887.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 942714.0,
+      "drawdown": -0.07863013869703463,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.24,
+          "prev_price": 9.24,
+          "pnl": 0.0,
+          "weight": 0.049978
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 48.4,
+          "prev_price": 48.4,
+          "pnl": 0.0,
+          "weight": 0.035932
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 7.11,
+          "prev_price": 7.11,
+          "pnl": 0.0,
+          "weight": 0.053539
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 14.75,
+          "prev_price": 14.75,
+          "pnl": 0.0,
+          "weight": 0.048495
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 60.28,
+          "prev_price": 60.28,
+          "pnl": 0.0,
+          "weight": 0.038359
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 8.12,
+          "prev_price": 8.12,
+          "pnl": 0.0,
+          "weight": 0.044782
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.26,
+          "prev_price": 4.26,
+          "pnl": 0.0,
+          "weight": 0.047439
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 6.98,
+          "prev_price": 6.98,
+          "pnl": 0.0,
+          "weight": 0.046638
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.24,
+          "prev_price": 4.24,
+          "pnl": 0.0,
+          "weight": 0.046317
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 26.12,
+          "prev_price": 26.12,
+          "pnl": 0.0,
+          "weight": 0.047094
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 21.85,
+          "prev_price": 21.85,
+          "pnl": 0.0,
+          "weight": 0.039395
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 3.94,
+          "prev_price": 3.94,
+          "pnl": 0.0,
+          "weight": 0.046383
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 23.46,
+          "prev_price": 23.46,
+          "pnl": 0.0,
+          "weight": 0.05225
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 28.21,
+          "prev_price": 28.21,
+          "pnl": 0.0,
+          "weight": 0.044878
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 22.4,
+          "prev_price": 22.4,
+          "pnl": 0.0,
+          "weight": 0.052265
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.2,
+          "prev_price": 9.2,
+          "pnl": 0.0,
+          "weight": 0.052689
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 12.71,
+          "prev_price": 12.71,
+          "pnl": 0.0,
+          "weight": 0.04718
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.25,
+          "prev_price": 17.25,
+          "pnl": 0.0,
+          "weight": 0.051226
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.45,
+          "prev_price": 11.45,
+          "pnl": 0.0,
+          "weight": 0.046146
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.19,
+          "prev_price": 7.19,
+          "pnl": 0.0,
+          "weight": 0.048041
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 136.61,
+          "prev_price": 136.61,
+          "pnl": 0.0,
+          "weight": 0.014488
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.23,
+          "prev_price": 13.23,
+          "pnl": 0.0,
+          "weight": 0.046304
+        }
+      }
+    },
+    {
+      "trade_date": "2024-06-27",
+      "nav": 0.9274690999999998,
+      "total_value": 927469.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 927296.0,
+      "drawdown": -0.0936962908605006,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.29,
+          "prev_price": 9.29,
+          "pnl": 0.0,
+          "weight": 0.051084
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 47.76,
+          "prev_price": 47.76,
+          "pnl": 0.0,
+          "weight": 0.036046
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 6.69,
+          "prev_price": 6.69,
+          "pnl": 0.0,
+          "weight": 0.051214
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 14.78,
+          "prev_price": 14.78,
+          "pnl": 0.0,
+          "weight": 0.049401
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 60.13,
+          "prev_price": 60.13,
+          "pnl": 0.0,
+          "weight": 0.038899
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 7.95,
+          "prev_price": 7.95,
+          "pnl": 0.0,
+          "weight": 0.044573
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.25,
+          "prev_price": 4.25,
+          "pnl": 0.0,
+          "weight": 0.048115
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 6.72,
+          "prev_price": 6.72,
+          "pnl": 0.0,
+          "weight": 0.045647
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.2,
+          "prev_price": 4.2,
+          "pnl": 0.0,
+          "weight": 0.046643
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 25.58,
+          "prev_price": 25.58,
+          "pnl": 0.0,
+          "weight": 0.046887
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 21.3,
+          "prev_price": 21.3,
+          "pnl": 0.0,
+          "weight": 0.039042
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 3.99,
+          "prev_price": 3.99,
+          "pnl": 0.0,
+          "weight": 0.047753
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 22.96,
+          "prev_price": 22.96,
+          "pnl": 0.0,
+          "weight": 0.051987
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 27.27,
+          "prev_price": 27.27,
+          "pnl": 0.0,
+          "weight": 0.044104
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 21.79,
+          "prev_price": 21.79,
+          "pnl": 0.0,
+          "weight": 0.051687
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.1,
+          "prev_price": 9.1,
+          "pnl": 0.0,
+          "weight": 0.052983
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 12.38,
+          "prev_price": 12.38,
+          "pnl": 0.0,
+          "weight": 0.046719
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.29,
+          "prev_price": 17.29,
+          "pnl": 0.0,
+          "weight": 0.052198
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.4,
+          "prev_price": 11.4,
+          "pnl": 0.0,
+          "weight": 0.046708
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 7.0,
+          "prev_price": 7.0,
+          "pnl": 0.0,
+          "weight": 0.047549
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 135.47,
+          "prev_price": 135.47,
+          "pnl": 0.0,
+          "weight": 0.014606
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 12.92,
+          "prev_price": 12.92,
+          "pnl": 0.0,
+          "weight": 0.04597
+        }
+      }
+    },
+    {
+      "trade_date": "2024-06-28",
+      "nav": 0.9360600999999998,
+      "total_value": 936060.0999999999,
+      "cash": 173.09999999985314,
+      "position_value": 935887.0,
+      "drawdown": -0.08530134253799859,
+      "num_positions": 22,
+      "position_pnl": {
+        "000001.SZ": {
+          "shares": 5100,
+          "price": 9.31,
+          "prev_price": 9.31,
+          "pnl": 0.0,
+          "weight": 0.050724
+        },
+        "000538.SZ": {
+          "shares": 700,
+          "price": 47.73,
+          "prev_price": 47.73,
+          "pnl": 0.0,
+          "weight": 0.035693
+        },
+        "000425.SZ": {
+          "shares": 7100,
+          "price": 6.8,
+          "prev_price": 6.8,
+          "pnl": 0.0,
+          "weight": 0.051578
+        },
+        "000338.SZ": {
+          "shares": 3100,
+          "price": 15.17,
+          "prev_price": 15.17,
+          "pnl": 0.0,
+          "weight": 0.050239
+        },
+        "000333.SZ": {
+          "shares": 600,
+          "price": 60.53,
+          "prev_price": 60.53,
+          "pnl": 0.0,
+          "weight": 0.038799
+        },
+        "000301.SZ": {
+          "shares": 5200,
+          "price": 7.97,
+          "prev_price": 7.97,
+          "pnl": 0.0,
+          "weight": 0.044275
+        },
+        "000166.SZ": {
+          "shares": 10500,
+          "price": 4.16,
+          "prev_price": 4.16,
+          "pnl": 0.0,
+          "weight": 0.046664
+        },
+        "000157.SZ": {
+          "shares": 6300,
+          "price": 6.86,
+          "prev_price": 6.86,
+          "pnl": 0.0,
+          "weight": 0.04617
+        },
+        "000100.SZ": {
+          "shares": 10300,
+          "price": 4.27,
+          "prev_price": 4.27,
+          "pnl": 0.0,
+          "weight": 0.046985
+        },
+        "000063.SZ": {
+          "shares": 1700,
+          "price": 26.67,
+          "prev_price": 26.67,
+          "pnl": 0.0,
+          "weight": 0.048436
+        },
+        "000408.SZ": {
+          "shares": 1700,
+          "price": 21.32,
+          "prev_price": 21.32,
+          "pnl": 0.0,
+          "weight": 0.03872
+        },
+        "000725.SZ": {
+          "shares": 11100,
+          "price": 4.04,
+          "prev_price": 4.04,
+          "pnl": 0.0,
+          "weight": 0.047907
+        },
+        "000768.SZ": {
+          "shares": 2100,
+          "price": 23.91,
+          "prev_price": 23.91,
+          "pnl": 0.0,
+          "weight": 0.053641
+        },
+        "000963.SZ": {
+          "shares": 1500,
+          "price": 26.53,
+          "prev_price": 26.53,
+          "pnl": 0.0,
+          "weight": 0.042513
+        },
+        "000938.SZ": {
+          "shares": 2200,
+          "price": 22.28,
+          "prev_price": 22.28,
+          "pnl": 0.0,
+          "weight": 0.052364
+        },
+        "000876.SZ": {
+          "shares": 5400,
+          "price": 9.12,
+          "prev_price": 9.12,
+          "pnl": 0.0,
+          "weight": 0.052612
+        },
+        "000807.SZ": {
+          "shares": 3500,
+          "price": 12.78,
+          "prev_price": 12.78,
+          "pnl": 0.0,
+          "weight": 0.047785
+        },
+        "000792.SZ": {
+          "shares": 2800,
+          "price": 17.45,
+          "prev_price": 17.45,
+          "pnl": 0.0,
+          "weight": 0.052198
+        },
+        "000776.SZ": {
+          "shares": 3800,
+          "price": 11.27,
+          "prev_price": 11.27,
+          "pnl": 0.0,
+          "weight": 0.045751
+        },
+        "000002.SZ": {
+          "shares": 6300,
+          "price": 6.93,
+          "prev_price": 6.93,
+          "pnl": 0.0,
+          "weight": 0.046641
+        },
+        "000568.SZ": {
+          "shares": 100,
+          "price": 130.78,
+          "prev_price": 130.78,
+          "pnl": 0.0,
+          "weight": 0.013971
+        },
+        "000625.SZ": {
+          "shares": 3300,
+          "price": 13.09,
+          "prev_price": 13.09,
+          "pnl": 0.0,
+          "weight": 0.046148
+        }
+      }
+    }
+  ]
+}

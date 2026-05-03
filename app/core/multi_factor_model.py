@@ -74,10 +74,46 @@ class MultiFactorModel:
         )
 
     def calculate_factors(
-        self, ts_codes: list[str], trade_date: date, lookback_days: int = 252
+        self, ts_codes: list[str], trade_date: date, lookback_days: int = 252, batch_size: int = 50
     ) -> pd.DataFrame:
         """
         计算因子值
+
+        Args:
+            ts_codes: 股票代码列表
+            trade_date: 计算日期
+            lookback_days: 回溯天数
+            batch_size: 每批处理的股票数量，用于控制内存使用
+
+        Returns:
+            DataFrame with columns: ts_code, factor1, factor2, ...
+        """
+        logger.info(f"Calculating factors for {len(ts_codes)} stocks on {trade_date}")
+
+        # 如果股票数量超过batch_size，分批处理
+        if len(ts_codes) > batch_size:
+            logger.info(f"Processing in batches of {batch_size} stocks to reduce memory usage")
+            all_results = []
+            for i in range(0, len(ts_codes), batch_size):
+                batch = ts_codes[i:i+batch_size]
+                logger.info(f"Processing batch {i//batch_size + 1}/{(len(ts_codes)-1)//batch_size + 1}: {len(batch)} stocks")
+                batch_result = self._calculate_factors_batch(batch, trade_date, lookback_days)
+                if not batch_result.empty:
+                    all_results.append(batch_result)
+
+            if all_results:
+                return pd.concat(all_results, ignore_index=True)
+            else:
+                return pd.DataFrame()
+
+        # 股票数量较少，直接处理
+        return self._calculate_factors_batch(ts_codes, trade_date, lookback_days)
+
+    def _calculate_factors_batch(
+        self, ts_codes: list[str], trade_date: date, lookback_days: int = 252
+    ) -> pd.DataFrame:
+        """
+        计算单批股票的因子值（内部方法）
 
         Args:
             ts_codes: 股票代码列表
@@ -87,7 +123,6 @@ class MultiFactorModel:
         Returns:
             DataFrame with columns: ts_code, factor1, factor2, ...
         """
-        logger.info(f"Calculating factors for {len(ts_codes)} stocks on {trade_date}")
 
         # 获取所有需要的数据
         from sqlalchemy import text
@@ -118,10 +153,20 @@ class MultiFactorModel:
             except:
                 pass
 
-        # 2. 获取财务数据
+        # 2. 获取财务数据 - 只查询需要的字段，避免加载所有列
         financial_query = text(
             """
-            SELECT * FROM stock_financial
+            SELECT ts_code, ann_date, end_date,
+                   total_revenue, operating_revenue, operating_cost, gross_profit,
+                   total_profit, net_profit, deduct_net_profit,
+                   total_assets, total_liabilities, total_equity,
+                   current_assets, current_liabilities,
+                   operating_cash_flow, goodwill,
+                   roe, roa, gross_profit_margin, net_profit_margin, debt_to_assets,
+                   total_market_cap, circ_market_cap, pe_ttm, pb, ps_ttm,
+                   revenue_ttm, net_profit_ttm, ocf_ttm,
+                   revenue_yoy, net_profit_yoy
+            FROM stock_financial
             WHERE ts_code = ANY(:ts_codes)
                 AND ann_date <= :trade_date
                 AND ann_date >= :start_date
@@ -205,6 +250,12 @@ class MultiFactorModel:
                 result_df[col] = pd.to_numeric(result_df[col], errors='coerce')
 
         logger.info(f"Calculated {len(result_df.columns)-1} factors for {len(result_df)} stocks")
+
+        # 清理内存
+        del price_df, financial_df, all_factors
+        import gc
+        gc.collect()
+
         return result_df
 
     def preprocess_factors(

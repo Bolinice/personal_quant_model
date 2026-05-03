@@ -1388,6 +1388,7 @@ class ABShareBacktestEngine:
 
                     # 买入: 目标组合中的持仓 — 按目标权重分配资金
                     for ts_code, weight in target_w.items():
+                        weight = float(weight)  # 转换 Decimal 为 float
                         if weight < 1e-6:  # 权重极低则跳过，避免无效交易
                             continue
 
@@ -1396,17 +1397,17 @@ class ABShareBacktestEngine:
                         stock_info = price_data.get(stock_key, {}) if price_data else {}
                         # 使用次日开盘价成交(实盘真实)，回退到收盘价
                         if use_next_day_open:
-                            buy_price = stock_info.get("open", stock_info.get("close", 0))
+                            buy_price = float(stock_info.get("open", stock_info.get("close", 0)))
                         else:
-                            buy_price = stock_info.get("close", 0)
+                            buy_price = float(stock_info.get("close", 0))
 
                         if buy_price <= 0:
                             continue
 
                         # 计算已有持仓金额
-                        current_amount = 0
+                        current_amount = 0.0
                         if ts_code in state.positions:
-                            current_amount = state.positions[ts_code].shares * buy_price
+                            current_amount = float(state.positions[ts_code].shares) * buy_price
 
                         # 只在需要增仓时买入
                         if target_amount > current_amount * 1.05:  # 5%缓冲 — 偏离不足5%不调仓，降低摩擦成本和无效换手

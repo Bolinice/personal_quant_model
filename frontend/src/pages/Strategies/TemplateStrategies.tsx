@@ -193,7 +193,7 @@ export default function TemplateStrategies() {
 
                       {/* 关键指标网格 */}
                       <Grid container spacing={2}>
-                        <Grid item xs={6}>
+                        <Grid size={{ xs: 6 }}>
                           <Box
                             sx={{
                               p: 2,
@@ -220,7 +220,7 @@ export default function TemplateStrategies() {
                           </Box>
                         </Grid>
 
-                        <Grid item xs={6}>
+                        <Grid size={{ xs: 6 }}>
                           <Box
                             sx={{
                               p: 2,
@@ -247,7 +247,7 @@ export default function TemplateStrategies() {
                           </Box>
                         </Grid>
 
-                        <Grid item xs={6}>
+                        <Grid size={{ xs: 6 }}>
                           <Box
                             sx={{
                               p: 2,
@@ -274,7 +274,7 @@ export default function TemplateStrategies() {
                           </Box>
                         </Grid>
 
-                        <Grid item xs={6}>
+                        <Grid size={{ xs: 6 }}>
                           <Box
                             sx={{
                               p: 2,

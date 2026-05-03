@@ -89,7 +89,11 @@ class NotificationService:
         return count
 
     def send_alert_notification(self, alert: AlertLog, user_ids: list[int] | None = None) -> int:
-        """发送告警通知"""
+        """
+        发送告警通知（优化版）
+
+        优化：使用 bulk_insert_mappings 批量插入，消除N+1插入
+        """
         if not user_ids:
             # 默认发送给所有管理员
             from app.models.user import User
@@ -104,41 +108,78 @@ class NotificationService:
             )
             user_ids = [u.id for u in admins]
 
-        count = 0
-        for user_id in user_ids:
-            self.create_notification(
-                user_id=user_id,
-                title=f"[{alert.severity.upper()}] {alert.title}",
-                content=alert.message or "",
-                notification_type="alert",
-            )
-            count += 1
+        if not user_ids:
+            return 0
 
-        return count
+        # 批量插入通知（1次操作代替N次）
+        notifications = [
+            {
+                "user_id": user_id,
+                "title": f"[{alert.severity.upper()}] {alert.title}",
+                "content": alert.message or "",
+                "notification_type": "alert",
+                "status": "unread",
+                "created_at": datetime.now(tz=UTC),
+            }
+            for user_id in user_ids
+        ]
+
+        self.db.bulk_insert_mappings(Notification, notifications)
+        self.db.commit()
+
+        return len(notifications)
 
     def send_rebalance_notification(self, model_id: int, trade_date: str, user_ids: list[int]) -> int:
-        """发送调仓通知"""
-        count = 0
-        for user_id in user_ids:
-            self.create_notification(
-                user_id=user_id,
-                title=f"调仓信号 - {trade_date}",
-                content=f"模型 {model_id} 在 {trade_date} 生成了新的调仓信号",
-                notification_type="rebalance",
-            )
-            count += 1
-        return count
+        """
+        发送调仓通知（优化版）
+
+        优化：使用 bulk_insert_mappings 批量插入，消除N+1插入
+        """
+        if not user_ids:
+            return 0
+
+        # 批量插入通知（1次操作代替N次）
+        notifications = [
+            {
+                "user_id": user_id,
+                "title": f"调仓信号 - {trade_date}",
+                "content": f"模型 {model_id} 在 {trade_date} 生成了新的调仓信号",
+                "notification_type": "rebalance",
+                "status": "unread",
+                "created_at": datetime.now(tz=UTC),
+            }
+            for user_id in user_ids
+        ]
+
+        self.db.bulk_insert_mappings(Notification, notifications)
+        self.db.commit()
+
+        return len(notifications)
 
     def send_report_notification(self, report_id: int, title: str, user_ids: list[int]) -> int:
-        """发送报告通知"""
-        count = 0
-        for user_id in user_ids:
-            self.create_notification(
-                user_id=user_id,
-                title=f"新报告: {title}",
-                content="报告已生成",
-                notification_type="report",
-                link=f"/reports/{report_id}",
-            )
-            count += 1
-        return count
+        """
+        发送报告通知（优化版）
+
+        优化：使用 bulk_insert_mappings 批量插入，消除N+1插入
+        """
+        if not user_ids:
+            return 0
+
+        # 批量插入通知（1次操作代替N次）
+        notifications = [
+            {
+                "user_id": user_id,
+                "title": f"新报告: {title}",
+                "content": "报告已生成",
+                "notification_type": "report",
+                "link": f"/reports/{report_id}",
+                "status": "unread",
+                "created_at": datetime.now(tz=UTC),
+            }
+            for user_id in user_ids
+        ]
+
+        self.db.bulk_insert_mappings(Notification, notifications)
+        self.db.commit()
+
+        return len(notifications)

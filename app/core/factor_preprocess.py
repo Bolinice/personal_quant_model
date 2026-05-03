@@ -398,14 +398,59 @@ class FactorPreprocessor:
     # 中性化=回归取残差，残差天然均值≈0但方差≠1；若先标准化再做回归，
     # 回归后的残差不再均值为0/方差为1，标准化被破坏，因子间不可比。
 
-    def neutralize_industry(self, df: pd.DataFrame, value_col: str, industry_col: str) -> pd.Series:
+    def neutralize_industry(
+        self,
+        df: pd.DataFrame,
+        value_col: str,
+        industry_col: str,
+        trade_date: pd.Timestamp | None = None,
+        session=None
+    ) -> pd.Series:
         """
-        行业中性化
+        行业中性化（支持历史时点查询）
         符合ADD 6.3.5节: 对因子做行业哑变量回归，取残差
         无行业映射的股票标记为NaN，避免引入行业偏差
 
         x_i = α + Σ β_k * Industry_{i,k} + ε_i
+
+        Args:
+            df: 包含因子值和股票代码的DataFrame
+            value_col: 因子值列名
+            industry_col: 行业列名（如果df中已有）或将从数据库查询
+            trade_date: 交易日期，用于历史时点查询（如果industry_col不在df中）
+            session: 数据库会话（如果需要查询历史行业分类）
+
+        Returns:
+            中性化后的因子值序列
         """
+        # 如果df中没有行业列，且提供了trade_date和session，则查询历史行业分类
+        if industry_col not in df.columns and trade_date is not None and session is not None:
+            from app.repositories.industry_repo import IndustryRepository
+            from datetime import date
+
+            repo = IndustryRepository(session)
+            ts_codes = df['ts_code'].tolist() if 'ts_code' in df.columns else None
+
+            # 查询历史时点的行业分类
+            industry_df = repo.get_industry_at_date(
+                trade_date=trade_date.date() if isinstance(trade_date, pd.Timestamp) else trade_date,
+                ts_codes=ts_codes,
+                standard="sw",
+                level="L1"
+            )
+
+            # 合并到df中
+            if not industry_df.empty:
+                df = df.merge(
+                    industry_df[['ts_code', 'industry_name']],
+                    on='ts_code',
+                    how='left'
+                )
+                industry_col = 'industry_name'
+            else:
+                logger.warning(f"No industry data found for date {trade_date}")
+                return pd.Series(np.nan, index=df.index)
+
         # 识别无行业映射的股票
         has_industry = df[industry_col].notna()
 
@@ -467,13 +512,55 @@ class FactorPreprocessor:
         return df[value_col] - (slope * log_cap + intercept)
 
     def neutralize_industry_and_cap(
-        self, df: pd.DataFrame, value_col: str, industry_col: str, cap_col: str
+        self,
+        df: pd.DataFrame,
+        value_col: str,
+        industry_col: str,
+        cap_col: str,
+        trade_date: pd.Timestamp | None = None,
+        session=None
     ) -> pd.Series:
         """
-        行业和市值双重中性化
+        行业和市值双重中性化（支持历史时点查询）
         符合ADD 6.3.5节:
         x_i = α + β * log(MV_i) + Σ γ_k * Industry_{i,k} + ε_i
+
+        Args:
+            df: 包含因子值、股票代码和市值的DataFrame
+            value_col: 因子值列名
+            industry_col: 行业列名（如果df中已有）或将从数据库查询
+            cap_col: 市值列名
+            trade_date: 交易日期，用于历史时点查询
+            session: 数据库会话
+
+        Returns:
+            中性化后的因子值序列
         """
+        # 如果df中没有行业列，且提供了trade_date和session，则查询历史行业分类
+        if industry_col not in df.columns and trade_date is not None and session is not None:
+            from app.repositories.industry_repo import IndustryRepository
+
+            repo = IndustryRepository(session)
+            ts_codes = df['ts_code'].tolist() if 'ts_code' in df.columns else None
+
+            industry_df = repo.get_industry_at_date(
+                trade_date=trade_date.date() if isinstance(trade_date, pd.Timestamp) else trade_date,
+                ts_codes=ts_codes,
+                standard="sw",
+                level="L1"
+            )
+
+            if not industry_df.empty:
+                df = df.merge(
+                    industry_df[['ts_code', 'industry_name']],
+                    on='ts_code',
+                    how='left'
+                )
+                industry_col = 'industry_name'
+            else:
+                logger.warning(f"No industry data found for date {trade_date}")
+                return df[value_col]
+
         # 构建特征矩阵: 行业哑变量 + log(市值)
         industries = pd.get_dummies(df[industry_col], drop_first=True)
         log_cap = np.log(df[cap_col])

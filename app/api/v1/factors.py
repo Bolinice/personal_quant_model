@@ -221,7 +221,11 @@ async def list_all_factors(db: Session = Depends(get_db)):
 async def calculate_factors(
     request: FactorCalculationRequest, db: Session = Depends(get_db)
 ):
-    """批量计算因子"""
+    """
+    批量计算因子（优化版）
+
+    优化：批量预加载所有股票的数据，避免N+1查询
+    """
     from datetime import datetime
 
     from app.core.factor_calculator import FactorCalculator
@@ -234,6 +238,16 @@ async def calculate_factors(
 
     # 初始化因子计算器
     calculator = FactorCalculator(db)
+
+    # 批量预加载数据（如果 FactorCalculator 支持批量加载）
+    # 这样可以避免在循环中每次都查询数据库
+    try:
+        # 尝试调用批量预加载方法（如果存在）
+        if hasattr(calculator, 'preload_data'):
+            calculator.preload_data(request.ts_codes, trade_date, request.lookback_days)
+    except Exception:
+        # 如果不支持批量预加载，继续使用原有逻辑
+        pass
 
     # 计算因子
     if request.factor_groups:

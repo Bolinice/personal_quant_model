@@ -150,52 +150,104 @@ def generate_report(report_id: int, db: Session = None):
         calc9_date = report.report_date or datetime.now(tz=UTC).date()
 
         if report.report_type == "daily":
-            # 日报：汇总所有活跃模型表现
+            # 日报：汇总所有活跃模型表现（优化版：批量查询）
+            from sqlalchemy import func
+
             from app.models.models import Model, ModelPerformance
             from app.models.portfolios import Portfolio, PortfolioPosition
 
             active_models = db.query(Model).filter(Model.status == "active").all()
             content_parts.append(f"# 日报 {calc9_date}\n")
 
-            for model in active_models:
-                perf = (
+            if not active_models:
+                content_parts.append("无活跃模型\n")
+            else:
+                model_ids = [m.id for m in active_models]
+
+                # 批量查询所有模型的最新表现（1次查询）
+                subq = (
+                    db.query(
+                        ModelPerformance.model_id,
+                        func.max(ModelPerformance.trade_date).label("max_date")
+                    )
+                    .filter(ModelPerformance.model_id.in_(model_ids))
+                    .group_by(ModelPerformance.model_id)
+                    .subquery()
+                )
+
+                perf_list = (
                     db.query(ModelPerformance)
-                    .filter(
-                        ModelPerformance.model_id == model.id,
+                    .join(
+                        subq,
+                        (ModelPerformance.model_id == subq.c.model_id) &
+                        (ModelPerformance.trade_date == subq.c.max_date)
                     )
-                    .order_by(ModelPerformance.trade_date.desc())
-                    .first()
+                    .all()
+                )
+                perf_map = {p.model_id: p for p in perf_list}
+
+                # 批量查询所有模型的最新组合（1次查询）
+                subq2 = (
+                    db.query(
+                        Portfolio.model_id,
+                        func.max(Portfolio.trade_date).label("max_date")
+                    )
+                    .filter(Portfolio.model_id.in_(model_ids))
+                    .group_by(Portfolio.model_id)
+                    .subquery()
                 )
 
-                portfolio = (
+                portfolio_list = (
                     db.query(Portfolio)
-                    .filter(
-                        Portfolio.model_id == model.id,
+                    .join(
+                        subq2,
+                        (Portfolio.model_id == subq2.c.model_id) &
+                        (Portfolio.trade_date == subq2.c.max_date)
                     )
-                    .order_by(Portfolio.trade_date.desc())
-                    .first()
+                    .all()
                 )
+                portfolio_map = {p.model_id: p for p in portfolio_list}
 
-                pos_count = 0
-                if portfolio:
-                    pos_count = (
-                        db.query(PortfolioPosition).filter(PortfolioPosition.portfolio_id == portfolio.id).count()
+                # 批量查询所有组合的持仓数（1次查询）
+                portfolio_ids = [p.id for p in portfolio_list]
+                if portfolio_ids:
+                    position_counts = (
+                        db.query(
+                            PortfolioPosition.portfolio_id,
+                            func.count(PortfolioPosition.id).label("count")
+                        )
+                        .filter(PortfolioPosition.portfolio_id.in_(portfolio_ids))
+                        .group_by(PortfolioPosition.portfolio_id)
+                        .all()
                     )
+                    position_count_map = {pc[0]: pc[1] for pc in position_counts}
+                else:
+                    position_count_map = {}
 
-                dr = f"{perf.daily_return:.2%}" if perf and perf.daily_return else "N/A"
-                cr = f"{perf.cumulative_return:.2%}" if perf and perf.cumulative_return else "N/A"
-                dd = f"{perf.max_drawdown:.2%}" if perf and perf.max_drawdown else "N/A"
-                sr = f"{perf.sharpe_ratio:.2f}" if perf and perf.sharpe_ratio else "N/A"
+                # 构建报告内容（从内存中获取数据，无需查询）
+                for model in active_models:
+                    perf = perf_map.get(model.id)
+                    portfolio = portfolio_map.get(model.id)
+                    pos_count = 0
+                    if portfolio:
+                        pos_count = position_count_map.get(portfolio.id, 0)
 
-                content_parts.append(
-                    f"## {model.model_name}\n"
-                    f"- 日收益: {dr} | 累计收益: {cr}\n"
-                    f"- 最大回撤: {dd} | 夏普: {sr}\n"
-                    f"- 持仓数: {pos_count}\n"
-                )
+                    dr = f"{perf.daily_return:.2%}" if perf and perf.daily_return else "N/A"
+                    cr = f"{perf.cumulative_return:.2%}" if perf and perf.cumulative_return else "N/A"
+                    dd = f"{perf.max_drawdown:.2%}" if perf and perf.max_drawdown else "N/A"
+                    sr = f"{perf.sharpe_ratio:.2f}" if perf and perf.sharpe_ratio else "N/A"
+
+                    content_parts.append(
+                        f"## {model.model_name}\n"
+                        f"- 日收益: {dr} | 累计收益: {cr}\n"
+                        f"- 最大回撤: {dd} | 夏普: {sr}\n"
+                        f"- 持仓数: {pos_count}\n"
+                    )
 
         elif report.report_type == "factor":
-            # 因子报告：IC/衰减/分组
+            # 因子报告：IC/衰减/分组（优化版：批量查询）
+            from sqlalchemy import func
+
             from app.models.factors import Factor, FactorAnalysis
 
             active_factors = db.query(Factor).filter(Factor.is_active).all()
@@ -203,21 +255,42 @@ def generate_report(report_id: int, db: Session = None):
             content_parts.append("| 因子 | 分类 | IC | Rank IC | ICIR | 覆盖率 |")
             content_parts.append("|------|------|-----|---------|------|--------|")
 
-            for factor in active_factors:
-                analysis = (
-                    db.query(FactorAnalysis)
-                    .filter(
-                        FactorAnalysis.factor_id == factor.id,
+            if not active_factors:
+                content_parts.append("| - | - | - | - | - | - |")
+            else:
+                factor_ids = [f.id for f in active_factors]
+
+                # 批量查询所有因子的最新分析结果（1次查询）
+                subq = (
+                    db.query(
+                        FactorAnalysis.factor_id,
+                        func.max(FactorAnalysis.analysis_date).label("max_date")
                     )
-                    .order_by(FactorAnalysis.analysis_date.desc())
-                    .first()
+                    .filter(FactorAnalysis.factor_id.in_(factor_ids))
+                    .group_by(FactorAnalysis.factor_id)
+                    .subquery()
                 )
 
-                ic = f"{analysis.ic:.4f}" if analysis and analysis.ic else "-"
-                ric = f"{analysis.rank_ic:.4f}" if analysis and analysis.rank_ic else "-"
-                icir = f"{analysis.ic_ir:.4f}" if analysis and analysis.ic_ir else "-"
-                cov = f"{analysis.coverage:.2%}" if analysis and analysis.coverage else "-"
-                content_parts.append(f"| {factor.factor_name} | {factor.category} | {ic} | {ric} | {icir} | {cov} |")
+                analysis_list = (
+                    db.query(FactorAnalysis)
+                    .join(
+                        subq,
+                        (FactorAnalysis.factor_id == subq.c.factor_id) &
+                        (FactorAnalysis.analysis_date == subq.c.max_date)
+                    )
+                    .all()
+                )
+                analysis_map = {a.factor_id: a for a in analysis_list}
+
+                # 构建报告内容（从内存中获取数据，无需查询）
+                for factor in active_factors:
+                    analysis = analysis_map.get(factor.id)
+
+                    ic = f"{analysis.ic:.4f}" if analysis and analysis.ic else "-"
+                    ric = f"{analysis.rank_ic:.4f}" if analysis and analysis.rank_ic else "-"
+                    icir = f"{analysis.ic_ir:.4f}" if analysis and analysis.ic_ir else "-"
+                    cov = f"{analysis.coverage:.2%}" if analysis and analysis.coverage else "-"
+                    content_parts.append(f"| {factor.factor_name} | {factor.category} | {ic} | {ric} | {icir} | {cov} |")
 
         elif report.report_type == "risk":
             # 风控报告

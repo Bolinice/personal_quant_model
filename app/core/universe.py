@@ -92,14 +92,38 @@ class UniverseBuilder:
         candidates = set(stock_basic_df["ts_code"].dropna().unique())
         excluded_reasons: dict[str, int] = {}
 
-        # 1. 排除退市/非上市
+        # 1. 排除退市/非上市 (修复幸存者偏差)
+        # 关键修复：回测时应该包含"当时尚未退市"的股票，而非排除所有已退市股票
         if exclude_delist and "list_status" in stock_basic_df.columns:
-            delisted = stock_basic_df[stock_basic_df["list_status"] == "D"]["ts_code"]
-            excluded_reasons["delisted"] = len(delisted)
-            candidates -= set(delisted)
+            # 如果有delist_date字段，使用时点过滤（正确做法）
+            if "delist_date" in stock_basic_df.columns:
+                # 只排除"在trade_date之前已退市"的股票
+                stock_basic_df['delist_date_parsed'] = pd.to_datetime(
+                    stock_basic_df['delist_date'],
+                    errors='coerce'
+                )
+                already_delisted = stock_basic_df[
+                    (stock_basic_df['delist_date_parsed'].notna()) &
+                    (stock_basic_df['delist_date_parsed'] < pd.Timestamp(trade_date))
+                ]["ts_code"]
+                excluded_reasons["already_delisted"] = len(already_delisted)
+                candidates -= set(already_delisted)
+                logger.debug(
+                    f"Excluded {len(already_delisted)} stocks delisted before {trade_date}"
+                )
+            else:
+                # 无退市日期字段，退化为排除所有退市状态（次优方案）
+                delisted = stock_basic_df[stock_basic_df["list_status"] == "D"]["ts_code"]
+                excluded_reasons["delisted_no_date"] = len(delisted)
+                candidates -= set(delisted)
+                logger.warning(
+                    "No delist_date field, using list_status='D' filter. "
+                    "This may introduce survivorship bias in backtesting."
+                )
 
+        # 排除非上市股票（状态不是L=上市或P=暂停上市）
         if "list_status" in stock_basic_df.columns:
-            non_listed = stock_basic_df[~stock_basic_df["list_status"].isin(["L", "P"])]["ts_code"]
+            non_listed = stock_basic_df[~stock_basic_df["list_status"].isin(["L", "P", "D"])]["ts_code"]
             excluded_reasons["non_listed"] = len(non_listed)
             candidates -= set(non_listed)
 

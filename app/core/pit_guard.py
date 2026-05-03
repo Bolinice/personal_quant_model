@@ -68,7 +68,8 @@ def pit_filter_df(
     if filtered.empty:
         return filtered
 
-    # 同一股票同一报告期，取最新公告记录
+    # 同一股票同一报告期，按优先级+版本号去重
+    # 优先级：正式报告(3) > 业绩快报(2) > 业绩预告(1)
     if period_col and period_col in filtered.columns:
         dedup_col = period_col
     elif "report_period" in filtered.columns:
@@ -78,8 +79,40 @@ def pit_filter_df(
     else:
         return filtered
 
-    filtered = filtered.sort_values([ann_date_col], ascending=False)
-    return filtered.drop_duplicates(subset=[code_col, dedup_col], keep="first")
+    # 构建排序列：代码、报告期、优先级、版本号、公告日期
+    sort_cols = [code_col, dedup_col]
+    sort_order = [True, True]  # 代码升序、报告期升序
+
+    # 如果有source_priority字段，按优先级降序（数值越大越优先）
+    if 'source_priority' in filtered.columns:
+        sort_cols.append('source_priority')
+        sort_order.append(False)  # 降序
+        logger.debug("PIT filter: using source_priority for deduplication")
+
+    # 如果有revision_no字段，按版本号降序（版本号越大越新）
+    if 'revision_no' in filtered.columns:
+        sort_cols.append('revision_no')
+        sort_order.append(False)  # 降序
+        logger.debug("PIT filter: using revision_no for deduplication")
+
+    # 最后按公告日期降序（同优先级同版本时，取最新公告）
+    sort_cols.append(ann_date_col)
+    sort_order.append(False)
+
+    # 排序并去重
+    filtered = filtered.sort_values(sort_cols, ascending=sort_order)
+    before_dedup = len(filtered)
+    filtered = filtered.drop_duplicates(subset=[code_col, dedup_col], keep="first")
+    after_dedup = len(filtered)
+
+    if before_dedup > after_dedup:
+        logger.info(
+            "PIT filter: deduplicated %d rows (kept %d records with highest priority/version)",
+            before_dedup - after_dedup,
+            after_dedup
+        )
+
+    return filtered
 
 
 def pit_filter_query(

@@ -152,6 +152,7 @@ class TransactionCost:
         计算买入成本
         支持参与率滑点模型: slippage = base_spread + impact * sqrt(participation_rate)
         """
+        amount = float(amount)  # Convert Decimal to float
         commission = max(amount * self.commission_rate, self.min_commission)
         transfer_fee = amount * self.transfer_fee_rate
 
@@ -177,6 +178,7 @@ class TransactionCost:
         self, amount: float, daily_volume: float | None = None, volatility: float | None = None
     ) -> dict[str, float]:
         """计算卖出成本（含印花税）"""
+        amount = float(amount)  # Convert Decimal to float
         commission = max(amount * self.commission_rate, self.min_commission)
         stamp_tax = amount * self.stamp_tax_rate
         transfer_fee = amount * self.transfer_fee_rate
@@ -405,6 +407,10 @@ class ABShareBacktestEngine:
             trade_date: 交易日期
             stock_data: 当日行情数据
         """
+        # Convert Decimal to float
+        price = float(price)
+        target_amount = float(target_amount)
+
         # 可交易性检查
         tradable, _reason = self.is_tradable(ts_code, trade_date, "buy", stock_data)
         if not tradable:
@@ -482,6 +488,9 @@ class ABShareBacktestEngine:
         stock_data: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         """执行卖出 (含T+1限制: 当日买入的部分不可卖出，原有持仓可卖出)"""
+        # Convert Decimal to float
+        price = float(price)
+
         tradable, _reason = self.is_tradable(ts_code, trade_date, "sell", stock_data)
         if not tradable:
             return None
@@ -559,8 +568,8 @@ class ABShareBacktestEngine:
         position_pnl = {}  # 持仓级P&L
 
         for ts_code, pos in state.positions.items():
-            price = price_data.get(ts_code, 0)
-            prev_price = prev_price_data.get(ts_code, price) if prev_price_data else price
+            price = float(price_data.get(ts_code, 0))
+            prev_price = float(prev_price_data.get(ts_code, price) if prev_price_data else price)
             pos.market_value = pos.shares * price
             position_value += pos.market_value
 
@@ -1408,7 +1417,7 @@ class ABShareBacktestEngine:
                     # 更新上期权重
                     total_value = state.cash + sum(
                         pos.shares
-                        * (
+                        * float(
                             price_data.get((ts_code, trade_date), {}).get("close", pos.cost_price)
                             if price_data
                             else pos.cost_price
@@ -1420,7 +1429,7 @@ class ABShareBacktestEngine:
                             {
                                 ts_code: (
                                     pos.shares
-                                    * (
+                                    * float(
                                         price_data.get((ts_code, trade_date), {}).get("close", pos.cost_price)
                                         if price_data
                                         else pos.cost_price
@@ -1439,10 +1448,10 @@ class ABShareBacktestEngine:
                         "positions": {
                             ts_code: {
                                 "shares": pos.shares,
-                                "cost_price": round(pos.cost_price, 2),
+                                "cost_price": round(float(pos.cost_price), 2),
                                 "market_value": round(
                                     pos.shares
-                                    * (
+                                    * float(
                                         price_data.get((ts_code, trade_date), {}).get("close", pos.cost_price)
                                         if price_data
                                         else pos.cost_price
@@ -1452,7 +1461,7 @@ class ABShareBacktestEngine:
                                 "weight": round(
                                     (
                                         pos.shares
-                                        * (
+                                        * float(
                                             price_data.get((ts_code, trade_date), {}).get("close", pos.cost_price)
                                             if price_data
                                             else pos.cost_price

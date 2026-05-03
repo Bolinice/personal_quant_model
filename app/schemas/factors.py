@@ -171,3 +171,36 @@ class FactorResultOut(FactorResultBase):
 
 class FactorResult(FactorResultOut):
     pass
+
+
+# 新增：因子计算请求和响应模型
+class FactorCalculationRequest(BaseModel):
+    """因子计算请求"""
+    ts_codes: list[str]
+    trade_date: str | date
+    factor_groups: list[str] | None = None
+    lookback_days: int = 252
+
+
+class FactorCalculationResponse(BaseModel):
+    """因子计算响应"""
+    success: bool
+    message: str
+    data: list[dict]
+    total_stocks: int
+    total_factors: int
+
+
+class FactorGroupResponse(BaseModel):
+    """因子组响应"""
+    group_key: str
+    group_name: str
+    factors: list[str]
+    factor_count: int
+
+
+class FactorListResponse(BaseModel):
+    """因子列表响应"""
+    total_factors: int
+    total_groups: int
+    factors: list[dict]

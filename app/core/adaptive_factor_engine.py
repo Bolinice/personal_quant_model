@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 
     import pandas as pd
 
-
 class FactorState(StrEnum):
     ACTIVE = "active"
     MONITORING = "monitoring"

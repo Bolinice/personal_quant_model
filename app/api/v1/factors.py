@@ -9,7 +9,11 @@ from app.db.base import get_db
 from app.models.user import User
 from app.schemas.factors import (
     FactorAnalysisCreate,
+    FactorCalculationRequest,
+    FactorCalculationResponse,
     FactorCreate,
+    FactorGroupResponse,
+    FactorListResponse,
     FactorUpdate,
     FactorValueCreate,
 )
@@ -156,3 +160,108 @@ def create_factor_analysis_endpoint(
     """创建因子分析"""
     result = create_factor_analysis(factor_id, analysis, db=db)
     return success(result)
+
+
+@router.get("/groups", response_model=list[FactorGroupResponse])
+async def get_factor_groups(db: Session = Depends(get_db)):
+    """获取所有因子组"""
+    from app.core.factor_calculator import FACTOR_GROUPS
+
+    groups = []
+    for group_key, factors in FACTOR_GROUPS.items():
+        group_name_map = {
+            "valuation": "估值因子",
+            "growth": "成长因子",
+            "quality": "质量因子",
+            "momentum": "动量因子",
+            "volatility": "波动率因子",
+            "liquidity": "流动性因子",
+            "northbound": "北向资金因子",
+            "analyst": "分析师因子",
+            "earnings_quality": "盈利质量因子",
+            "risk_penalty": "风险惩罚因子",
+            "smart_money": "聪明钱因子",
+            "technical": "技术因子",
+        }
+        groups.append(
+            FactorGroupResponse(
+                group_key=group_key,
+                group_name=group_name_map.get(group_key, group_key),
+                factors=factors,
+                factor_count=len(factors),
+            )
+        )
+    return groups
+
+
+@router.get("/list", response_model=FactorListResponse)
+async def list_all_factors(db: Session = Depends(get_db)):
+    """列出所有可计算的因子"""
+    from app.core.factor_calculator import FACTOR_DIRECTIONS, FACTOR_GROUPS
+
+    all_factors = []
+    for group_key, factors in FACTOR_GROUPS.items():
+        for factor_code in factors:
+            all_factors.append(
+                {
+                    "factor_code": factor_code,
+                    "group": group_key,
+                    "direction": FACTOR_DIRECTIONS.get(factor_code, 1),
+                }
+            )
+
+    return FactorListResponse(
+        total_factors=len(all_factors),
+        total_groups=len(FACTOR_GROUPS),
+        factors=all_factors,
+    )
+
+
+@router.post("/calculate", response_model=FactorCalculationResponse)
+async def calculate_factors(
+    request: FactorCalculationRequest, db: Session = Depends(get_db)
+):
+    """批量计算因子"""
+    from datetime import datetime
+
+    from app.core.factor_calculator import FactorCalculator
+
+    # 转换日期格式
+    if isinstance(request.trade_date, str):
+        trade_date = datetime.strptime(request.trade_date, "%Y-%m-%d").date()
+    else:
+        trade_date = request.trade_date
+
+    # 初始化因子计算器
+    calculator = FactorCalculator(db)
+
+    # 计算因子
+    if request.factor_groups:
+        # 计算指定组的因子
+        results = []
+        for ts_code in request.ts_codes:
+            stock_factors = {}
+            for group in request.factor_groups:
+                group_method = f"calc_{group}_factors"
+                if hasattr(calculator, group_method):
+                    method = getattr(calculator, group_method)
+                    factors = method(ts_code, trade_date, request.lookback_days)
+                    stock_factors.update(factors)
+            results.append({"ts_code": ts_code, "trade_date": str(trade_date), **stock_factors})
+    else:
+        # 计算所有因子
+        results = []
+        for ts_code in request.ts_codes:
+            factors = calculator.calc_all_factors(ts_code, trade_date, request.lookback_days)
+            results.append({"ts_code": ts_code, "trade_date": str(trade_date), **factors})
+
+    # 统计因子数量
+    total_factors = len(results[0]) - 2 if results else 0  # 减去 ts_code 和 trade_date
+
+    return FactorCalculationResponse(
+        success=True,
+        message=f"Successfully calculated factors for {len(results)} stocks",
+        data=results,
+        total_stocks=len(results),
+        total_factors=total_factors,
+    )

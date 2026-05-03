@@ -20,6 +20,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import TimelineIcon from '@mui/icons-material/Timeline';
+import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import { motion } from 'framer-motion';
 import PageHeader from '../../components/ui/PageHeader';
 import StatusChip from '../../components/ui/StatusChip';
@@ -99,27 +100,49 @@ export default function StrategyList() {
           { label: '策略管理' },
         ]}
         actions={
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => navigate('/app/strategies/new')}
-            sx={{
-              background: 'linear-gradient(135deg, #22d3ee 0%, #3b82f6 100%)',
-              color: '#0f172a',
-              fontWeight: 600,
-              px: 3,
-              py: 1.25,
-              borderRadius: '10px',
-              textTransform: 'none',
-              boxShadow: '0 4px 12px rgba(34, 211, 238, 0.3)',
-              '&:hover': {
-                background: 'linear-gradient(135deg, #06b6d4 0%, #2563eb 100%)',
-                boxShadow: '0 6px 16px rgba(34, 211, 238, 0.4)',
-              },
-            }}
-          >
-            新建策略
-          </Button>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="outlined"
+              startIcon={<LibraryBooksIcon />}
+              onClick={() => navigate('/app/strategies/templates')}
+              sx={{
+                borderColor: 'rgba(139, 92, 246, 0.3)',
+                color: '#a78bfa',
+                fontWeight: 600,
+                px: 3,
+                py: 1.25,
+                borderRadius: '10px',
+                textTransform: 'none',
+                '&:hover': {
+                  borderColor: 'rgba(139, 92, 246, 0.5)',
+                  background: 'rgba(139, 92, 246, 0.05)',
+                },
+              }}
+            >
+              模板策略
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => navigate('/app/strategies/new')}
+              sx={{
+                background: 'linear-gradient(135deg, #22d3ee 0%, #3b82f6 100%)',
+                color: '#0f172a',
+                fontWeight: 600,
+                px: 3,
+                py: 1.25,
+                borderRadius: '10px',
+                textTransform: 'none',
+                boxShadow: '0 4px 12px rgba(34, 211, 238, 0.3)',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #06b6d4 0%, #2563eb 100%)',
+                  boxShadow: '0 6px 16px rgba(34, 211, 238, 0.4)',
+                },
+              }}
+            >
+              新建策略
+            </Button>
+          </Box>
         }
       />
 

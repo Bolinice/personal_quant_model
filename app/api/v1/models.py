@@ -21,6 +21,49 @@ from app.services.models_service import (
 router = APIRouter()
 
 
+@router.get("/templates")
+def read_template_models(db: Session = Depends(get_db)):
+    """获取模板策略列表（包含回测结果）"""
+    from app.models.backtests import Backtest, BacktestResult
+
+    # 查询所有模板策略
+    models = db.query(Model).filter(Model.model_code.like('TEMPLATE_%')).order_by(Model.id).all()
+
+    result = []
+    for model in models:
+        # 获取该模型的回测记录
+        backtest = db.query(Backtest).filter_by(model_id=model.id).first()
+        backtest_result = None
+
+        if backtest:
+            # 获取回测结果
+            br = db.query(BacktestResult).filter_by(backtest_id=backtest.id).first()
+            if br:
+                backtest_result = {
+                    'backtest_id': backtest.id,
+                    'start_date': backtest.start_date.isoformat(),
+                    'end_date': backtest.end_date.isoformat(),
+                    'total_return': br.total_return,
+                    'annual_return': br.annual_return,
+                    'sharpe': br.sharpe,
+                    'max_drawdown': br.max_drawdown,
+                    'calmar': br.calmar,
+                    'information_ratio': br.information_ratio,
+                    'win_rate': br.win_rate,
+                }
+
+        result.append({
+            'id': model.id,
+            'model_name': model.model_name,
+            'model_code': model.model_code,
+            'description': model.description,
+            'status': model.status,
+            'backtest_result': backtest_result,
+        })
+
+    return success(result)
+
+
 @router.get("/")
 def read_models(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """获取模型列表"""

@@ -16,6 +16,7 @@ from app.api.v1 import (
     model_registry,
     models,
     monitor,
+    multi_factor,
     notifications,
     payments,
     performance,
@@ -45,6 +46,7 @@ api_router.include_router(market.router, prefix="/market", tags=["市场数据"]
 api_router.include_router(stock_pools.router, prefix="/stock-pools", tags=["股票池管理"])
 api_router.include_router(factors.router, prefix="/factors", tags=["因子管理"])
 api_router.include_router(models.router, prefix="/models", tags=["模型管理"])
+api_router.include_router(multi_factor.router, prefix="/multi-factor", tags=["多因子模型"])
 api_router.include_router(timing.router, prefix="/timing", tags=["择时管理"])
 api_router.include_router(portfolios.router, prefix="/portfolios", tags=["组合管理"])
 api_router.include_router(backtests.router, prefix="/backtests", tags=["回测管理"])

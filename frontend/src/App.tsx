@@ -35,6 +35,7 @@ import Subscribe from '@/pages/Subscribe';
 import StrategyList from '@/pages/Strategies/StrategyList';
 import StrategyDetail from '@/pages/Strategies/StrategyDetail';
 import StrategyForm from '@/pages/Strategies/StrategyForm';
+import TemplateStrategies from '@/pages/Strategies/TemplateStrategies';
 
 function AppRoutes() {
   return (
@@ -102,6 +103,7 @@ function AppRoutes() {
         />
         <Route path="backtests/:id" element={<BacktestResult />} />
         <Route path="strategies" element={<StrategyList />} />
+        <Route path="strategies/templates" element={<TemplateStrategies />} />
         <Route
           path="strategies/create"
           element={

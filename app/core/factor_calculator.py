@@ -347,16 +347,18 @@ class FactorCalculator:
         if has_raw:
             # YoY计算必须用同比4个季度前的数据(revenue_yoy_4q)，而非单季同比
             # 单季同比受季节性干扰严重，4Q滚动可比消除了季节性偏差
-            result["yoy_revenue"] = (financial_df["revenue"] - financial_df["revenue_yoy_4q"]) / financial_df[
-                "revenue_yoy_4q"
-            ].replace(0, np.nan).abs()
+            revenue_yoy_4q = pd.to_numeric(financial_df["revenue_yoy_4q"], errors='coerce')
+            revenue = pd.to_numeric(financial_df["revenue"], errors='coerce')
+            denominator = revenue_yoy_4q.abs().replace(0, np.nan)
+            result["yoy_revenue"] = (revenue - revenue_yoy_4q) / denominator
         else:
             result["yoy_revenue"] = financial_df.get("yoy_revenue")
 
         if "net_profit" in financial_df.columns and "net_profit_yoy_4q" in financial_df.columns:
-            result["yoy_net_profit"] = (financial_df["net_profit"] - financial_df["net_profit_yoy_4q"]) / financial_df[
-                "net_profit_yoy_4q"
-            ].replace(0, np.nan).abs()
+            net_profit_yoy_4q = pd.to_numeric(financial_df["net_profit_yoy_4q"], errors='coerce')
+            net_profit = pd.to_numeric(financial_df["net_profit"], errors='coerce')
+            denominator = net_profit_yoy_4q.abs().replace(0, np.nan)
+            result["yoy_net_profit"] = (net_profit - net_profit_yoy_4q) / denominator
         else:
             result["yoy_net_profit"] = financial_df.get("yoy_net_profit")
 

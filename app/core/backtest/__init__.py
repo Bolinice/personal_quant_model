@@ -1,73 +1,53 @@
 """
-A股回测引擎 — 模块化子包
+回测子包
+========
+将原backtest_engine.py (1921行) 拆分为多个模块
 
-子模块:
-  cost_model — 交易成本模型 (TransactionCost)
-  trading_rules — A股交易规则 (涨跌停/T+1/板块判断)
-  events — 事件驱动架构 (Order/OrderBook/Event)
-  validation — 统计验证 (Walk-Forward/蒙特卡洛/DSR/Bootstrap)
-  metrics — 回测指标计算
-  engine — 核心回测引擎 (ABShareBacktestEngine/EventDrivenBacktestEngine)
+模块划分:
+- event_system.py - 事件驱动系统 (BacktestEvent, OrderStatus, Order, OrderBook)
+- cost_model.py - 交易成本模型 (TransactionCost) [已更新]
+- slippage.py - 滑点模型 (参与率滑点) [已更新]
+- order_manager.py - 订单管理 (订单生成、执行、拒绝) [新增]
+- validators.py - 回测验证器 (Walk-Forward, 蒙特卡洛) [待创建]
+- engine.py - 核心回测引擎 (ABShareBacktestEngine) [待更新]
 
-向后兼容: 所有公共API从本包直接导出
+使用示例:
+    from app.core.backtest import ABShareBacktestEngine
+
+    engine = ABShareBacktestEngine(
+        initial_capital=1_000_000,
+        commission_rate=0.00025,
+    )
+
+    results = engine.run(
+        signal_generator=my_signal_func,
+        start_date=date(2024, 1, 1),
+        end_date=date(2024, 12, 31),
+    )
 """
 
-from app.core.backtest_engine import (
-    DEFAULT_COMMISSION_RATE,
-    DEFAULT_SLIPPAGE_RATE,
-    DEFAULT_STAMP_TAX_RATE,
-    DEFAULT_TRANSFER_FEE_RATE,
-    GEM_LIMIT,
-    GEM_LIMIT_PCT,
-    LOT_SIZE,
-    MAIN_BOARD_LIMIT,
-    MAIN_BOARD_LIMIT_PCT,
-    MIN_COMMISSION,
-    NORTH_LIMIT,
-    NORTH_LIMIT_PCT,
-    ST_LIMIT,
-    ST_LIMIT_PCT,
-    STAR_LIMIT,
-    STAR_LIMIT_PCT,
-    ABShareBacktestEngine,
+from app.core.backtest.event_system import (
     BacktestEvent,
     BacktestEventType,
-    BacktestState,
-    EventDrivenBacktestEngine,
     Order,
     OrderBook,
     OrderStatus,
-    Position,
-    SignalGenerator,
-    TransactionCost,
 )
+from app.core.backtest.cost_model import TransactionCost
+from app.core.backtest.slippage import SlippageModel
+from app.core.backtest.order_manager import OrderManager
 
 __all__ = [
-    "DEFAULT_COMMISSION_RATE",
-    "DEFAULT_SLIPPAGE_RATE",
-    "DEFAULT_STAMP_TAX_RATE",
-    "DEFAULT_TRANSFER_FEE_RATE",
-    "GEM_LIMIT",
-    "GEM_LIMIT_PCT",
-    "LOT_SIZE",
-    "MAIN_BOARD_LIMIT",
-    "MAIN_BOARD_LIMIT_PCT",
-    "MIN_COMMISSION",
-    "NORTH_LIMIT",
-    "NORTH_LIMIT_PCT",
-    "STAR_LIMIT",
-    "STAR_LIMIT_PCT",
-    "ST_LIMIT",
-    "ST_LIMIT_PCT",
-    "ABShareBacktestEngine",
+    # Event System
     "BacktestEvent",
     "BacktestEventType",
-    "BacktestState",
-    "EventDrivenBacktestEngine",
     "Order",
     "OrderBook",
     "OrderStatus",
-    "Position",
-    "SignalGenerator",
+    # Cost Model
     "TransactionCost",
+    # Slippage Model
+    "SlippageModel",
+    # Order Manager
+    "OrderManager",
 ]

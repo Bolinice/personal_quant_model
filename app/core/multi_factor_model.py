@@ -74,7 +74,7 @@ class MultiFactorModel:
         )
 
     def calculate_factors(
-        self, ts_codes: list[str], trade_date: date, lookback_days: int = 252, batch_size: int = 50
+        self, ts_codes: list[str], trade_date: date, lookback_days: int = 126, batch_size: int = 50
     ) -> pd.DataFrame:
         """
         计算因子值
@@ -110,7 +110,7 @@ class MultiFactorModel:
         return self._calculate_factors_batch(ts_codes, trade_date, lookback_days)
 
     def _calculate_factors_batch(
-        self, ts_codes: list[str], trade_date: date, lookback_days: int = 252
+        self, ts_codes: list[str], trade_date: date, lookback_days: int = 126
     ) -> pd.DataFrame:
         """
         计算单批股票的因子值（内部方法）

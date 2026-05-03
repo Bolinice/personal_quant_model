@@ -836,7 +836,10 @@ class ABShareBacktestEngine:
             if trading_days:
                 idx = trading_days.index(trade_date) if trade_date in trading_days else -1
                 if idx >= 0 and idx + 1 < len(trading_days):
-                    return trading_days[idx].month != trading_days[idx + 1].month
+                    is_month_end = trading_days[idx].month != trading_days[idx + 1].month
+                    if is_month_end:
+                        logger.info(f"Monthly rebalance triggered on {trade_date} (month-end)")
+                    return is_month_end
                 return idx == len(trading_days) - 1
             return False
         return False

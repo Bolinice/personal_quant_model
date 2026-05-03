@@ -22,3 +22,4 @@ prometheus-client>=0.20.0
 lightgbm>=4.0.0
 hmmlearn>=0.3.0
 cvxpy>=1.4.0
+tenacity>=9.0.0

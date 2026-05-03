@@ -330,20 +330,36 @@ def initialize_portfolio(model, initial_capital, db):
 
 
 def calculate_portfolio_nav(portfolio, positions, current_date, db):
-    """计算投资组合净值"""
+    """
+    计算投资组合净值（优化版）
+
+    优化：批量查询所有持仓的当日价格，消除N+1查询
+    """
     total_value = 0
     cash = portfolio.current_capital
 
-    for position in positions:
-        # 获取当前价格
-        stock_data = (
-            db.query(StockDaily)
-            .filter(StockDaily.ts_code == position.security_id, StockDaily.trade_date == current_date)
-            .first()
-        )
+    if not positions:
+        return cash / portfolio.initial_capital
 
-        if stock_data:
-            position_value = position.quantity * stock_data.close
+    # 批量查询所有持仓的当日价格（1次查询代替N次）
+    ts_codes = [p.security_id for p in positions]
+    stock_data_list = (
+        db.query(StockDaily)
+        .filter(
+            StockDaily.ts_code.in_(ts_codes),
+            StockDaily.trade_date == current_date
+        )
+        .all()
+    )
+
+    # 构建价格字典
+    price_map = {sd.ts_code: sd.close for sd in stock_data_list}
+
+    # 计算持仓市值
+    for position in positions:
+        price = price_map.get(position.security_id)
+        if price:
+            position_value = position.quantity * price
             total_value += position_value
 
     return (total_value + cash) / portfolio.initial_capital

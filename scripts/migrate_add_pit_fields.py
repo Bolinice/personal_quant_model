@@ -18,15 +18,19 @@ def upgrade_stock_financial():
         # 添加source_priority字段（1=预告, 2=快报, 3=正式报告）
         db.execute(text("""
             ALTER TABLE stock_financial
-            ADD COLUMN IF NOT EXISTS source_priority INTEGER DEFAULT 3
-            COMMENT '数据来源优先级: 1=业绩预告, 2=业绩快报, 3=正式报告';
+            ADD COLUMN IF NOT EXISTS source_priority INTEGER DEFAULT 3;
+        """))
+        db.execute(text("""
+            COMMENT ON COLUMN stock_financial.source_priority IS '数据来源优先级: 1=业绩预告, 2=业绩快报, 3=正式报告';
         """))
 
         # 添加revision_no字段（修订版本号，0=初版）
         db.execute(text("""
             ALTER TABLE stock_financial
-            ADD COLUMN IF NOT EXISTS revision_no INTEGER DEFAULT 0
-            COMMENT '修订版本号: 0=初版, 1=修订1, 2=修订2...';
+            ADD COLUMN IF NOT EXISTS revision_no INTEGER DEFAULT 0;
+        """))
+        db.execute(text("""
+            COMMENT ON COLUMN stock_financial.revision_no IS '修订版本号: 0=初版, 1=修订1, 2=修订2...';
         """))
 
         # 添加索引
@@ -52,15 +56,19 @@ def upgrade_stock_industry():
         # 添加effective_date字段（生效日期）
         db.execute(text("""
             ALTER TABLE stock_industry
-            ADD COLUMN IF NOT EXISTS effective_date DATE
-            COMMENT '行业分类生效日期';
+            ADD COLUMN IF NOT EXISTS effective_date DATE;
+        """))
+        db.execute(text("""
+            COMMENT ON COLUMN stock_industry.effective_date IS '行业分类生效日期';
         """))
 
         # 添加expire_date字段（失效日期）
         db.execute(text("""
             ALTER TABLE stock_industry
-            ADD COLUMN IF NOT EXISTS expire_date DATE
-            COMMENT '行业分类失效日期（NULL表示当前有效）';
+            ADD COLUMN IF NOT EXISTS expire_date DATE;
+        """))
+        db.execute(text("""
+            COMMENT ON COLUMN stock_industry.expire_date IS '行业分类失效日期（NULL表示当前有效）';
         """))
 
         # 添加索引

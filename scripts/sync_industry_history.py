@@ -36,97 +36,48 @@ def sync_industry_history():
         stock_codes = [s[0] for s in stocks]
         print(f"   共 {len(stock_codes)} 只股票")
 
-        # 2. 获取申万行业分类（当前）
+        # 2. 尝试获取申万行业分类（当前）
         print("\n2. 获取申万行业分类（当前）")
-        df_sw = pro.ths_member(
-            ts_code='',
-            fields='ts_code,name,code,in_date,out_date,is_new'
-        )
 
-        if df_sw.empty:
-            print("   ⚠️  无法获取申万行业数据，尝试使用stock_basic中的industry字段")
+        # 直接使用stock_basic中的行业分类（备用方案）
+        print("   使用stock_basic中的industry字段作为当前行业分类")
 
-            # 从stock_basic获取当前行业分类
-            result = db.execute(text("""
-                SELECT ts_code, industry, industry_sw
-                FROM stock_basic
-                WHERE industry IS NOT NULL OR industry_sw IS NOT NULL;
-            """))
-
-            for row in result:
-                ts_code = row[0]
-                industry = row[1] or row[2]  # 优先使用industry，其次industry_sw
-
-                if not industry:
-                    continue
-
-                # 插入当前行业分类（effective_date设为上市日期）
-                db.execute(text("""
-                    INSERT INTO stock_industry
-                    (ts_code, industry_name, industry_code, level, standard, effective_date, expire_date)
-                    VALUES (:ts_code, :industry_name, :industry_code, :level, :standard, :effective_date, NULL)
-                    ON CONFLICT (ts_code, industry_name, standard)
-                    DO UPDATE SET
-                        effective_date = EXCLUDED.effective_date,
-                        expire_date = EXCLUDED.expire_date;
-                """), {
-                    'ts_code': ts_code,
-                    'industry_name': industry,
-                    'industry_code': '',
-                    'level': 'L1',
-                    'standard': 'SW',  # 申万
-                    'effective_date': date(2018, 1, 1)  # 默认生效日期
-                })
-
-            db.commit()
-            print(f"   已插入当前行业分类")
-
-        else:
-            # 处理申万行业数据
-            for _, row in df_sw.iterrows():
-                ts_code = row['ts_code']
-                in_date = pd.to_datetime(row['in_date']).date() if pd.notna(row['in_date']) else date(2018, 1, 1)
-                out_date = pd.to_datetime(row['out_date']).date() if pd.notna(row['out_date']) else None
-
-                db.execute(text("""
-                    INSERT INTO stock_industry
-                    (ts_code, industry_name, industry_code, level, standard, effective_date, expire_date)
-                    VALUES (:ts_code, :industry_name, :industry_code, :level, :standard, :effective_date, :expire_date)
-                    ON CONFLICT (ts_code, industry_name, standard)
-                    DO UPDATE SET
-                        effective_date = EXCLUDED.effective_date,
-                        expire_date = EXCLUDED.expire_date;
-                """), {
-                    'ts_code': ts_code,
-                    'industry_name': row['name'],
-                    'industry_code': row['code'],
-                    'level': 'L1',
-                    'standard': 'SW',
-                    'effective_date': in_date,
-                    'expire_date': out_date
-                })
-
-            db.commit()
-            print(f"   已插入 {len(df_sw)} 条行业分类记录")
-
-        # 3. 验证数据
-        print("\n3. 验证行业分类历史数据")
         result = db.execute(text("""
-            SELECT ts_code, COUNT(*) as cnt
-            FROM stock_industry
-            WHERE effective_date IS NOT NULL
-            GROUP BY ts_code
-            HAVING COUNT(*) > 1
-            LIMIT 10;
+            SELECT ts_code, industry, industry_sw, list_date
+            FROM stock_basic
+            WHERE industry IS NOT NULL OR industry_sw IS NOT NULL;
         """))
-        multi_industry = result.fetchall()
 
-        if multi_industry:
-            print(f"   ✅ 发现 {len(multi_industry)} 只股票有多条行业记录（历史调整）")
-            for ts_code, cnt in multi_industry[:5]:
-                print(f"      {ts_code}: {cnt} 条记录")
-        else:
-            print(f"   ⚠️  所有股票只有1条行业记录，可能缺少历史调整数据")
+        inserted_count = 0
+        for row in result:
+            ts_code = row[0]
+            industry = row[1] or row[2]  # 优先使用industry，其次industry_sw
+            list_date = row[3]
+
+            if not industry:
+                continue
+
+            # 使用上市日期作为生效日期
+            effective_date = list_date if list_date else date(2018, 1, 1)
+
+            # 插入当前行业分类
+            db.execute(text("""
+                INSERT INTO stock_industry
+                (ts_code, industry_name, industry_code, level, standard, effective_date, expire_date)
+                VALUES (:ts_code, :industry_name, :industry_code, :level, :standard, :effective_date, NULL)
+                ON CONFLICT DO NOTHING;
+            """), {
+                'ts_code': ts_code,
+                'industry_name': industry,
+                'industry_code': '',
+                'level': 'L1',
+                'standard': 'SW',  # 申万
+                'effective_date': effective_date
+            })
+            inserted_count += 1
+
+        db.commit()
+        print(f"   已插入 {inserted_count} 条当前行业分类")
 
         print("\n✅ 行业分类历史数据同步完成")
 

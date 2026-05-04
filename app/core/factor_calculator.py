@@ -96,7 +96,10 @@ FACTOR_GROUPS = {
     },
     "momentum": {
         "name": "动量因子",
-        "factors": ["ret_1m_reversal", "ret_3m_skip1", "ret_6m_skip1", "ret_12m_skip1"],
+        "factors": [
+            "ret_1m_reversal", "ret_3m_skip1", "ret_6m_skip1", "ret_12m_skip1",
+            "residual_momentum_20d", "residual_momentum_60d", "residual_momentum_120d", "residual_momentum_sharpe"
+        ],
     },
     "volatility": {
         "name": "波动率因子",
@@ -455,6 +458,30 @@ class FactorCalculator:
         result["ret_6m_skip1"] = _safe_divide(close_shift_20, close_shift_120) - 1
         result["ret_12m_skip1"] = _safe_divide(close_shift_20, close_shift_240) - 1
         return result
+
+    def calc_residual_momentum_factors(
+        self,
+        price_df: pd.DataFrame,
+        style_factors_df: pd.DataFrame,
+        lookback_periods: list[int] = [20, 60, 120]
+    ) -> pd.DataFrame:
+        """计算残差动量因子
+
+        Args:
+            price_df: 价格数据，必须包含 ts_code, trade_date, close 列
+            style_factors_df: 风格因子数据，必须包含 ts_code, trade_date 和各风格因子列
+            lookback_periods: 回看周期列表，默认 [20, 60, 120] 对应1/3/6个月
+
+        Returns:
+            包含残差动量因子的DataFrame，列名格式: residual_momentum_{period}d
+        """
+        from app.core.factors.momentum import calc_residual_momentum_factors
+
+        return calc_residual_momentum_factors(
+            price_df=price_df,
+            style_factors_df=style_factors_df,
+            lookback_periods=lookback_periods
+        )
 
     # ==================== 波动率因子 ====================
 

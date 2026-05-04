@@ -29,13 +29,15 @@ sys.path.insert(0, str(project_root))
 from app.db.base import SessionLocal
 from app.models.market.stock_daily import StockDaily
 from app.models.market.stock_daily_basic import StockDailyBasic
-from app.models.financial.income_statement import IncomeStatement
-from app.models.financial.balance_sheet import BalanceSheet
-from app.core.factors.base import pit_filter
+from app.models.market.stock_financial import StockFinancial
+from app.core.logging import logger
 
 
 def _safe_divide(numerator, denominator, eps: float = 1e-8):
-    """安全除法"""
+    """安全除法，处理Decimal和None类型"""
+    # 转换为float并处理None
+    if isinstance(denominator, pd.Series):
+        denominator = denominator.astype(float)
     denom = np.where(np.abs(denominator) < eps, np.nan, denominator)
     return numerator / denom
 
@@ -68,10 +70,10 @@ def fetch_price_data(session, trade_date: date, lookback_days: int = 150) -> pd.
     data = [{
         'ts_code': r.ts_code,
         'trade_date': r.trade_date,
-        'close': r.close,
-        'pct_chg': r.pct_chg,
-        'vol': r.vol,
-        'amount': r.amount,
+        'close': float(r.close) if r.close is not None else None,
+        'pct_chg': float(r.pct_chg) if r.pct_chg is not None else None,
+        'vol': float(r.vol) if r.vol is not None else None,
+        'amount': float(r.amount) if r.amount is not None else None,
     } for r in rows]
 
     return pd.DataFrame(data)
@@ -99,11 +101,11 @@ def fetch_basic_data(session, trade_date: date) -> pd.DataFrame:
     data = [{
         'ts_code': r.ts_code,
         'trade_date': r.trade_date,
-        'total_mv': r.total_mv,
-        'circ_mv': r.circ_mv,
-        'turnover_rate': r.turnover_rate,
-        'pe_ttm': r.pe_ttm,
-        'pb': r.pb,
+        'total_mv': float(r.total_mv) if r.total_mv is not None else None,
+        'circ_mv': float(r.circ_mv) if r.circ_mv is not None else None,
+        'turnover_rate': float(r.turnover_rate) if r.turnover_rate is not None else None,
+        'pe_ttm': float(r.pe_ttm) if r.pe_ttm is not None else None,
+        'pb': float(r.pb) if r.pb is not None else None,
     } for r in rows]
 
     return pd.DataFrame(data)
@@ -120,62 +122,37 @@ def fetch_financial_data(session, trade_date: date) -> pd.DataFrame:
     Returns:
         财务数据DataFrame
     """
-    # 获取利润表数据
-    stmt_income = select(IncomeStatement).where(
-        IncomeStatement.ann_date <= trade_date
+    # 使用StockFinancial模型，获取PIT数据（ann_date <= trade_date）
+    stmt = select(StockFinancial).where(
+        StockFinancial.ann_date <= trade_date
     )
-    result_income = session.execute(stmt_income)
-    income_rows = result_income.scalars().all()
+    result = session.execute(stmt)
+    rows = result.scalars().all()
 
-    # 获取资产负债表数据
-    stmt_balance = select(BalanceSheet).where(
-        BalanceSheet.ann_date <= trade_date
-    )
-    result_balance = session.execute(stmt_balance)
-    balance_rows = result_balance.scalars().all()
-
-    # 转换为DataFrame
-    income_data = [{
-        'ts_code': r.ts_code,
-        'end_date': r.end_date,
-        'ann_date': r.ann_date,
-        'report_type': r.report_type,
-        'net_profit': r.n_income,
-        'revenue': r.revenue,
-    } for r in income_rows] if income_rows else []
-
-    balance_data = [{
-        'ts_code': r.ts_code,
-        'end_date': r.end_date,
-        'ann_date': r.ann_date,
-        'report_type': r.report_type,
-        'total_assets': r.total_assets,
-        'total_liab': r.total_liab,
-    } for r in balance_rows] if balance_rows else []
-
-    income_df = pd.DataFrame(income_data)
-    balance_df = pd.DataFrame(balance_data)
-
-    if income_df.empty or balance_df.empty:
+    if not rows:
         return pd.DataFrame()
 
-    # PIT过滤
-    income_df = pit_filter(income_df, trade_date)
-    balance_df = pit_filter(balance_df, trade_date)
+    # 转换为DataFrame
+    data = [{
+        'ts_code': r.ts_code,
+        'end_date': r.end_date,
+        'ann_date': r.ann_date,
+        'net_profit_ttm': r.net_profit_ttm,
+        'revenue_ttm': r.revenue_ttm,
+        'total_assets': r.total_assets,
+        'total_equity': r.total_equity,
+    } for r in rows]
 
-    # 合并财务数据
-    financial_df = pd.merge(
-        income_df,
-        balance_df,
-        on=['ts_code', 'end_date', 'ann_date', 'report_type'],
-        how='outer'
-    )
+    df = pd.DataFrame(data)
 
-    # 计算净资产
-    if 'total_assets' in financial_df.columns and 'total_liab' in financial_df.columns:
-        financial_df['net_assets'] = financial_df['total_assets'] - financial_df['total_liab']
+    if df.empty:
+        return pd.DataFrame()
 
-    return financial_df
+    # 对每只股票，选择最新的财务数据（按ann_date降序，取第一条）
+    df = df.sort_values(['ts_code', 'ann_date'], ascending=[True, False])
+    df = df.groupby('ts_code').first().reset_index()
+
+    return df
 
 
 def calc_size_factor(basic_df: pd.DataFrame) -> pd.DataFrame:
@@ -184,8 +161,8 @@ def calc_size_factor(basic_df: pd.DataFrame) -> pd.DataFrame:
     result['ts_code'] = basic_df['ts_code']
 
     if 'total_mv' in basic_df.columns:
-        # log(市值)，单位：亿元
-        result['log_mv'] = np.log(basic_df['total_mv'] + 1)
+        # log(市值)，单位：亿元，转换为float避免Decimal类型问题
+        result['log_mv'] = np.log(basic_df['total_mv'].astype(float) + 1)
 
     return result
 
@@ -195,9 +172,12 @@ def calc_value_factors(basic_df: pd.DataFrame, financial_df: pd.DataFrame) -> pd
     result = pd.DataFrame()
     result['ts_code'] = basic_df['ts_code']
 
-    # 从basic_df直接获取PE和PB的倒数
+    # 从basic_df直接获取PE和PB的倒数，转换为float
     if 'pe_ttm' in basic_df.columns:
-        result['ep_ttm'] = _safe_divide(1.0, basic_df['pe_ttm'])
+        result['ep_ttm'] = _safe_divide(1.0, basic_df['pe_ttm'].astype(float))
+
+    if 'pb' in basic_df.columns:
+        result['bp'] = _safe_divide(1.0, basic_df['pb'].astype(float))
 
     if 'pb' in basic_df.columns:
         result['bp'] = _safe_divide(1.0, basic_df['pb'])
@@ -444,14 +424,17 @@ def main():
         print(f"批量准备风格因子数据: {start_date} 至 {end_date}")
 
         # 获取交易日历
-        with get_session() as session:
-            stmt = select(DailyPrice.trade_date).distinct().where(
-                DailyPrice.trade_date >= start_date,
-                DailyPrice.trade_date <= end_date
-            ).order_by(DailyPrice.trade_date)
+        db = SessionLocal()
+        try:
+            stmt = select(StockDaily.trade_date).distinct().where(
+                StockDaily.trade_date >= start_date,
+                StockDaily.trade_date <= end_date
+            ).order_by(StockDaily.trade_date)
 
-            result = session.execute(stmt)
+            result = db.execute(stmt)
             trade_dates = [row[0] for row in result]
+        finally:
+            db.close()
 
         print(f"共 {len(trade_dates)} 个交易日")
 
@@ -464,12 +447,15 @@ def main():
             trade_date = datetime.strptime(args.date, '%Y-%m-%d').date()
         else:
             # 默认使用最近一个交易日
-            with get_session() as session:
-                stmt = select(DailyPrice.trade_date).distinct().order_by(
-                    DailyPrice.trade_date.desc()
+            db = SessionLocal()
+            try:
+                stmt = select(StockDaily.trade_date).distinct().order_by(
+                    StockDaily.trade_date.desc()
                 ).limit(1)
-                result = session.execute(stmt)
+                result = db.execute(stmt)
                 trade_date = result.scalar()
+            finally:
+                db.close()
 
         prepare_style_factors(trade_date, output_dir)
 

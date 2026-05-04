@@ -53,3 +53,4 @@ data/raw/
 
 # Claude
 .claude/
+data/style_factors/
